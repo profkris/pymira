@@ -17,7 +17,7 @@ class AmiraMesh(object):
         self.definitions = None
         self.fields = None
         self.fieldOffset = None
-        self.data = []
+        self.fileRead = False
         
     def _dataline(self,curLine):
         endPat = '1234567890@ \n'
@@ -86,6 +86,8 @@ class AmiraMesh(object):
         return True
         
     def read(self,filename):
+        
+        self.fileRead = False
         
         with open(filename) as f:
             content = f.readlines()
@@ -263,8 +265,41 @@ class AmiraMesh(object):
                         return False
                     
                     curDataMarker = newDataMarker # Increment the marker
+                    
+        self.fileRead = True
         
         return True
+        
+    def get_parameter_value(self,paramName):
+        if not self.fileRead:
+            return None
+        
+        val = [x['value'] for x in self.parameters if x['parameter']==paramName]
+        if len(val)==0:
+            return None
+        return val[0]
+        
+    def get_field(self,name=None,marker=None):
+        if not self.fileRead:
+            return None
+        
+        if name is not None:
+            val = [x for x in self.fields if x['name']==name]
+            if len(val)==0:
+                return None
+            return val[0]
+        elif marker is not None:
+            val = [x for x in self.fields if x['marker']==marker]
+            if len(val)==0:
+                return None
+            return val[0]
+            
+    def get_data(self,*args,**kwargs):
+        f = self.get_field(*args,**kwargs)
+        if f is None:
+            return None
+        else:
+            return f['data']
         
     def test_read(self):
         am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\lsm2-files\LSM2_rec2.labels'
