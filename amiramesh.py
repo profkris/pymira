@@ -281,7 +281,7 @@ class AmiraMesh(object):
                                     if len(fieldDataType)==0:
                                         raise Exception('Data type not recognised in field line: ',curLine)
                                     fieldDataType = fieldDataType[0]
-                                    fieldName = fieldType.replace(fieldDataType,'').strip()
+                                    fieldName = fieldType.replace(fieldDataType,'',1).strip()
                                     nel = 1
                             except Exception,e:
                                 raise Exception(e)
@@ -309,7 +309,17 @@ class AmiraMesh(object):
                                     assert len(fieldTypeInfo)==2
                             else:
                                 raise Exception('Data type not recognised in field line: ',curLine)
-                             
+                            
+#                            def_ = [x for x in self.definitions if x['name']==fieldDef]
+#                            assert len(def_)==1
+#                            def_ = def_[0]
+#                            if getattr(def_,'type',None) is None:
+#                                def_['type'] = fieldDataType
+#                                def_['nelements'] = nel
+#                            else:
+#                                assert def_['type']==fieldDataType
+#                                assert def_['nelements']==nel
+                                
                             self.fields.append({'name':fieldName,'marker':marker, \
                                                  'definition':fieldDef,'type':fieldDataType, \
                                                  'encoding':fieldTypeInfo[0],'encoding_length':fieldTypeInfo[1],\
@@ -394,15 +404,34 @@ class AmiraMesh(object):
             # Parameter section
             f.write('Parameters {\n')
             for p in self.parameters:
-                f.write('\t{} \"{}\"'.format(p['parameter'],p['value']))
+                f.write('   {} \"{}\"\n'.format(p['parameter'],p['value']))
             f.write('}\n')
+            f.write('\n')
+            
+            # Data definition section
+            for d in self.fields:
+                if d['nelements']>1:
+                    f.write('{0} {{ {1}[{2}] {3} }} {4} \n'.format(d['definition'],d['type'],d['nelements'],d['name'],d['marker']))
+                else:
+                    f.write('{0} {{ {1} {2} }} {3} \n'.format(d['definition'],d['type'],d['name'],d['marker']))
             f.write('\n')
             
             # Data section
             for d in self.fields:
                 f.write('{}\n'.format(d['marker']))
-                import pdb
-                pdb.set_trace()
+                data = d['data']
+                if data.ndim==1:
+                    for j in range(data.shape[0]):
+                        data[j].tofile(f, sep=" ", format="%s")
+                        f.write('\n')
+                elif data.ndim==2:
+                    for j in range(data.shape[0]):
+                        data[j,:].tofile(f, sep=" ", format="%s")
+                        f.write('\n')
+                else:
+                    import pdb
+                    pdb.set_trace()
+                f.write('\n')
         
     def add_field(self,fieldDict):
         markers = [int(x['marker'].replace('@','')) for x in self.fields]

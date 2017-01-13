@@ -10,13 +10,13 @@ def merge_graphs(f1,f2,fo):
     a1 = am.AmiraMesh()
     a1.read(f1)
     if a1.get_parameter_value('ContentType')!='HxSpatialGraph':
-        print('{} is not a SpatialGraph file!'.format(f1))
+        print('{} is not a SpatialGraph file! {}'.format(f1,a1.get_parameter_value('ContentType')))
         return
         
     a2 = am.AmiraMesh()
     a2.read(f2)
     if a2.get_parameter_value('ContentType')!='HxSpatialGraph':
-        print('{} is not a SpatialGraph file!'.format(f2))
+        print('{} is not a SpatialGraph file! {}'.format(f2,a1.get_parameter_value('ContentType')))
         return
     
     dif1  = list(set(a1.fieldNames) - set(a2.fieldNames))
@@ -27,9 +27,6 @@ def merge_graphs(f1,f2,fo):
         a1.add_field(f)
         
     a1.write(fo)
-        
-    import pdb
-    pdb.set_trace()
 
 dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\' 
 fp = dir_+'Press2Amira.txt'
@@ -38,3 +35,5 @@ fs = dir_+'Stress2Amira.txt'
 fv = dir_+'Velocity2Amira.txt'
 fo = dir_+'spatialGraph.am'
 merge_graphs(fp,ff,fo)
+merge_graphs(fo,fv,fo)
+merge_graphs(fo,fs,fo)
