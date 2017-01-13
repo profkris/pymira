@@ -19,6 +19,7 @@ class AmiraMesh(object):
         self.fileType = None
         self.definitions = None
         self.fields = None
+        self.fieldNames = None
         self.fieldOffset = None
         self.fileRead = False
         self.dataFieldCount = 0
@@ -212,7 +213,7 @@ class AmiraMesh(object):
                     if inParam:
                         self.paramText.append(curLine)
                         spl = str.split(curLine,' ')
-                        spl = [x for x in spl if x!='']
+                        spl = [x for x in spl if x not in ['','\t']]
                         nspl = len(spl)
                         if '{' in curLine:
                             bracketCount += 1
@@ -352,7 +353,7 @@ class AmiraMesh(object):
         
         for i,curField in enumerate(self.fields):
             self._read_file_data(self.data,self.fieldRange[i],self.fieldRange[i+1],curField['marker'])
-
+        self.fieldNames = [x['name'] for x in self.fields]
                         
 #                else:
 #                    # The first time a data section marker is found (usually '@1') is during
@@ -379,6 +380,40 @@ class AmiraMesh(object):
         self.fileRead = True
         
         return True
+        
+    def write(self,filename):
+        with open(filename, 'wb') as f:
+            f.write('# AmiraMesh {}\n'.format(self.fileType))
+            f.write('\n')
+            
+            # Definition section
+            for d in self.definitions:
+                f.write('define {} {}\n'.format(d['name'],d['size'][0]))
+            f.write('\n')
+            
+            # Parameter section
+            f.write('Parameters {\n')
+            for p in self.parameters:
+                f.write('\t{} \"{}\"'.format(p['parameter'],p['value']))
+            f.write('}\n')
+            f.write('\n')
+            
+            # Data section
+            for d in self.fields:
+                f.write('{}\n'.format(d['marker']))
+                import pdb
+                pdb.set_trace()
+        
+    def add_field(self,fieldDict):
+        markers = [int(x['marker'].replace('@','')) for x in self.fields]
+        fieldDict['marker'] = '@{}'.format(max(markers)+1)
+        defNames = [x['name'] for x in self.definitions]
+        assert fieldDict['definition'] in defNames
+        # TO DO: add check for consistency with definition...
+        
+        self.fields.append(fieldDict)
+        self.fieldNames.append(fieldDict['name'])
+        self.fieldRange.append(-1)
         
     def decode_rle(self,d,uncompressed_size):
         # based on decode.rle from nat's amiramesh-io.R
@@ -457,25 +492,25 @@ class AmiraMesh(object):
           
         print 'File size:',fileSize 
         print '% read = ',bytesRead*100./float(fileSize)
-        print 'count: ',count                
+        print 'count: ',count 
         
-if __name__ == "__main__":
-    from pymira import amiramesh
-    reload(amiramesh)
-    am = amiramesh.AmiraMesh()
-    # Binary
-    am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\lsm2-files\LSM2_rec2.labels'
-    # Spatial graph
-    #am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\LSM2_bgrem_frangi_response_skel.SptGraph.am'
-    #am_file = r'G:\OPT\2016.02.VDA_2 lectins\#1\Flow2Amira.am'
-    #
-    #am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\LSM2_mask.am'
-#    am.close_error(am_file)
-    try:
-        tmp = am.read(am_file)
-        print tmp
-        am.close_error(am_file)
-        import pdb
-        pdb.set_trace()
-    except Exception,e:
-        print e
+#if __name__ == "__main__":
+#    from pymira import amiramesh
+#    reload(amiramesh)
+#    am = amiramesh.AmiraMesh()
+#    # Binary
+#    am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\lsm2-files\LSM2_rec2.labels'
+#    # Spatial graph
+#    #am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\LSM2_bgrem_frangi_response_skel.SptGraph.am'
+#    #am_file = r'G:\OPT\2016.02.VDA_2 lectins\#1\Flow2Amira.am'
+#    #
+#    #am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\LSM2_mask.am'
+##    am.close_error(am_file)
+#    try:
+#        tmp = am.read(am_file)
+#        print tmp
+#        am.close_error(am_file)
+#        import pdb
+#        pdb.set_trace()
+#    except Exception,e:
+#        print e
