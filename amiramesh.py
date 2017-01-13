@@ -7,6 +7,9 @@ Created on Tue Nov 29 14:40:52 2016
 
 import numpy as np
 import re
+from tqdm import tqdm # Progress bar
+import sys
+import os
 
 class AmiraMesh(object):
     
@@ -18,6 +21,21 @@ class AmiraMesh(object):
         self.fields = None
         self.fieldOffset = None
         self.fileRead = False
+        self.dataFieldCount = 0
+        self.header = None
+        self.dataTypes = ['float','double','byte','int','long','binary']
+        
+    def _populate_next_data_field(self,i,curDataMarker,eof=False):
+        self.dataFieldCount += 1
+        self.fieldOffset.append(i)
+        if self.dataFieldCount>1:
+            strt = self.fieldOffset[self.dataFieldCount-1]+1
+            fin = self.fieldOffset[self.dataFieldCount]-1
+            if eof:
+                fin += 1
+            print curDataMarker
+            if not self._read_file_data(content,strt,fin,curDataMarker):
+                return
         
     def _dataline(self,curLine):
         endPat = '1234567890@ \n'
@@ -31,7 +49,7 @@ class AmiraMesh(object):
                     marker = mtch.group(0)
                     markerIndex = int(marker.replace('@',''))
                 except Exception,e:
-                    print repr(e)
+                    print(repr(e))
                     return chk,marker,markerIndex
         return chk,marker,markerIndex
         
@@ -47,51 +65,78 @@ class AmiraMesh(object):
         if curField['nelements']>1:
             curShape.append(curField['nelements'])
         curField['shape'] = curShape
+            
+        # Grab data
+        fin = content[strt:].find('@')
+        if fin<0:
+            fin = len(content)-1-strt
+        curData = content[strt:strt+fin-1]
         
         # Data type
         if 'ascii' in self.fileType.lower():
+            curData = [s.strip().split(' ') for s in curData.splitlines() if s]
             if curField['type']=='float':
                 dtype = np.dtype('f')
             elif curField['type']=='double':
-                dtype = np.dtype('d')
-            elif curField['type']=='byte':
-                dtype = np.dtype('b')                     
+                dtype = np.dtype('d')                     
             elif curField['type']=='int':
                 dtype = np.dtype('i')
             elif curField['type']=='long':
                 dtype = np.dtype('i')
             else: # Default to float
                 dtype = np.dtype('f')
-        else:
-            print('Non-ASCII files not currently supported!')
-            return False
-            
-        # Grab data
-
-        # Check size
-        if (fin-strt)!=int(curDef['size'][0]):
+            curData = np.array(curData,dtype=dtype)
+            curData = np.reshape(curData,curField['shape'])
+            curField['data'] = curData
+        elif 'binary' in self.fileType.lower():
             import pdb
             pdb.set_trace()
-            print 'Error: Data size does not match header definition! Marker: '+curDataMarker
-            return None
-        curData = [x.rstrip().split(' ') for x in content[strt:fin] if x]
-            
-        # Convert to numpy array
-        curData = np.array(curData,dtype=dtype)
-        # Reshape data
-        curData = np.reshape(curData,curField['shape'])
-        # Add to field entry
-        curField['data'] = curData
+            #curData = self.decode_rle(self,curData,uncompressed_size)
+
+            if curField['encoding']=='raw':
+                if curField['type'] != 'byte':
+                    raise Exception('Unsupported data type')
+                curData = curData.strip('\n')
+            else:
+                enc = curField['encoding']
+                num_bytes = int(curField['encoding_length'])
+                curData = curData.strip('\n')
+                assert len(curData)==num_bytes
+    
+                assert curField['type'] == 'byte'
+                uncompressed_size = np.prod(curField['shape'])
+                curData = self.decode_rle(curData, uncompressed_size)
+            flt_values = np.fromstring(data_strip, dtype=np.uint8) # only tested with bytes
+
+        else:
+            raise Exception('File type not currently supported!')
         
         return True
+        
+    def _check_type(self,str_,type='float'):
+        
+        # See if a string can be converted into a number
+        try:
+            if type=='float':
+                res = float(str_)
+            elif type=='double':
+                res = float(str_)
+            elif type=='byte':
+                res = byte(str_)                
+            elif type=='int':
+                res = float(str_)
+            elif type=='long':
+                res = float(str_)
+            else:
+                return None
+            return True
+        except:
+            return False
         
     def read(self,filename):
         
         self.fileRead = False
         
-        with open(filename) as f:
-            content = f.readlines()
-            
         self.parameters = []
         self.definitions = []
         self.fileType = None
@@ -99,177 +144,265 @@ class AmiraMesh(object):
         self.fields = []
         self.fieldOffset = []
         self.data = []
-            
-        # Remove line returns
-        content = [x.strip('\n') for x in content]
-
+        self.header = []
+        
         inHeader = True
         inParam = False
         curLine = ''
         firstLineFound = False
         nonEmptyLineCount = 0
-        dataFieldCount = 0
-        i = -1
+        self.dataFieldCount = 0
         
-        for i,curLine in enumerate(content):
-            #i += 1 # Use this instead of enumerate
-            
-            if curLine=='' or curLine==' ':
-                emptyLine = True
-            else:
-                nonEmptyLineCount += 1
-                emptyLine = False
-
-            if inHeader:
-                # Check for line definition symbols (if line is short)
-                if len(curLine)<200:
-                    defChk = 'define' in curLine.lower()
-                    hashChk = '#' in curLine
-                    atChk = '@' in curLine
-                    paramChk = 'parameters' in curLine.lower()
-                    dataSectionChk,curDataMarker,curMarkerIndex = self._dataline(curLine)
-                else:
-                    defChk = False
-                    hashChk = False
-                    atChk = False
-                    paramChk = False
-                    dataSectionChk = False
-                    
-                if nonEmptyLineCount==1 and firstLineFound is False:
-                    # Look for magic
-                    firstLineFound = True
-                    ptn = re.compile("\s*#\s*amiramesh")
-                    magicMtch = ptn.match(curLine.lower()) is not None
-                    if not magicMtch:
-                        print('Error: Not a supported Amira file!')
-                        return False
-                    spl = curLine.split('AmiraMesh')
-                    self.fileType = ''.join(spl[1:]).strip()
-                    
-                # Parameter line
-                if paramChk:
-                    self.parameters = []
-                    inParam = True
-                    bracketCount = 0
-                    
-                if inParam:
-                    self.paramText.append(curLine)
-                    spl = str.split(curLine,' ')
-                    spl = [x for x in spl if x!='']
-                    nspl = len(spl)
-                    if '{' in curLine:
-                        bracketCount += 1
-                    if '}' in curLine:
-                        bracketCount -= 1
-                    #print 'Bracket: ',bracketCount
-                    if nspl>1 and '{' not in curLine and '}' not in curLine: # Nested parameter structure not yet supported
-                    
-                        curParam = spl[0]
-                        if '"' in curLine:
-                            val = ' '.join(spl[1:])
-                            val = val.replace('"','').rstrip()
-                            self.parameters.append({'parameter':curParam,'value':val})
-                        elif curParam=='ContentType':
-                            spl2 = str.split(spl[1],'\"')
-                            curParamVal = spl2[0]
-                            self.parameters.append({'parameter':curParam,'value':curParamVal})                        
-                        elif curParam=='TransformationMatrix':
-                            matr = [float(re.sub(r'\W+','',x)) for x in spl[1:]]
-                            self.parameters.append({'parameter':curParam,'value':matr})                        
-                        elif curParam=='BoundingBox':
-                            bbox = [float(re.sub(r'\W+','',x)) for x in spl[1:]]
-                            self.parameters.append({'parameter':curParam,'value':bbox})                        
-                        else:
-                            val = spl[1:]
-                            self.parameters.append({'parameter':curParam,'value':val})
-    
-                    if bracketCount==0:
-                        inParam = False
-                            
-                if defChk and not inParam: # Definition line
-                    spl = str.split(curLine, ' ')
-                    nspl = len(spl)
-                    if nspl>2:
-                        self.definitions.append({'name':spl[1],'size':[long(x) for x in spl[2:]]})
-                    else:
-                        print('Error: Unexpected formatting on definition line!')
-                        return False
-                        
-                if atChk and not inParam and not dataSectionChk: # Field line
-                    spl = curLine.split(' ')
-                    spl = [x for x in spl if x!='']
-                    
-                    defMtch = [x for x in self.definitions if x['name']==spl[0]]
-                    
-                    if len(defMtch)>0:
-                        spl = re.split(r"[{}]+", curLine)
-                        spl = [x for x in spl if x!='']
-                        fieldDef = spl[0].strip()
-                        fieldType = spl[1].strip()
-                        typeSpl = spl[1].split(' ')
-                        typeSpl = [x for x in typeSpl if x!='']
-                        if len(typeSpl)==2:
-                            fieldName = typeSpl[1].strip()
-                            fieldDataType = typeSpl[0].strip()
-                            m = re.split(r"\[(\w+)\]", fieldDataType)
-                            m = [x for x in m if x!='']
-                            if len(m)==2:
-                                fieldDataType = m[0].strip()
-                                nel = int(m[1].strip())
-                            else:
-                                nel = 1
-                        else:
-                            print('Error: Unexpected formatting on variable definition line! ',curLine)
-                            return None
-                        spl2 = re.split(r"[()]+", spl[2])
-                        spl2 = [x for x in spl2 if x!='']
-                        marker = spl2[0].strip()
-                        if len(spl2)>1:
-                            fieldTypeInfo = spl2[1].split(',')
-                            fieldTypeInfo = [x for x in fieldTypeInfo if x!='']
-                            if len(fieldTypeInfo)!=2:
-                                import pdb
-                                pdb.set_trace()
-                        else:
-                            fieldTypeInfo = [None,None]
-                         
-                        self.fields.append({'name':fieldName,'marker':marker, \
-                                             'definition':fieldDef,'type':fieldDataType, \
-                                             'encoding':fieldTypeInfo[0],'length':fieldTypeInfo[1],\
-                                             'nelements':nel,'nentries':None})
-                    else:
+        # Remove line returns
+        #content = [x.strip('\n') for x in content]
+        
+        #pbar = tqdm(total=100)
+        #nline = len(content)
+        
+        content = []
+        bytesRead = 0
+        fileSize = os.path.getsize(filename)
+        
+        with open(filename,'rb') as f:
+            i = -1
+            while True:
+                if inHeader:
+                    curLine = f.readline()
+                    i += 1
+                    bytesRead += sys.getsizeof(curLine)
+                    curLine = curLine.strip('\n')
+                
+                    if curLine=='' or curLine==' ':
                         pass
-                
-                if dataSectionChk: # Come out of header and move on to data
-                    self.fieldOffset.append(i)         
-                    inHeader = False
+                    else:
+                        nonEmptyLineCount += 1
+                        content.append(curLine)
                     
-            else:
-                # The first time a data section marker is found (usually '@1') is during
-                # reading the header (it's hopw we know the header has ended). When the next
-                # data section marker (usually '@2') is found, we should end up here.
-                # This means that we are always sorting through the data once we've been
-                # through it already.
-                dataSectionChk,newDataMarker,newMarkerIndex = self._dataline(curLine)
-                eofChk = i==(len(content)-1) # Check for end of file
-                
-                if dataSectionChk or eofChk:
-                    dataFieldCount += 1
-                    self.fieldOffset.append(i)
-                    strt = self.fieldOffset[dataFieldCount-1]+1
-                    fin = self.fieldOffset[dataFieldCount]-1
-                    if eofChk:
-                        fin += 1
-                    print curDataMarker
-                    if not self._read_file_data(content,strt,fin,curDataMarker):
-                        return False
+                    # Check for line definition symbols (if line is short)
+                    if len(curLine)<200:
+                        defChk = 'define' in curLine.lower()
+                        hashChk = '#' in curLine
+                        atChk = '@' in curLine
+                        paramChk = 'parameters' in curLine.lower()
+                        dataSectionChk,curDataMarker,curMarkerIndex = self._dataline(curLine)
+                    else:
+                        defChk = False
+                        hashChk = False
+                        atChk = False
+                        paramChk = False
+                        dataSectionChk = False
+                        
+                    if nonEmptyLineCount==1 and firstLineFound is False:
+                        # Look for magic
+                        firstLineFound = True
+                        ptn = re.compile("\s*#\s*amiramesh")
+                        magicMtch = ptn.match(curLine.lower()) is not None
+                        if not magicMtch:
+                            raise Exception('Error: Not a supported Amira file!')
+                            #return False
+                        spl = curLine.split('AmiraMesh')
+                        self.fileType = ''.join(spl[1:]).strip()
+                        
+                    # Parameter line
+                    if paramChk:
+                        self.parameters = []
+                        inParam = True
+                        bracketCount = 0
+                        
+                    if inParam:
+                        self.paramText.append(curLine)
+                        spl = str.split(curLine,' ')
+                        spl = [x for x in spl if x!='']
+                        nspl = len(spl)
+                        if '{' in curLine:
+                            bracketCount += 1
+                        if '}' in curLine:
+                            bracketCount -= 1
+                        #print 'Bracket: ',bracketCount
+                        if nspl>1 and '{' not in curLine and '}' not in curLine: # Nested parameter structure not yet supported
+                        
+                            curParam = spl[0]
+                            if '"' in curLine:
+                                val = ' '.join(spl[1:])
+                                val = val.replace('"','').rstrip()
+                                self.parameters.append({'parameter':curParam,'value':val})
+                            elif curParam=='ContentType':
+                                spl2 = str.split(spl[1],'\"')
+                                curParamVal = spl2[0]
+                                self.parameters.append({'parameter':curParam,'value':curParamVal})                        
+                            elif curParam=='TransformationMatrix':
+                                matr = [float(re.sub(r'\W+','',x)) for x in spl[1:]]
+                                self.parameters.append({'parameter':curParam,'value':matr})                        
+                            elif curParam=='BoundingBox':
+                                bbox = [float(re.sub(r'\W+','',x)) for x in spl[1:]]
+                                self.parameters.append({'parameter':curParam,'value':bbox})                        
+                            else:
+                                val = spl[1:]
+                                self.parameters.append({'parameter':curParam,'value':val})
+        
+                        if bracketCount==0:
+                            inParam = False
+                                
+                    if defChk and not inParam: # Definition line
+                        spl = str.split(curLine, ' ')
+                        spl = [x for x in spl if x]
+                        nspl = len(spl)
+                        if nspl>2:
+                            self.definitions.append({'name':spl[1],'size':[long(x) for x in spl[2:]]})
+                        else:
+                            raise Exception('Error: Unexpected formatting on definition line!')
+                            #return False
+                            
+                    if atChk and not inParam and not dataSectionChk: # Field line
+                        spl = curLine.split(' ')
+                        spl = [x for x in spl if x!='']
+                        
+                        defMtch = [x for x in self.definitions if x['name']==spl[0]]
+                        
+                        if len(defMtch)>0:
+                            curLineNoWS = curLine.replace(' ','')
+                            spl = re.split(r"[{}]+", curLineNoWS)
+                            spl = [x for x in spl if x]
+                            
+                            fieldDef = spl[0].strip()
+                            fieldType = spl[1].strip()
+
+                            m = re.split(r"\[(\w+)\]", fieldType)
+                            try:
+                                if len(m)==3:
+                                    fieldDataType = m[0].strip()
+                                    if fieldDataType not in self.dataTypes:
+                                         raise Exception('Data type not recognised in field line: ',curLine)
+                                    nel = int(m[1])
+                                    fieldName = m[2].strip()
+                                else:
+                                    fieldDataType = [x for x in self.dataTypes if x in fieldType]
+                                    if len(fieldDataType)==0:
+                                        raise Exception('Data type not recognised in field line: ',curLine)
+                                    fieldDataType = fieldDataType[0]
+                                    fieldName = fieldType.replace(fieldDataType,'').strip()
+                                    nel = 1
+                            except Exception,e:
+                                raise Exception(e)
+                                #return None
+
+                            if len(spl)==3:
+                                marker = spl[2]
+                                spl2 = re.split(r"[()]+", spl[2])
+                                spl2 = [x for x in spl2 if x]
+                                if len(spl2)>1:
+                                    marker = spl2[0].strip()
+                                    fieldTypeInfo = spl2[1].split(',')
+                                    fieldTypeInfo = [x for x in fieldTypeInfo if x]
+                                    assert len(fieldTypeInfo)==2
+                                else:
+                                    fieldTypeInfo = [None,None]
+                            # RLE (and other?) files have an extra section in parentheses here
+                            elif len(spl)==4:
+                                spl2 = re.split(r"[()]+", spl[3])
+                                spl2 = [x for x in spl2 if x]
+                                marker = spl2[0].strip()
+                                if len(spl2)>1:
+                                    fieldTypeInfo = spl2[1].split(',')
+                                    fieldTypeInfo = [x for x in fieldTypeInfo if x]
+                                    assert len(fieldTypeInfo)==2
+                            else:
+                                raise Exception('Data type not recognised in field line: ',curLine)
+                             
+                            self.fields.append({'name':fieldName,'marker':marker, \
+                                                 'definition':fieldDef,'type':fieldDataType, \
+                                                 'encoding':fieldTypeInfo[0],'encoding_length':fieldTypeInfo[1],\
+                                                 'nelements':nel,'nentries':None})
+                        else:
+                            pass
                     
-                    curDataMarker = newDataMarker # Increment the marker
+                    if dataSectionChk: # Come out of header and move on to data
+                        #self.fieldOffset.append(i)         
+                        inHeader = False
+                        self.header = content[0:-2]
+                        self.data = content[-1]
+                        content = []
                     
+                else:
+#                    if 'binary' in self.fileType.lower():
+#                        import pdb
+#                        pdb.set_trace()
+#                        f.close()
+#                        hdrEnd = sys.getsizeof(self.header)
+#                        with open(filename,'rb') as f:
+#                            f.seek(hdrEnd+1)
+#                            self.data = f.read() 
+#                    else:
+                    if True:
+                        self.data += f.read()
+                    bytesRead += sys.getsizeof(self.data)
+                    if bytesRead<fileSize:
+                        import pdb
+                        pdb.set_trace()
+                        raise Exception('Not all of file was read! Only '+str(bytesRead)+' of '+str(fileSize))
+                    break
+
+        self.fieldRange = []
+        for curField in self.fields:
+            mrk = curField['marker']
+            mInd = self.data.find(mrk)
+            mInd += len(mrk)
+            self.fieldRange.append(mInd)
+        self.fieldRange.append(len(self.data))
+        
+        for i,curField in enumerate(self.fields):
+            self._read_file_data(self.data,self.fieldRange[i],self.fieldRange[i+1],curField['marker'])
+
+                        
+#                else:
+#                    # The first time a data section marker is found (usually '@1') is during
+#                    # reading the header (it's hopw we know the header has ended). When the next
+#                    # data section marker (usually '@2') is found, we should end up here.
+#                    # This means that we are always sorting through the data once we've been
+#                    # through it already.
+#                    print i#,curLine
+#                    if i==32:
+#                        import pdb
+#                        pdb.set_trace()
+#                    dataSectionChk,newDataMarker,newMarkerIndex = self._dataline(curLine)
+#                    #eofChk = i==(len(content)-1) # Check for end of file
+#                    
+#                    if dataSectionChk:
+#                        import pdb
+#                        pdb.set_trace()
+#                        self._populate_next_data_field(i,curDataMarker)
+#                        curDataMarker = newDataMarker # Increment the marker
+
+        # Populate the last field
+        #self._populate_next_data_field(i,curDataMarker,eof=True)
+
         self.fileRead = True
         
         return True
         
+    def decode_rle(self,d,uncompressed_size):
+        # based on decode.rle from nat's amiramesh-io.R
+        d = np.fromstring(d, dtype=np.uint8 )
+        rval = np.empty( (uncompressed_size,), dtype=np.uint8 )
+        bytes_read = 0
+        filepos = 0
+        while bytes_read < uncompressed_size:
+            x=d[filepos]
+            if x==0:
+                raise ValueError('x is 0 at %d'%filepos)
+            filepos += 1
+    
+            if x > 0x7f:
+                x = (x & 0x7f)
+                mybytes=d[filepos:filepos+x]
+                filepos += x
+            else:
+                mybytes=np.repeat(d[filepos],x)
+                filepos += 1
+            rval[bytes_read:bytes_read+len(mybytes)] = mybytes
+            bytes_read += len(mybytes)
+        return rval
+
     def get_parameter_value(self,paramName):
         if not self.fileRead:
             return None
@@ -300,11 +433,49 @@ class AmiraMesh(object):
             return None
         else:
             return f['data']
+            
+    def close_error(self,filename):
         
-    def test_read(self):
-        am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\lsm2-files\LSM2_rec2.labels'
-        # Spatial graph
-        am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\LSM2_bgrem_frangi_response_skel.SptGraph.am'
-        tmp = self.read(am_file)
+        fileSize = os.path.getsize(filename) # file size in bytes
+        bytesRead = 0L
+        content = []
+        count = 0
+        try:
+            while True:
+                count += 1
+                with open(filename,'r') as f:
+                    f.seek(bytesRead+1)
+                    newContent = f.read()
+                    content.append(newContent)
+                    bytesRead += sys.getsizeof(newContent)
+                    print count,' Total read:',bytesRead
+        except Exception,e:
+            print 'Exception: ',e
+            
         import pdb
         pdb.set_trace()
+          
+        print 'File size:',fileSize 
+        print '% read = ',bytesRead*100./float(fileSize)
+        print 'count: ',count                
+        
+if __name__ == "__main__":
+    from pymira import amiramesh
+    reload(amiramesh)
+    am = amiramesh.AmiraMesh()
+    # Binary
+    am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\lsm2-files\LSM2_rec2.labels'
+    # Spatial graph
+    #am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\LSM2_bgrem_frangi_response_skel.SptGraph.am'
+    #am_file = r'G:\OPT\2016.02.VDA_2 lectins\#1\Flow2Amira.am'
+    #
+    #am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\LSM2_mask.am'
+#    am.close_error(am_file)
+    try:
+        tmp = am.read(am_file)
+        print tmp
+        am.close_error(am_file)
+        import pdb
+        pdb.set_trace()
+    except Exception,e:
+        print e
