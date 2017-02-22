@@ -25,6 +25,8 @@ class AmiraMesh(object):
         self.dataFieldCount = 0
         self.header = None
         self.dataTypes = ['float','double','byte','int','long','binary']
+        self.filename = None
+        self.dir = None
         
     def _populate_next_data_field(self,i,curDataMarker,eof=False):
         self.dataFieldCount += 1
@@ -133,10 +135,25 @@ class AmiraMesh(object):
             return True
         except:
             return False
+
+    def _field_generator(self,name='',marker='', 
+                         definition='',type='',
+                         encoding='',encoding_length=0,
+                         nelements=0,nentries=0):
+        return {'name':name,'marker':marker,
+                'definition':definition,'type':type,
+                'encoding':encoding,'encoding_length':encoding_length,
+                'nelements':nelements,'nentries':nentries}
+                
+#    def add_field(self,**kwargs):
+#        self.fields.append(self._field_generator(**kwargs))
         
     def read(self,filename):
         
         self.fileRead = False
+        self.filename = filename
+        import os
+        self.dir = os.path.dirname(filename)
         
         self.parameters = []
         self.definitions = []
@@ -320,10 +337,10 @@ class AmiraMesh(object):
 #                                assert def_['type']==fieldDataType
 #                                assert def_['nelements']==nel
                                 
-                            self.fields.append({'name':fieldName,'marker':marker, \
-                                                 'definition':fieldDef,'type':fieldDataType, \
-                                                 'encoding':fieldTypeInfo[0],'encoding_length':fieldTypeInfo[1],\
-                                                 'nelements':nel,'nentries':None})
+                            self.fields.append(self._field_generator(name=fieldName,marker=marker,
+                                                 definition=fieldDef,type=fieldDataType,
+                                                 encoding=fieldTypeInfo[0],encoding_length=fieldTypeInfo[1],
+                                                 nelements=nel,nentries=None))
                         else:
                             pass
                     
@@ -391,6 +408,23 @@ class AmiraMesh(object):
         
         return True
         
+    def add_definition(self,name,size):
+        if type(size) is not list:
+            size = [size]
+        if self.definitions is None:
+            self.definitions = []
+        self.definitions.append({'name':name,'size':size})
+        
+    def add_parameter(self,name,value):
+        if self.parameters is None:
+            self.parameters = []
+        self.parameters.append({'parameter':name,'value':value})
+        
+    def add_field(self,**kwargs):
+        if self.fields is None:
+            self.fields = []
+        self.fields.append(self._field_generator(**kwargs))
+        
     def write(self,filename):
         with open(filename, 'wb') as f:
             f.write('# AmiraMesh {}\n'.format(self.fileType))
@@ -417,6 +451,7 @@ class AmiraMesh(object):
             f.write('\n')
             
             # Data section
+            f.write('# Data section\n')
             for d in self.fields:
                 f.write('{}\n'.format(d['marker']))
                 data = d['data']
@@ -433,16 +468,16 @@ class AmiraMesh(object):
                     pdb.set_trace()
                 f.write('\n')
         
-    def add_field(self,fieldDict):
-        markers = [int(x['marker'].replace('@','')) for x in self.fields]
-        fieldDict['marker'] = '@{}'.format(max(markers)+1)
-        defNames = [x['name'] for x in self.definitions]
-        assert fieldDict['definition'] in defNames
-        # TO DO: add check for consistency with definition...
-        
-        self.fields.append(fieldDict)
-        self.fieldNames.append(fieldDict['name'])
-        self.fieldRange.append(-1)
+#    def add_field(self,fieldDict):
+#        markers = [int(x['marker'].replace('@','')) for x in self.fields]
+#        fieldDict['marker'] = '@{}'.format(max(markers)+1)
+#        defNames = [x['name'] for x in self.definitions]
+#        assert fieldDict['definition'] in defNames
+#        # TO DO: add check for consistency with definition...
+#        
+#        self.fields.append(fieldDict)
+#        self.fieldNames.append(fieldDict['name'])
+#        self.fieldRange.append(-1)
         
     def decode_rle(self,d,uncompressed_size):
         # based on decode.rle from nat's amiramesh-io.R
@@ -468,8 +503,8 @@ class AmiraMesh(object):
         return rval
 
     def get_parameter_value(self,paramName):
-        if not self.fileRead:
-            return None
+        #if not self.fileRead:
+        #    return None
         
         val = [x['value'] for x in self.parameters if x['parameter']==paramName]
         if len(val)==0:
@@ -477,8 +512,8 @@ class AmiraMesh(object):
         return val[0]
         
     def get_field(self,name=None,marker=None):
-        if not self.fileRead:
-            return None
+        #if not self.fileRead:
+        #    return None
         
         if name is not None:
             val = [x for x in self.fields if x['name']==name]
@@ -491,12 +526,43 @@ class AmiraMesh(object):
                 return None
             return val[0]
             
+    def get_field_names(self):
+        return [x['name'] for x in self.fields]
+            
     def get_data(self,*args,**kwargs):
         f = self.get_field(*args,**kwargs)
         if f is None:
             return None
         else:
             return f['data']
+            
+    def set_data(self,data,**kwargs):
+        f = self.get_field(**kwargs)
+        if f is not None:
+            f['data'] = data
+            f['shape'] = data.shape
+            try:
+                f['nentries'] = [len(data)]
+            except:
+                f['nentries'] = [1]
+            
+    def get_definition(self,name):
+        defin = [x for x in self.definitions if x['name'].lower()==name.lower()]
+        if len(defin)==0:
+            return None
+        else:
+            return defin[0]
+            
+    def get_definition_names(self):
+        return [x['name'] for x in self.definitions]
+            
+    def set_definition_size(self,name,size):
+        defin = self.get_definition(name)
+        if defin is None:
+            return
+        if type(size) is not list:
+            size = [size]
+        defin['size'] = size
             
     def close_error(self,filename):
         
@@ -522,6 +588,8 @@ class AmiraMesh(object):
         print 'File size:',fileSize 
         print '% read = ',bytesRead*100./float(fileSize)
         print 'count: ',count 
+        
+
         
 #if __name__ == "__main__":
 #    from pymira import amiramesh

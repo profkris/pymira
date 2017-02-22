@@ -28,7 +28,7 @@ def merge_graphs(f1,f2,fo):
         
     a1.write(fo)
 
-dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\' 
+dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\' 
 fp = dir_+'Press2Amira.txt'
 ff = dir_+'Flow2Amira.txt'
 fs = dir_+'Stress2Amira.txt'
