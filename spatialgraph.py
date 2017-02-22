@@ -391,9 +391,9 @@ class SpatialGraph(amiramesh.AmiraMesh): #
                     newEdgeCount += 1
                     
                     #if newEdgeCount==2:
-                    if True:
-                        import pdb
-                        pdb.set_trace()
+#                    if True:
+#                        import pdb
+#                        pdb.set_trace()
                     
                     # Start walking - complete when a branching node is encountered
                     endFlag = False
@@ -405,64 +405,65 @@ class SpatialGraph(amiramesh.AmiraMesh): #
                         visited.append(curNodeIndex)
                         
                         if len(connecting_edge)>1:
-                            import pdb
-                            pdb.set_trace()
+                            print('Warning: More than 1 connecting edge identified!')
+                            #import pdb
+                            #pdb.set_trace()
                                        
                         # If it's an intermediate (connecting) node
                         if curNode.nconn==2:
                             next_node_index = [x for x in curNode.connecting_node if x not in visited]
-                            connecting_edge = [e for x,e in zip(curNode.connecting_node,curNode.edges) 
-                                               if x not in visited and edge_converted[e.index]==0 ]
-                            if connecting_edge[0].start_node_index!=curNode.index:
-                                reverse_edge_indices = True
-                            else:
-                                reverse_edge_indices = False
+                            connecting_edge = [e for x,e in zip(curNode.connecting_node,curNode.edges) if x not in visited and edge_converted[e.index]==0 ]
+                            if len(connecting_edge)>0:
 
-                            # Add in connecting edge points
-                            if newEdgeCount==2:
-                                import pdb
-                                pdb.set_trace()
-                            #if connecting_edge[0].npoints>2:
-                            if True:
-                                # Reverse edge coordinates if necessary
-                                if reverse_edge_indices:
-                                    scalars = [s[::-1] for s in connecting_edge[0].scalars]
-                                    #scalars = [s[1:-1] for s in scalars]
-                                    coords = connecting_edge[0].coordinates
-                                    coords = coords[::-1,:]
-                                    newEdge.add_point(coords,scalars=scalars,remove_last=True)
+                                if connecting_edge[0].start_node_index!=curNode.index:
+                                    reverse_edge_indices = True
                                 else:
-                                    #scalars = [s[1:-1] for s in connecting_edge[0].scalars]
-                                    scalars = connecting_edge[0].scalars
-                                    newEdge.add_point(connecting_edge[0].coordinates,
-                                                  scalars=scalars,remove_last=True)
-                            elif connecting_edge[0].npoints==2:
-                                # Reverse edge coordinates if necessary
-                                if reverse_edge_indices:
-                                    #scalars = [s[-1] for s in connecting_edge[0].scalars]
-                                    scalars = [s[::-1] for s in connecting_edge[0].scalars]
-                                    coords = connecting_edge[0].coordinates
-                                    coords = coords[::-1,:]
-                                    newEdge.add_point(connecting_edge[0].coordinates[-1],
-                                                  scalars=scalars,remove_last=True)
+                                    reverse_edge_indices = False
+    
+                                # Add in connecting edge points
+                                #if connecting_edge[0].npoints>2:
+                                if True:
+                                    # Reverse edge coordinates if necessary
+                                    if reverse_edge_indices:
+                                        scalars = [s[::-1] for s in connecting_edge[0].scalars]
+                                        #scalars = [s[1:-1] for s in scalars]
+                                        coords = connecting_edge[0].coordinates
+                                        coords = coords[::-1,:]
+                                        newEdge.add_point(coords,scalars=scalars,remove_last=True)
+                                    else:
+                                        #scalars = [s[1:-1] for s in connecting_edge[0].scalars]
+                                        scalars = connecting_edge[0].scalars
+                                        newEdge.add_point(connecting_edge[0].coordinates,
+                                                      scalars=scalars,remove_last=True)
+                                elif connecting_edge[0].npoints==2:
+                                    # Reverse edge coordinates if necessary
+                                    if reverse_edge_indices:
+                                        #scalars = [s[-1] for s in connecting_edge[0].scalars]
+                                        scalars = [s[::-1] for s in connecting_edge[0].scalars]
+                                        coords = connecting_edge[0].coordinates
+                                        coords = coords[::-1,:]
+                                        newEdge.add_point(connecting_edge[0].coordinates[-1],
+                                                      scalars=scalars,remove_last=True)
+                                    else:
+                                        scalars = [s[0] for s in connecting_edge[0].scalars]
+                                        newEdge.add_point(connecting_edge[0].coordinates[0],
+                                                      scalars=scalars,remove_last=True)
                                 else:
-                                    scalars = [s[0] for s in connecting_edge[0].scalars]
-                                    newEdge.add_point(connecting_edge[0].coordinates[0],
-                                                  scalars=scalars,remove_last=True)
+                                    import pdb
+                                    pdb.set_trace()
+
+                                # Mark that node is now an edge point
+                                node_now_edge[curNodeIndex] = 1
+    
+                                # If we've run out of nodes, then quit;
+                                # Otherwise, walk to the next node
+                                if len(next_node_index)==0:                                
+                                    endFlag = True
+                                else:
+                                    curNodeIndex = next_node_index[0]
+                                    edge_converted[connecting_edge[0].index] = 1
                             else:
-                                import pdb
-                                pdb.set_trace()
-
-                            # Mark that node is now an edge point
-                            node_now_edge[curNodeIndex] = 1
-
-                            # If we've run out of nodes, then quit;
-                            # Otherwise, walk to the next node
-                            if len(next_node_index)==0:                                
                                 endFlag = True
-                            else:
-                                curNodeIndex = next_node_index[0]
-                                edge_converted[connecting_edge[0].index] = 1
                                 
                         elif curNode.nconn==1:
                             endFlag = True # Terminal node
@@ -510,7 +511,12 @@ class SpatialGraph(amiramesh.AmiraMesh): #
                             #scalars = [s[-1] for s in connecting_edge[0].scalars]
                             #newEdge.add_point(endNode.coords,is_end=True,end_index=end_node_index_new,
                             #                  scalars=scalars)
-                            newEdge.complete_edge(endNode.coords,end_node_index_new)
+                            try:                            
+                                newEdge.complete_edge(endNode.coords,end_node_index_new)
+                            except Exception,e:
+                                print(e)
+                                import pdb
+                                pdb.set_trace()
                             newNode.add_edge(newEdge)
                             endNode.add_edge(newEdge,reverse=True)
                             
@@ -522,8 +528,18 @@ class SpatialGraph(amiramesh.AmiraMesh): #
         new_nedge = newEdgeCount
         new_nnode = newNodeCount
         
+        import pdb
+        pdb.set_trace()
+        
         nodeCoords = np.asarray([n.coords for n in new_nodeList])
-        edges = np.unique([f for f in n.edges for n in new_nodeList])
+        
+        edges = [n.edges for n in new_nodeList]
+        import itertools
+        edges = np.asarray(list(set(itertools.chain(*edges)))) # Flatten and get unique entries
+        if len(edges)!=new_nedge:
+            import pdb
+            pdb.set_trace()
+
         edgeConn = np.asarray([[x.start_node_index,x.end_node_index] for x in edges])
         edgeCoords = np.concatenate([x.coordinates for x in edges])
         nedgepoint = np.array([x.npoints for x in edges])
@@ -779,12 +795,15 @@ class Edge(object):
                 for i,sc in enumerate(scalars):
                     self.scalars[i] = np.append(self.scalars[i],scalars[i])
         if is_end:
-            self.complete(np.asarray(coords),end_index)
+            self.complete_edge(np.asarray(coords),end_index)
             
     def complete_edge(self,end_node_coords,end_node_index):
         self.end_node_coords = np.asarray(end_node_coords)
         self.end_node_index = end_node_index
         self.complete = True
+        
+        assert all([x==y for x,y in zip(self.end_node_coords,self.coordinates[-1,:])])
+        assert all([x==y for x,y in zip(self.start_node_coords,self.coordinates[0,:])])
             
     def _print(self):
         print('EDGE ({})'.format(self.index))

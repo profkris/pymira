@@ -563,6 +563,11 @@ class AmiraMesh(object):
         if type(size) is not list:
             size = [size]
         defin['size'] = size
+        
+    def generate_next_marker(self):
+        marker_indices = [int(f['marker'].replace('@','')) for f in self.fields]
+        mx = max(marker_indices)
+        return '@{}'.format(mx+1)
             
     def close_error(self,filename):
         

@@ -8,10 +8,15 @@ from pymira import spatialgraph
 import pickle
 
 amdata = spatialgraph.SpatialGraph()
-#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\' 
-#fo = dir_+'spatialGraph.am'
-dir_ = 'C:\\Anaconda2\\Lib\\site-packages\\pymira\\'
-fo = dir_ + 'circle.am'
+
+dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\' 
+fo = dir_+'spatialGraph.am'
+ofile = dir_ + 'spatialGraph_RIN.am'
+
+#dir_ = 'C:\\Anaconda2\\Lib\\site-packages\\pymira\\'
+#fo = dir_ + 'circle.am'
+#ofile = dir_ + 'circle_RIN.am'
+
 print 'Loading graph...'
 amdata.read(fo)
 print('Graph loaded')
@@ -32,5 +37,7 @@ print('Graph loaded')
 nodeList = None
 
 new_graph = amdata.remove_intermediate_nodes(nodeList=nodeList)
-ofile = dir_ + 'circle_RIN.am'
+import pdb
+pdb.set_trace()
+new_graph.sanity_check(deep=True)
 new_graph.write(ofile)
