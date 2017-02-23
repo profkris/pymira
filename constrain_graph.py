@@ -10,8 +10,8 @@ import pickle
 amdata = spatialgraph.SpatialGraph()
 
 dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\' 
-fo = dir_+'spatialGraph_constrained.am'
-ofile = dir_ + 'spatialGraph_constrained_RIN.am'
+fo = dir_+'spatialGraph.am'
+ofile = dir_ + 'spatialGraph_constrained.am'
 
 #dir_ = 'C:\\Anaconda2\\Lib\\site-packages\\pymira\\'
 #fo = dir_ + 'circle.am'
@@ -23,21 +23,12 @@ print('Graph loaded')
 #print('Performing sanity check...')
 #amdata.sanity_check(deep=True)
 
-#amdata.constrain_nodes(xrange=[0.,2000.],yrange=[0.,2000.])
+amdata.constrain_nodes(xrange=[1000.,2000.],yrange=[0.,2000.])
 #amdata.constrain_nodes(xrange=[0.,10.],yrange=[0.,10.])
 #amdata.remove_field('Pressure')
 #amdata.remove_field('Stress')
 #amdata.remove_field('Flow')
 #amdata.remove_field('Radii')
-#amdata.sanity_check(deep=True)
+amdata.sanity_check(deep=True)
 #ofile = dir_+'circle_constrained.am'
-#amdata.write(ofile)
-
-#pFile = dir_+'node_list.p'
-nodeList = None
-
-new_graph = amdata.remove_intermediate_nodes(nodeList=nodeList)
-import pdb
-pdb.set_trace()
-new_graph.sanity_check(deep=True)
-new_graph.write(ofile)
+amdata.write(ofile)
