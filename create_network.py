@@ -8,74 +8,90 @@ Created on Tue Feb 21 07:18:10 2017
 import numpy as np
 import spatialgraph
 
-nturn = 10
-nnode = 5
-nedge = nnode
-nconnpoints = int(nturn/np.float(nnode))
-#nturn = nedge*nconnpoints
-npoint = nturn + nnode
+nodes = [[0,0,0],
+         [1,0,0],
+         [0.5,0,0],
+         [0,1,0],
+         [2,2,0],
+         [5,5,0],
+         [2,5,0],
+        ]
+        
+connectivity = [[0,1],
+                [2,3],
+                [1,4],
+                [4,5],
+                [4,6],
+                [0,0]
+                ]
+        
+points = [[0,0,0],
+         [0.5,0.,0.],
+         [1,0,0],
+         [0,0,0],
+         [0,0.5,0],
+         [0,1,0],
+         [1,0,0],
+         [1.5,0,0],
+         [2,2,0],
+         [2,2,0],
+         [3,3,0],
+         [4,4,0],
+         [5,5,0],
+         [2,2,0],
+         [2,3,0],
+         [2,4,0],
+         [2,5,0],
+         [0,0,0],
+         [1.5,0,0],
+         [1.5,1.5,0],
+         [0,1.5,0],
+         [0,0,0]
+        ]
+        
+radii = [3,
+          3,
+          3,
+          1,
+          1,
+          1,
+          2,
+          2,
+          2,
+          1,
+          1,
+          1,
+          1,
+          1.5,
+          1.5,
+          1.5,
+          1.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          ]
+        
+nedgepoints = [3,
+               3,
+               3,
+               4,
+               4,
+               5
+               ]
 
-centre = [10.,10.,10.]
-radius = 5.
-thickness = 1.
-flowValue = 0.5
-
-points = np.zeros([npoint,3],dtype='float')
-nodes = np.zeros([nnode,3],dtype='float')
-connectivity = np.zeros([nedge,2],dtype='int')
-nedgepoints = np.zeros([nedge],dtype='int')
-edgepoints = np.zeros([npoint,3],dtype='float')
-radii = np.zeros([npoint],dtype='float') + thickness
-flow = np.zeros([npoint],dtype='float') + flowValue
-
-angular_spacing = np.deg2rad(360. / np.float(nturn))
-
-nodeCount = 0
-pointCount = 0
-curAngle = 0
-turnCount = 0
-print npoint,nconnpoints
-while turnCount<nturn:
-#for i in range(0,npoint,nconnpoints):
-    print 'NODE',nodeCount,np.rad2deg(curAngle)
-    print 'EDGE',pointCount,np.rad2deg(curAngle)
-    # Start point
-    edgepoints[pointCount,:] = [radius*np.cos(curAngle)+centre[0],
-                   radius*np.sin(curAngle)+centre[1],
-                   0.]
-    pointCount += 1
-
-    nodes[nodeCount,:] = edgepoints[pointCount-1,:]
-    if nodeCount<nnode-1:
-        connectivity[nodeCount,:] = [nodeCount,nodeCount+1]
-    else:
-        connectivity[nodeCount,:] = [nodeCount,0]
-    nedgepoints[nodeCount] = nconnpoints + 1
-    nodeCount += 1
-    
-    for j in range(pointCount+1,pointCount+nconnpoints+1):
-        curAngle += angular_spacing
-        turnCount += 1
-        print 'EDGE',pointCount,np.rad2deg(curAngle)
-        #print 'TURNS:',turnCount
-        edgepoints[pointCount,:] = [radius*np.cos(curAngle)+centre[0],
-                   radius*np.sin(curAngle)+centre[1],
-                   0.]
-        pointCount += 1
-                
-midpoint = int(nnode / 2.)
-connectivity = np.append(connectivity,[[0,midpoint]],axis=0)
-nedgepoints = np.append(nedgepoints,[2],axis=0)
-edgepoints = np.append(edgepoints,[nodes[0,:]],axis=0)
-edgepoints = np.append(edgepoints,[nodes[midpoint,:]],axis=0)
-radii = np.append(radii,[thickness,thickness],axis=0)
-flow = np.append(flow,[flowValue,flowValue],axis=0)
+nodes = np.asarray(nodes,dtype='float')
+nedgepoints = np.asarray(nedgepoints,dtype='int')
+connectivity = np.asarray(connectivity,dtype='int')
+edgepoints = np.asarray(points,dtype='float')
+radii = np.asarray(radii,dtype='float')
 
 nnode = nodes.shape[0]
 nedge = nedgepoints.shape[0]
 npoint = edgepoints.shape[0]
     
-graph = spatialgraph.SpatialGraph(initialise=True,scalars=['Radii','Flow'])
+graph = spatialgraph.SpatialGraph(initialise=True,scalars=['Radii'])
 graph.set_definition_size('VERTEX',nnode)
 graph.set_definition_size('EDGE',nedge)
 graph.set_definition_size('POINT',npoint)
@@ -84,7 +100,16 @@ graph.set_data(connectivity,name='EdgeConnectivity')
 graph.set_data(nedgepoints,name='NumEdgePoints')
 graph.set_data(edgepoints,name='EdgePointCoordinates')
 graph.set_data(radii,name='Radii')
-graph.set_data(flow,name='Flow')
+
+#graph.sanity_check(deep=True)
+
+#import pdb
+#pdb.set_trace()
+#graph.constrain_nodes(xrange=[2,5])
+graph.delete_nodes([2,5])
+
+graph.sanity_check(deep=True)
+
 #graph._print()
-ofile = 'C:\\Anaconda2\\Lib\\site-packages\\pymira\\circle.am'
+ofile = 'C:\\Anaconda2\\Lib\\site-packages\\pymira\\test_network.am'
 graph.write(ofile)
