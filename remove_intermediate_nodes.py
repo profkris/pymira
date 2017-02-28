@@ -10,8 +10,8 @@ import pickle
 amdata = spatialgraph.SpatialGraph()
 
 dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\' 
-fo = dir_+'spatialGraph.am'
-ofile = dir_ + 'spatialGraph_RIN.am'
+fo = dir_+'spatialGraph_constrained.am'
+ofile = dir_ + 'spatialGraph_constrained_RIN.am'
 
 #dir_ = 'C:\\Anaconda2\\Lib\\site-packages\\pymira\\'
 #fo = dir_ + 'circle.am'
@@ -36,7 +36,8 @@ print('Graph loaded')
 #pFile = dir_+'node_list.p'
 nodeList = None
 
-new_graph = amdata.remove_intermediate_nodes(nodeList=nodeList)
+editor = spatialgraph.Editor()
+new_graph = editor.remove_intermediate_nodes(amdata,nodeList=nodeList)
 import pdb
 pdb.set_trace()
 new_graph.sanity_check(deep=True)

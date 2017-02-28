@@ -208,15 +208,92 @@ class SpatialGraph(amiramesh.AmiraMesh): #
         if len(nodes_to_keep[0])==0:
             print('No nodes left!')
             return
-            
-        return self.delete_nodes(nodes_to_delete[0])
-                
-    def delete_nodes(self,nodes_to_delete):
         
-        nodeCoords = self.get_data('VertexCoordinates')
-        edgeConn = self.get_data('EdgeConnectivity')
+        editor = Editor()
+        return editor.delete_nodes(nodes_to_delete[0])
+        
+    def remove_field(self,fieldName):
+        f = [(i,f) for (i,f) in enumerate(self.fields) if f['name']==fieldName]
+        if f[0][1] is None:
+            print('Could not locate requested field: {}'.format(fieldName))
+            return
+        _  = self.fields.pop(f[0][0])
+        
+    def get_node(self,index):
+        return Node(graph=self,index=index)
+        
+    def get_edge(self,index):
+        return Edge(graph=self,index=index)
+        
+    def get_scalars(self):
+        return [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
+        
+    def edgepoint_indices(self,edgeIndex):
         nedgepoints = self.get_data('NumEdgePoints')
         edgeCoords = self.get_data('EdgePointCoordinates')
+        nedge = len(nedgepoints)
+        
+        assert edgeIndex>=0
+        assert edgeIndex<nedge
+        
+        npoints = nedgepoints[edgeIndex]
+        if edgeIndex==0:
+            start_index = 0
+        else:
+            start_index = np.sum(nedgepoints[0:edgeIndex])
+        end_index = start_index + npoints
+        
+        return [start_index,end_index]
+        
+    def _print(self):
+        print('GRAPH')
+        print('Fields: {}'.format(self.fieldNames))
+        for f in self.fields:
+            print(f)
+            
+    def sanity_check(self,deep=False):
+        
+        self.set_graph_sizes()
+        
+        for d in self.definitions:
+            defName = d['name']
+            defSize = d['size'][0]
+            fields = [f for f in self.fields if f['definition']==defName]
+            for f in fields:
+                if f['nentries'][0]!=defSize:
+                    print('{} field size does not match {} definition size!'.format(f['name'],defName))
+                if f['shape'][0]!=defSize:
+                    print('{} shape size does not match {} definition size!'.format(f['name'],defName))
+                if not all(x==y for x,y in zip(f['data'].shape,f['shape'])):
+                    print('{} data shape does not match shape field!'.format(f['name']))
+
+        if deep:
+            for nodeInd in range(self.nnode):
+                node = self.get_node(nodeInd)
+                for i,e in enumerate(node.edges):
+                    if not node.edge_indices_rev[i]:
+                        if not all(x==y for x,y in zip(e.start_node_coords,node.coords)):
+                            print('Node coordinates ({}) do not match start of edge ({}) coordinates: {} {}'.format(node.index,e.index,e.start_node_coords,node.coords))
+                        if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
+                            print('Edge start point does not match edge/node start ({}) coordinates'.format(e.index))
+                        if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
+                            print('Edge end point does not match edge/node end ({}) coordinates'.format(e.index))
+                    else:
+                        if not all(x==y for x,y in zip(e.end_node_coords,node.coords)):
+                            print('Node coordinates ({}) do not match end of edge ({}) coordinates'.format(node.index,e.index))
+                        if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
+                            print('Edge end point does not match edge start (REVERSE) ({}) coordinates'.format(e.index))
+                        if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
+                            print('Edge start point does not match edge end (REVERSE) ({}) coordinates'.format(e.index))        
+
+class Editor(object):
+    
+    def delete_nodes(self,graph,nodes_to_delete):
+        
+        nodeCoords = graph.get_data('VertexCoordinates')
+        edgeConn = graph.get_data('EdgeConnectivity')
+        nedgepoints = graph.get_data('NumEdgePoints')
+        edgeCoords = graph.get_data('EdgePointCoordinates')
         
         nnode = len(nodeCoords)
         nedge = len(edgeConn)
@@ -310,78 +387,41 @@ class SpatialGraph(amiramesh.AmiraMesh): #
                     pdb.set_trace()
         
         # Update VERTEX definition
-        vertex_def = self.get_definition('VERTEX')
+        vertex_def = graph.get_definition('VERTEX')
         vertex_def['size'] = [len(nodes_to_keep)]
         # Update EDGE definition
-        edge_def = self.get_definition('EDGE')
+        edge_def = graph.get_definition('EDGE')
         edge_def['size'] = [len(edges_to_keep[0])]
         # Update POINT definition
-        edgepoint_def = self.get_definition('POINT')
+        edgepoint_def = graph.get_definition('POINT')
         edgepoint_def['size'] = [len(edgepoints_to_keep[0])]
         
-        self.set_data(nodeCoords_ed,name='VertexCoordinates')
-        self.set_data(edgeConn_ed,name='EdgeConnectivity')
-        self.set_data(nedgepoints_ed,name='NumEdgePoints')
-        self.set_data(edgeCoords_ed,name='EdgePointCoordinates')
+        graph.set_data(nodeCoords_ed,name='VertexCoordinates')
+        graph.set_data(edgeConn_ed,name='EdgeConnectivity')
+        graph.set_data(nedgepoints_ed,name='NumEdgePoints')
+        graph.set_data(edgeCoords_ed,name='EdgePointCoordinates')
         
         #Check for any other scalar fields
         scalars = [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
         for sc in scalars:
             data_ed = np.delete(sc['data'],edgepoints_to_delete[0],axis=0)
-            self.set_data(data_ed,name=sc['name'])
+            graph.set_data(data_ed,name=sc['name'])
             
-        self.set_graph_sizes()
-            
-        import pdb
-        pdb.set_trace()
-
-        #if not no_copy:                
-        #    return graph
-            
-#    def remove_nodes(self,index):
-#        nodeCoords = self.get_data('VertexCoordinates')
-#        edgeConn = self.get_data('EdgeConnectivity')
-#        nedgepoints = self.get_data('NumEdgePoints')
-#        edgeCoords = self.get_data('EdgePointCoordinates')
-#        
-#        nnode = len(nodeCoords[:,0])
-#        assert index>=0
-#        assert index<nnode
-#        
-#        nodeCoords_ed = np.delete(nodeCoords,index,axis=0)
-#        
-#        s0 = np.where(edgeConn[:,0]==index)
-#        s1 = np.where(edgeConn[:,1]==index)
-#        if len(s0[0])>0:
-#            for i,e in enumerate(s0[0]):
-#                self.remove_edge(i)
-#                
-#    def remove_edge(self,index):
-#        edgeConn = self.get_data('EdgeConnectivity')
-#        nedgepoints = self.get_data('NumEdgePoints')
-#        edgeCoords = self.get_data('EdgePointCoordinates')
-        
-    def remove_field(self,fieldName):
-        f = [(i,f) for (i,f) in enumerate(self.fields) if f['name']==fieldName]
-        if f[0][1] is None:
-            print('Could not locate requested field: {}'.format(fieldName))
-            return
-        _  = self.fields.pop(f[0][0])
-
-#class Editor(object):
+        graph.set_graph_sizes()
+        return graph
     
-    def remove_intermediate_nodes(self,file=None,nodeList=None):
+    def remove_intermediate_nodes(self,graph,file=None,nodeList=None):
         
         import pickle
         import os
-        import spatialgraph
+        #import spatialgraph
         
         if nodeList is None:
-            pFile = self.dir+'\\node_list.p'
+            pFile = graph.dir+'\\node_list.p'
         #if not os.path.isfile(pFile):
         #if True:
             print 'Generating node list...'
-            nodeList = self.node_list()
+            nodeList = graph.node_list()
             print 'Node list complete.'
             #print 'Saving node list to {}'.format(pFile)
             #with open(pFile,'wb') as f:
@@ -392,8 +432,8 @@ class SpatialGraph(amiramesh.AmiraMesh): #
         #    with open(pFile,'rb') as f:
         #        nodeList = pickle.load(f)
         
-        nnode = self.nnode
-        nedge = self.nedge        
+        nnode = graph.nnode
+        nedge = graph.nedge        
         nconn = np.array([node.nconn for node in nodeList])
         new_nodeList = []
         
@@ -412,7 +452,7 @@ class SpatialGraph(amiramesh.AmiraMesh): #
             if (node.nconn==1 or node.nconn>2) and node_now_edge[node.index]==0 and node_converted[node.index]==0:
                 # If so, make a new node object
                 print('NODE {} {} (START)'.format(newNodeCount,node.index))
-                newNode = spatialgraph.Node(index=newNodeCount,coordinates=node.coords,connecting_node=[])
+                newNode = Node(index=newNodeCount,coordinates=node.coords,connecting_node=[])
                 # Mark node as having been converted to a new node (rather than an edge)
                 node_converted[node.index] = 1
                 new_nodeList.append(newNode)
@@ -556,7 +596,7 @@ class SpatialGraph(amiramesh.AmiraMesh): #
                                 elif node_now_edge[curNodeIndex]==0:
                                     print('NODE {} {} (END)'.format(newNodeCount,curNode.index))
                                     end_node_index_new = newNodeCount
-                                    endNode = spatialgraph.Node(index=end_node_index_new,coordinates=curNode.coords,connecting_node=[])
+                                    endNode = Node(index=end_node_index_new,coordinates=curNode.coords,connecting_node=[])
                                     node_converted[curNodeIndex] = 1
                                     new_nodeList.append(endNode) #[newNodeCount] = endNode
                                     node_index_lookup[end_node_index] = newNodeCount
@@ -582,9 +622,6 @@ class SpatialGraph(amiramesh.AmiraMesh): #
         new_nedge = newEdgeCount
         new_nnode = newNodeCount
         
-        import pdb
-        pdb.set_trace()
-        
         nodeCoords = np.asarray([n.coords for n in new_nodeList])
         
         edges = [n.edges for n in new_nodeList]
@@ -604,7 +641,7 @@ class SpatialGraph(amiramesh.AmiraMesh): #
         for i in range(nscalar): 
             scalars.append(np.concatenate([s[i] for s in scalarData]))
         
-        import spatialgraph
+        #import spatialgraph
         new_graph = SpatialGraph(initialise=True,scalars=scalarNames)
         
         new_graph.set_definition_size('VERTEX',new_nnode)
@@ -620,73 +657,7 @@ class SpatialGraph(amiramesh.AmiraMesh): #
         
         return new_graph
         
-    def get_node(self,index):
-        return Node(graph=self,index=index)
-        
-    def get_edge(self,index):
-        return Edge(graph=self,index=index)
-        
-    def get_scalars(self):
-        return [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
-        
-    def edgepoint_indices(self,edgeIndex):
-        nedgepoints = self.get_data('NumEdgePoints')
-        edgeCoords = self.get_data('EdgePointCoordinates')
-        nedge = len(nedgepoints)
-        
-        assert edgeIndex>=0
-        assert edgeIndex<nedge
-        
-        npoints = nedgepoints[edgeIndex]
-        if edgeIndex==0:
-            start_index = 0
-        else:
-            start_index = np.sum(nedgepoints[0:edgeIndex])
-        end_index = start_index + npoints
-        
-        return [start_index,end_index]
-        
-    def _print(self):
-        print('GRAPH')
-        print('Fields: {}'.format(self.fieldNames))
-        for f in self.fields:
-            print(f)
-            
-    def sanity_check(self,deep=False):
-        
-        self.set_graph_sizes()
-        
-        for d in self.definitions:
-            defName = d['name']
-            defSize = d['size'][0]
-            fields = [f for f in self.fields if f['definition']==defName]
-            for f in fields:
-                if f['nentries'][0]!=defSize:
-                    print('{} field size does not match {} definition size!'.format(f['name'],defName))
-                if f['shape'][0]!=defSize:
-                    print('{} shape size does not match {} definition size!'.format(f['name'],defName))
-                if not all(x==y for x,y in zip(f['data'].shape,f['shape'])):
-                    print('{} data shape does not match shape field!'.format(f['name']))
 
-        if deep:
-            for nodeInd in range(self.nnode):
-                node = self.get_node(nodeInd)
-                for i,e in enumerate(node.edges):
-                    if not node.edge_indices_rev[i]:
-                        if not all(x==y for x,y in zip(e.start_node_coords,node.coords)):
-                            print('Node coordinates ({}) do not match start of edge ({}) coordinates: {} {}'.format(node.index,e.index,e.start_node_coords,node.coords))
-                        if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
-                            print('Edge start point does not match edge/node start ({}) coordinates'.format(e.index))
-                        if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
-                            print('Edge end point does not match edge/node end ({}) coordinates'.format(e.index))
-                    else:
-                        if not all(x==y for x,y in zip(e.end_node_coords,node.coords)):
-                            print('Node coordinates ({}) do not match end of edge ({}) coordinates'.format(node.index,e.index))
-                        if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
-                            print('Edge end point does not match edge start (REVERSE) ({}) coordinates'.format(e.index))
-                        if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
-                            print('Edge start point does not match edge end (REVERSE) ({}) coordinates'.format(e.index))
-    
 class Node(object):
     
     def __init__(self, graph=None, index=0, edge_indices=None, edge_indices_rev=None,
