@@ -478,6 +478,10 @@ class Editor(object):
         
         for cntr,node in enumerate(nodeList):
             
+            if node.index==3754:
+                import pdb
+                pdb.set_trace()
+            
             # Is the current node branching (or terminal)?
             if (node.nconn==1 or node.nconn>2) and node_now_edge[node.index]==0 and node_edges_checked[node.index]==0:
                 # If so, make a new node object
@@ -492,7 +496,11 @@ class Editor(object):
                     newNodeCount += 1
                 else:
                     print('NODE (START, REVISITED) {} {} {}'.format(newNodeCount,node.index,node.nconn))
-                    newNode = new_nodeList[node_index_lookup[node.index]]
+                    ind = node_index_lookup[node.index]
+                    if ind<0:
+                        import pdb
+                        pdb.set_trace()
+                    newNode = new_nodeList[ind]
                     newNodeIndex = newNode.index
                     
                 node_edges_checked[node.index] = 1
@@ -511,195 +519,220 @@ class Editor(object):
                     # Compile connecting edges -
                     connecting_edge = [e for x,e in zip(node.connecting_node,node.edges) if x==connecting_node_index]
                     
-                    # Check if edge has already been converted (e.g. the return of a loop)
-                    if edge_converted[connecting_edge[0].index]==0:
-                        # Check whether to reverse coordinates in edge
-                        if connecting_edge[0].end_node_index==node.index:
-                            reverse_edge_indices = True
-                            ecoords = connecting_edge[0].coordinates
-                            ecoords = ecoords[::-1,:]
-                            scalars = [s[::-1] for s in connecting_edge[0].scalars]
-                        elif connecting_edge[0].start_node_index==node.index:
-                            reverse_edge_indices = False
-                            ecoords = connecting_edge[0].coordinates
-                            scalars = connecting_edge[0].scalars
-                        else:
-                            import pdb
-                            pdb.set_trace()
-                            
-                        # Create edge object to add points to during walk
-                        print('EDGE {}'.format(newEdgeCount))
-                        newEdge = Edge(index=newEdgeCount,start_node_index=newNode.index,
-                                           start_node_coords=newNode.coords,
-                                           coordinates=ecoords,
-                                           npoints=ecoords.shape[0],
-                                           scalars=scalars,
-                                           scalarNames=connecting_edge[0].scalarNames)
-                        new_edgeList.append(newEdge)
-                        edge_index_lookup[connecting_edge[0].index] = newEdgeCount
-                        
-                        newEdgeCount += 1
-                        
-                        visited_edges.append(connecting_edge[0].index)
-                        edge_converted[connecting_edge[0].index] = 1
-                    
-                        # Start walking - complete when a branching node is encountered
-                        endFlag = False
-                        
-                        while endFlag is False:
-                            curNode = nodeList[curNodeIndex]
-                            visited.append(curNodeIndex)
-                            
-                            # If it's an intermediate (connecting) node
-                            if curNode.nconn==2:
-                                # Check which connecting nodes have been visited already
-                                next_node_index = [x for x in curNode.connecting_node if x not in visited]
-                                # Get connecting edge (connected to unvisited, unconverted node)
-                                connecting_edge = [e for x,e in zip(curNode.connecting_node,curNode.edges) if x not in visited and edge_converted[e.index]==0 ]
-                                # If no unvisited nodes have been identified...
-                                if len(connecting_edge)==0:
-                                    # Look for branching nodes that have been visited (i.e. loops)
-                                    connecting_edge = [e for x,e in zip(curNode.connecting_node,curNode.edges) if edge_converted[e.index]==0 ]
-                                    if len(connecting_edge)==1:
-                                        foundConn = False
-                                        # Check both start and end node indices
-                                        for i,j in enumerate([connecting_edge[0].start_node_index,connecting_edge[0].end_node_index]):
-                                            if nodeList[j].nconn > 2:
-                                                #Loop!
-                                                # Look for a connecting branch point
-                                                next_node_index = [j]
-                                                foundConn = True
-                                        # If still nothing found...
-                                        if not foundConn:
-                                            import pdb
-                                            pdb.set_trace()
-                                            
-                                # If a connected edge has been found...
-                                if len(connecting_edge)>0:
-                                    # Check whether to reverse edge points
-                                    if connecting_edge[0].end_node_index==curNode.index:
-                                        reverse_edge_indices = True
-                                    elif connecting_edge[0].start_node_index==curNode.index:
-                                        reverse_edge_indices = False
-                                    else:
-                                        import pdb
-                                        pdb.set_trace()
-        
-                                    # Add in connecting edge points
-                                    # Reverse edge coordinates if necessary
-                                    if reverse_edge_indices:
-                                        scalars = [s[::-1] for s in connecting_edge[0].scalars]
-                                        #scalars = [s[1:-1] for s in scalars]
-                                        coords = connecting_edge[0].coordinates
-                                        coords = coords[::-1,:]
-                                        newEdge.add_point(coords,scalars=scalars,remove_last=True)
-                                    else:
-                                        #scalars = [s[1:-1] for s in connecting_edge[0].scalars]
-                                        scalars = connecting_edge[0].scalars
-                                        newEdge.add_point(connecting_edge[0].coordinates,
-                                                      scalars=scalars,remove_last=True)
-    
-                                    # Mark that node is now an edge point
-                                    node_now_edge[curNodeIndex] = 1
-        
-                                    # If we've run out of nodes, then quit;
-                                    # Otherwise, walk to the next node
-                                    if len(next_node_index)==0:                                
-                                        endFlag = True
-                                    else:
-                                        curNodeIndex = next_node_index[0]
-                                        edge_converted[connecting_edge[0].index] = 1
-                                else: # No connected edges found
-                                    print('No connected edges...')
-                                    endFlag = True
-                                    
-                            else: # Branch or terminal point
-                                endFlag = True
-                                end_node_index = curNode.index
-                                # Add in final edge coordinates, if necessary
-                                if not all([x==y for x,y in zip(newEdge.coordinates[-1,:],curNode.coords)]):
-                                    # Reverse edge coordinates if necessary
-                                    if connecting_edge[0].start_node_index!=curNode.index:
-                                        scalars = [s[::-1] for s in connecting_edge[0].scalars]
-                                        coords = connecting_edge[0].coordinates
-                                        coords = coords[::-1,:]
-                                        newEdge.add_point(coords,scalars=scalars,remove_last=True)
-                                    else:
-                                        scalars = connecting_edge[0].scalars
-                                        newEdge.add_point(connecting_edge[0].coordinates,
-                                                      scalars=scalars,remove_last=True)
-                                
-                            # Sort out end nodes and edges
-                            if endFlag:
-                                # Find end node
-                                if newEdge is None:
-                                    import pdb
-                                    pdb.set_trace()
-                                # If node has already been visited
-                                if node_converted[curNodeIndex]==1 and node_now_edge[curNodeIndex]==0:
-                                    end_node_index_new = int(node_index_lookup[end_node_index])
-                                    endNode = new_nodeList[end_node_index_new]
-                                    #print('REVISITED NODE {} (END)'.format(endNode.index))
-                                # If node hasn't been converted, and isn't an edge
-                                elif node_now_edge[curNodeIndex]==0:
-                                    print('NODE (END) {} {}'.format(newNodeCount,curNode.index))
-                                    end_node_index_new = newNodeCount
-                                    endNode = Node(index=end_node_index_new,coordinates=curNode.coords,connecting_node=[],old_index=curNode.index)
-                                    node_converted[curNodeIndex] = 1
-                                    new_nodeList.append(endNode) #[newNodeCount] = endNode
-                                    node_index_lookup[end_node_index] = newNodeCount
-                                    newNodeCount += 1
-                                else:
-                                    import pdb
-                                    pdb.set_trace()
-                                    
-                                try:
-                                    stat = newEdge.complete_edge(endNode.coords,end_node_index_new)
-                                    if stat!=0:
-                                        import pdb
-                                        pdb.set_trace()
-                                    print('EDGE COMPLETE: end node {}'.format(endNode.index))
-                                except Exception,e:
-                                    print(e)
-                                    import pdb
-                                    pdb.set_trace()
-                                    
-                                newNode.add_edge(newEdge)
-                                if endNode.index!=newNode.index:
-                                    endNode.add_edge(newEdge,reverse=True)
-                                
-                                edges_complete[node_counter] = True
-                                
-                                break
-                    else:
-                        newEdgeIndex = edge_index_lookup[connecting_edge[0].index]
-                        newEdge = new_edgeList[newEdgeIndex]
-                        if newEdge.start_node_index==newNode.index:
-                            newNode.add_edge(newEdge)
-                        elif newEdge.end_node_index==newNode.index:
-                            newNode.add_edge(newEdge,reverse=True)
-                        else:
-                            import pdb
-                            pdb.set_trace()
-                        edges_complete[node_counter] = True
-                        
-                    if edges_complete[node_counter]==False:
+                    if connecting_edge[0].index==4098:
                         import pdb
                         pdb.set_trace()
                         
-                if newNode.nconn==2:
-                    import pdb
-                    pdb.set_trace()
-                if newNode.nconn!=node.nconn:
-                    import pdb
-                    pdb.set_trace()
-                    #assert endNode is not None
-                if not all(edges_complete):
-                    import pdb
-                    pdb.set_trace()
+                    for connEdge in connecting_edge:
+
+                        # Check if edge has already been converted (e.g. the return of a loop)
+                        if edge_converted[connEdge.index]==0:
+                            # Check whether to reverse coordinates in edge
+                            if connEdge.end_node_index==node.index:
+                                reverse_edge_indices = True
+                                ecoords = connEdge.coordinates
+                                ecoords = ecoords[::-1,:]
+                                scalars = [s[::-1] for s in connEdge.scalars]
+                            elif connEdge.start_node_index==node.index:
+                                reverse_edge_indices = False
+                                ecoords = connEdge.coordinates
+                                scalars = connEdge.scalars
+                            else:
+                                import pdb
+                                pdb.set_trace()
+                                
+                            # Create edge object to add points to during walk
+                            print('EDGE {}'.format(newEdgeCount))
+                            newEdge = Edge(index=newEdgeCount,start_node_index=newNode.index,
+                                               start_node_coords=newNode.coords,
+                                               coordinates=ecoords,
+                                               npoints=ecoords.shape[0],
+                                               scalars=scalars,
+                                               scalarNames=connEdge.scalarNames)
+                                               
+                            new_edgeList.append(newEdge)
+                            assert len(new_edgeList)==newEdgeCount+1
+                            
+                            edge_index_lookup[connEdge.index] = newEdgeCount
+                            visited_edges.append(connEdge.index)
+                            edge_converted[connEdge.index] = 1
+                            
+                            newEdgeCount += 1
+                        
+                            # Start walking - complete when a branching node is encountered
+                            endFlag = False
+                            
+                            while endFlag is False:
+                                curNode = nodeList[curNodeIndex]
+                                visited.append(curNodeIndex)
+                                
+                                # If it's an intermediate (connecting) node
+                                if curNode.nconn==2:
+                                    # Check which connecting nodes have been visited already
+                                    next_node_index = [x for x in curNode.connecting_node if x not in visited]
+                                    # Get connecting edge (connected to unvisited, unconverted node)
+                                    connecting_edge_walk = [e for x,e in zip(curNode.connecting_node,curNode.edges) if x not in visited and edge_converted[e.index]==0 ]
+                                    # If no unvisited nodes have been identified...
+                                    if len(connecting_edge_walk)==0:
+                                        # Look for branching nodes that have been visited (i.e. loops)
+                                        connecting_edge_walk = [e for x,e in zip(curNode.connecting_node,curNode.edges) if edge_converted[e.index]==0 ]
+                                        if len(connecting_edge_walk)==1:
+                                            foundConn = False
+                                            # Check both start and end node indices
+                                            for i,j in enumerate([connecting_edge_walk[0].start_node_index,connecting_edge_walk[0].end_node_index]):
+                                                if nodeList[j].nconn > 2:
+                                                    #Loop!
+                                                    # Look for a connecting branch point
+                                                    next_node_index = [j]
+                                                    foundConn = True
+                                            # If still nothing found...
+                                            if not foundConn:
+                                                import pdb
+                                                pdb.set_trace()
+                                                
+                                    # If a connected edge has been found...
+                                    if len(connecting_edge_walk)>0:
+                                        # Check whether to reverse edge points
+                                        if connecting_edge_walk[0].end_node_index==curNode.index:
+                                            reverse_edge_indices = True
+                                        elif connecting_edge_walk[0].start_node_index==curNode.index:
+                                            reverse_edge_indices = False
+                                        else:
+                                            import pdb
+                                            pdb.set_trace()
+            
+                                        # Add in connecting edge points
+                                        # Reverse edge coordinates if necessary
+                                        if reverse_edge_indices:
+                                            scalars = [s[::-1] for s in connecting_edge_walk[0].scalars]
+                                            #scalars = [s[1:-1] for s in scalars]
+                                            coords = connecting_edge_walk[0].coordinates
+                                            coords = coords[::-1,:]
+                                            newEdge.add_point(coords,scalars=scalars,remove_last=True)
+                                        else:
+                                            scalars = connecting_edge_walk[0].scalars
+                                            newEdge.add_point(connecting_edge_walk[0].coordinates,
+                                                          scalars=scalars,remove_last=True)
+        
+                                        # Mark that node is now an edge point
+                                        node_now_edge[curNodeIndex] = 1
+            
+                                        # If we've run out of nodes, then quit;
+                                        # Otherwise, walk to the next node
+                                        if len(next_node_index)==0:                                
+                                            endFlag = True
+                                        else:
+                                            curNodeIndex = next_node_index[0]
+                                            edge_converted[connecting_edge_walk[0].index] = 1
+                                            edge_index_lookup[connecting_edge_walk[0].index] = newEdge.index
+                                    else: # No connected edges found
+                                        print('No connected edges...')
+                                        endFlag = True
+                                        
+                                else: # Branch or terminal point
+                                    endFlag = True
+                                    end_node_index = curNode.index
+                                    # Add in final edge coordinates, if necessary
+                                    if not all([x==y for x,y in zip(newEdge.coordinates[-1,:],curNode.coords)]):
+                                        # Reverse edge coordinates if necessary
+                                        if connEdge.start_node_index!=curNode.index:
+                                            scalars = [s[::-1] for s in connEdge.scalars]
+                                            coords = connEdge.coordinates
+                                            coords = coords[::-1,:]
+                                            newEdge.add_point(coords,scalars=scalars,remove_last=True)
+                                        else:
+                                            scalars = connEdge.scalars
+                                            newEdge.add_point(connEdge.coordinates,
+                                                          scalars=scalars,remove_last=True)
+                                    
+                                # Sort out end nodes and edges
+                                if endFlag:
+                                    # Find end node
+                                    if newEdge is None:
+                                        import pdb
+                                        pdb.set_trace()
+                                    # If node has already been visited
+                                    if node_converted[curNodeIndex]==1 and node_now_edge[curNodeIndex]==0:
+                                        end_node_index_new = int(node_index_lookup[end_node_index])
+                                        if end_node_index_new<0:
+                                            import pdb
+                                            pdb.set_trace()
+                                        endNode = new_nodeList[end_node_index_new]
+                                        #print('REVISITED NODE {} (END)'.format(endNode.index))
+                                    # If node hasn't been converted, and isn't an edge
+                                    elif node_now_edge[curNodeIndex]==0:
+                                        print('NODE (END) {} {}'.format(newNodeCount,curNode.index))
+                                        end_node_index_new = newNodeCount
+                                        endNode = Node(index=end_node_index_new,coordinates=curNode.coords,connecting_node=[],old_index=curNode.index)
+                                        node_converted[curNodeIndex] = 1
+                                        new_nodeList.append(endNode) #[newNodeCount] = endNode
+                                        node_index_lookup[end_node_index] = newNodeCount
+                                        newNodeCount += 1
+                                    else:
+                                        import pdb
+                                        pdb.set_trace()
+                                        
+                                    try:
+                                        stat = newEdge.complete_edge(endNode.coords,end_node_index_new)
+                                        if stat!=0:
+                                            import pdb
+                                            pdb.set_trace()
+                                        print('EDGE COMPLETE: end node {}'.format(endNode.index))
+                                    except Exception,e:
+                                        print(e)
+                                        import pdb
+                                        pdb.set_trace()
+                                        
+                                    res = newNode.add_edge(newEdge)
+                                    if not res:
+                                        import pdb
+                                        pdb.set_trace()
+                                    if endNode.index!=newNode.index:
+                                        res = endNode.add_edge(newEdge,reverse=True)
+                                        if not res:
+                                            import pdb
+                                            pdb.set_trace()
+                                    
+                                    edges_complete[node_counter] = True
+                                    
+                                    break
+                        else: # Edge has already been converted
+                            newEdgeIndex = edge_index_lookup[connEdge.index]
+                            if newEdgeIndex<0:
+                                import pdb
+                                pdb.set_trace()
+                            newEdge = new_edgeList[newEdgeIndex]
+                            if newEdge.start_node_index==newNode.index:
+                                res = newNode.add_edge(newEdge)
+                                if not res:
+                                    print('Error: Edge {} is already attached to node {}'.format(newEdge.index,newNode.index))
+                            elif newEdge.end_node_index==newNode.index:
+                                res = newNode.add_edge(newEdge,reverse=True)
+                                if not res:
+                                    print('Error: Edge {} is already attached to node {}'.format(newEdge.index,newNode.index))
+                            else:
+                                import pdb
+                                pdb.set_trace()
+                            edges_complete[node_counter] = True
+                        
+#                    if edges_complete[node_counter]==False:
+#                        import pdb
+#                        pdb.set_trace()
+                        
+#                if newNode.nconn==2:
+#                    import pdb
+#                    pdb.set_trace()
+#                if newNode.nconn!=node.nconn:
+#                    import pdb
+#                    pdb.set_trace()
+#                    #assert endNode is not None
+#                if not all(edges_complete):
+#                    import pdb
+#                    pdb.set_trace()
 
         #return new_nodeList
         se = np.where(edge_converted==0)
+        elu = np.where(edge_index_lookup<0)
         incomplete_edges = [e for e in new_edgeList if e.complete is False]
         incomp = np.where(edge_converted==0)
         node2 = [n for n in new_nodeList if n.nconn==2]
@@ -708,7 +741,8 @@ class Editor(object):
         new_nedge = newEdgeCount
         new_nnode = newNodeCount
         
-        return self.node_list_to_graph(new_nodeList)
+        new_graph = graph.node_list_to_graph(new_nodeList)
+        return new_graph
 
 class Node(object):
     
@@ -763,7 +797,7 @@ class Node(object):
             
         current_edge_indices = [e.index for e in self.edges]  
         if edge.index in current_edge_indices:
-            return
+            return False
             
         self.edges.append(edge)
         if self.edge_indices_rev is None:
@@ -776,6 +810,7 @@ class Node(object):
         else:
             self.connecting_node.append(edge.start_node_index)
         self.nconn += 1
+        return True
             
     def _print(self):
         print('NODE ({}):'.format(self.index))
