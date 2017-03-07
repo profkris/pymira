@@ -10,7 +10,7 @@ import numpy as np
 
 class SpatialGraph(amiramesh.AmiraMesh): #
     
-    def __init__(self,header_from=None,initialise=False,scalars=[]):
+    def __init__(self,header_from=None,initialise=False,scalars=[],node_scalars=[]):
         amiramesh.AmiraMesh.__init__(self)
         if header_from is not None:
             import copy
@@ -19,9 +19,9 @@ class SpatialGraph(amiramesh.AmiraMesh): #
             self.header = copy.deepcopy(header_from.header)
             self.fieldNames = copy.deepcopy(header_from.fieldNames)
         if initialise:
-            self.initialise(scalars=scalars)
+            self.initialise(scalars=scalars,node_scalars=node_scalars)
             
-    def initialise(self,scalars=[]):
+    def initialise(self,scalars=None,node_scalars=None):
         self.fileType = '3D ASCII 2.0'
         self.filename = ''
         
@@ -45,12 +45,24 @@ class SpatialGraph(amiramesh.AmiraMesh): #
                               nelements=3,nentries=[0])
                               
         offset = len(self.fields) + 1
-        if type(scalars) is not list:
-            scalars = [scalars]
-        for i,sc in enumerate(scalars):
-            self.add_field(name=sc,marker='@{}'.format(i+offset),
-                              definition='POINT',type='float',
-                              nelements=1,nentries=[0])
+        
+        if len(scalars)>0:
+            if type(scalars) is not list:
+                scalars = [scalars]
+            for i,sc in enumerate(scalars):
+                self.add_field(name=sc,marker='@{}'.format(offset),
+                                  definition='POINT',type='float',
+                                  nelements=1,nentries=[0])
+                offset = len(self.fields) + 1
+                                  
+        if len(node_scalars)>0:
+            if type(node_scalars) is not list:
+                node_scalars = [node_scalars]
+            for i,sc in enumerate(node_scalars):
+                self.add_field(name=sc,marker='@{}'.format(i+offset),
+                                  definition='VERTEX',type='float',
+                                  nelements=1,nentries=[0])
+                offset = len(self.fields) + 1
                               
         self.fieldNames = [x['name'] for x in self.fields]
         
@@ -296,21 +308,31 @@ class SpatialGraph(amiramesh.AmiraMesh): #
     def node_list_to_graph(self,nodeList):
         
         nodeCoords = np.asarray([n.coords for n in nodeList])
+        nnode = nodeCoords.shape[0]
         
         edges = self.edges_from_node_list(nodeList)
 
         edgeConn = np.asarray([[x.start_node_index,x.end_node_index] for x in edges])
         edgeCoords = np.concatenate([x.coordinates for x in edges])
         nedgepoint = np.array([x.npoints for x in edges])
+        
         scalarNames = edges[0].scalarNames
-        scalarData = [x.scalars for x in edges]
+        scalarData = [x.scalars for x in edges]        
         scalars = []
         nscalar = len(scalarNames)
         for i in range(nscalar): 
             scalars.append(np.concatenate([s[i] for s in scalarData]))
         
+        nodeScalarNames = nodeList[0].scalarNames
+        nodeScalarData = np.asarray([x.scalars for x in nodeList])
+        nnodescalar = len(nodeScalarNames)
+        nodeScalars = np.zeros([nnodescalar,nnode])
+        for i in range(nnodescalar):
+            #nodeScalars.append(np.concatenate([s[i] for s in nodeScalarData]))
+            nodeScalars[i,:] = nodeScalarData[i::nnodescalar,0]
+        
         #import spatialgraph
-        graph = SpatialGraph(initialise=True,scalars=scalarNames)
+        graph = SpatialGraph(initialise=True,scalars=scalarNames,node_scalars=nodeScalarNames)
         
         graph.set_definition_size('VERTEX',nodeCoords.shape[0])
         graph.set_definition_size('EDGE',edgeConn.shape[0])
@@ -322,6 +344,8 @@ class SpatialGraph(amiramesh.AmiraMesh): #
         graph.set_data(edgeCoords,name='EdgePointCoordinates')
         for i,s in enumerate(scalars):
             graph.set_data(s,name=scalarNames[i])
+        for i,s in enumerate(nodeScalars):
+            graph.set_data(s,name=nodeScalarNames[i])
         
         return graph
 
@@ -747,7 +771,8 @@ class Editor(object):
 class Node(object):
     
     def __init__(self, graph=None, index=0, edge_indices=None, edge_indices_rev=None,
-                 connecting_node=None, edges=None, coordinates=None, old_index=None ):
+                 connecting_node=None, edges=None, coordinates=None, old_index=None,
+                 scalars=None, scalarNames=None ):
                      
         self.index = index
         self.nconn = 0
@@ -757,6 +782,8 @@ class Node(object):
         self.edges = edges
         self.coords = coordinates
         self.old_index = old_index
+        self.scalars = []
+        self.scalarNames = []
         
         if graph is not None:
             vertCoords = graph.get_field('VertexCoordinates')['data']
@@ -811,6 +838,25 @@ class Node(object):
             self.connecting_node.append(edge.start_node_index)
         self.nconn += 1
         return True
+        
+    def add_scalar(self,name,values):
+        
+        if name in self.scalarNames:
+            print('Error: Node scalar field {} already exists!'.format(name))
+            return
+            
+        if len(self.scalars)==0:
+            self.scalars = [values]
+            self.scalarNames = [name]
+        else:
+            self.scalars.append([values])
+            self.scalarNames.append(name)
+            
+    def get_scalar(self,name):
+        scalar = [x for i,x in enumerate(self.scalars) if self.scalarNames[i]==name]
+        if len(scalar)==0:
+            return None
+        scalar[0]
             
     def _print(self):
         print('NODE ({}):'.format(self.index))
@@ -953,7 +999,7 @@ class Edge(object):
             
         if len(self.scalars)==0:
             self.scalars = values
-            self.scalaNames = name
+            self.scalarNames = [name]
         else:
             self.scalars.append(values)
             self.scalarNames.append(name)
