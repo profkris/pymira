@@ -11,6 +11,7 @@ import numpy as np
 import os
 import pickle
 import warnings
+import matplotlib.pyplot as plt
 
 np.seterr(all='warn')
 warnings.filterwarnings('error')
@@ -39,6 +40,7 @@ class InjectAgent(object):
         node.flow = []
         node.flow_direction = []
         node.delta_pressure = []
+        node.distance = 0.
         
         for edge in node.edges:        
             reverse = True
@@ -65,10 +67,10 @@ class InjectAgent(object):
                 eFlow = flow[0] #np.abs(flow[0])
                 
             velocity = np.asarray([(f*self.fluxConversion)/(np.square(r)*np.pi) for f,r in zip(flow,radius)])
-            length = np.zeros(edge.npoints-1)
+            length = np.zeros(edge.npoints)
             pts = edge.coordinates
-            for i in range(edge.npoints-1):
-                length[i] = np.linalg.norm(pts[i+1]-pts[i]) # Length (um)
+            for i in range(1,edge.npoints):
+                length[i] = np.linalg.norm(pts[i]-pts[i-1]) # Length (um)
     
             delay = np.asarray([np.sum(l/np.abs(v)) if v!=0. else 1.e6 for l,v in zip(length,velocity)]) # seconds
                 
@@ -80,36 +82,27 @@ class InjectAgent(object):
             edge.length = length
             edge.delay = delay
             edge.concentration = np.zeros([edge.npoints,len(self.time)])
-            
+
+        # Sort out flow direciton in edges with no pressure drop            
         if 0 in node.flow_direction:
             # Find combination that minimises inflow/outflow difference
             inFlow = [node.flow[i] for i,dir in enumerate(node.flow_direction) if dir>0]
             outFlow = [node.flow[i] for i,dir in enumerate(node.flow_direction) if dir<0]
             noPD = [node.flow[i] for i,dir in enumerate(node.flow_direction) if dir==0]
             noPDInds = [i for i,dir in enumerate(node.flow_direction) if dir==0]
-            if len(noPD)>2:
-                #print('Number of no pressure-drop branches > 2! {}'.format(len(noPD)))
-                pass
-            elif len(noPD)==2 and noPD[0]==noPD[1] and node.outFlow==node.inFlow:
-                #print('Number of no pressure-drop branches = 2 and are equal flow {}'.format(len(noPD)))
-                node.flow_direction[noPDInds[0]] = -1
-                node.flow_direction[noPDInds[1]] = 1
-                node.inFlow = np.sum(inFlow)+np.sum(noPD[0])
-                node.outFlow = np.sum(outFlow)+np.sum(noPD[1])
-            else:
-                if np.abs(np.sum(inFlow)-np.sum(outFlow)-np.sum(noPD))<0.01:
-                    # Zero pressure-drop edges are outflows (+1 direction)
-                    for ind in noPDInds:
-                        node.flow_direction[ind] = 1
-                    node.outFlow = np.sum(outFlow)+np.sum(noPD)
-                elif np.abs(np.sum(inFlow)-np.sum(outFlow)+np.sum(noPD))<0.01:
-                    # Zero pressure-drop edges are inflows (-1 direction)
-                    for ind in noPDInds:
-                        node.flow_direction[ind] = -1
-                    node.inFlow = np.sum(inFlow)+np.sum(noPD)
-                else:
-                    #print('No pressure drop edges cannot be balanced!')
-                    pass
+            mnState = None
+            mn = 1e6
+            from itertools import product
+            for i,state in enumerate(product([-1,1], repeat=len(noPDInds))): 
+                prod = np.sum(inFlow)-np.sum(outFlow)-np.sum([v*s for (v,s) in zip(noPD,state)])
+                if prod<mn:
+                    mnState = state
+                    mn = prod
+            
+            for i,ind in enumerate(noPDInds):
+                node.flow_direction[ind] = mnState[i]
+            node.inFlow = np.sum([node.flow[i] for i,dir in enumerate(node.flow_direction) if dir>0])
+            node.outFlow = np.sum([node.flow[i] for i,dir in enumerate(node.flow_direction) if dir<0])
             
         if node.inFlow==0. and node.outFlow>0:
             node.is_inlet = True
@@ -129,10 +122,9 @@ class InjectAgent(object):
                     #edge.Q = node.flow[i] / node.inFlow
                     node.Q[i] = node.flow[i] / node.inFlow
                     if node.Q[i]>1.001 and 0 in node.flow_direction:
-                        
-                        #import pdb
-                        #pdb.set_trace()
-                        pass
+                        import pdb
+                        pdb.set_trace()
+                        #pass
                 else:
                     node.Q[i] = 0.
                     #edge.Q = 0.
@@ -163,13 +155,16 @@ class InjectAgent(object):
             if len(s[0])>0:
                 conc[s[0]] = 0.
                 
+            if np.any(conc<0.):
+                import pdb
+                pdb.set_trace()
+                
             if not np.all(np.isfinite(conc)):
                 conc[:] = 0.
         except:
             import pdb
             pdb.set_trace()
             
-
         return conc
         
     def auc(self,edges):
@@ -177,6 +172,24 @@ class InjectAgent(object):
         for edge in edges:
             auc = np.sum(edge.concentration,axis=1)*self.dt
             edge.add_scalar('AUC',auc)
+            
+    def add_concentration(self,edges,time,conc_time=0.):
+        
+        idx = (np.abs(time-conc_time)).argmin()
+        #conc = np.zeros([len(edges),edges[0].concentration.shape[0]])        
+        for i,edge in enumerate(edges):
+            concVal = edge.concentration[:,idx]
+            edge.add_scalar('Concentration_{}'.format(conc_time),concVal)
+            
+    def add_distance(self,edges):
+        for i,edge in enumerate(edges):
+            if getattr(edge,'distance',None) is not None:
+                edge.add_scalar('Distance',[l+edge.distance for l in edge.length])
+            else:
+                edge.add_scalar('Distance',[-1.]*edge.npoints)
+            
+    def plot_conc(self,conc):
+        plt.plot(self.time, conc)
             
     def inflow_ratio(self,nodeList):
         
@@ -193,7 +206,7 @@ class InjectAgent(object):
         for i,edge in enumerate(edges):
             conc[i,:] = edge.concentration
             
-    def save_graph(self,output_directory=None):
+    def save_graph(self,output_directory=None,remove_zeros=False):
         
         if self.graph is None or self.nodeList is None:
             return
@@ -201,6 +214,25 @@ class InjectAgent(object):
         # Calculate AUC        
         edges = self.graph.edges_from_node_list(self.nodeList)
         self.auc(edges)
+        # Add concentration(t=1s) as a scalar field
+        self.add_concentration(edges,self.time,conc_time=1.)
+        self.add_distance(edges)
+        
+        # Not working yet!
+        if remove_zeros:
+            # Remove edges with AUC=0
+            print('Identifying zero-concentration edges')
+            edge_to_delete = [e.index for e in edges if np.all(e.get_scalar('AUC')==0.)]
+            print('Deleting {} EDGES'.format(len(edge_to_delete)))
+            node_to_delete = np.zeros(len(self.nodeList),dtype='int')
+            ndelcount = 0
+            for nInd,n in enumerate(self.nodeList):
+                [n.remove_edge([eInd]) for eInd,e in enumerate(n.edges) if e.index in edge_to_delete]
+                #if n.nconn==0:
+                #    node_to_delete[nInd] = 1
+                #    ndelcount += 1
+            #print('Deleting {} NODES'.format(ndelcount))
+            #self.nodeList = [n for nInd,n in enumerate(self.nodeList) if node_to_delete[nInd]==1]
         
         new_graph = self.graph.node_list_to_graph(self.nodeList)
         if output_directory is not None:
@@ -218,13 +250,13 @@ class InjectAgent(object):
     def inject(self, graph, output_directory=None):
 
         self.graph = graph        
-        nodeCoords = graph.get_data('VertexCoordinates')
-        edgeConn = graph.get_data('EdgeConnectivity')
-        nedgepoints = graph.get_data('NumEdgePoints')
-        edgeCoords = graph.get_data('EdgePointCoordinates')
-        radius = graph.get_data('Radii')
-        flow = graph.get_data('Flow')
-        pressure = graph.get_data('Pressure')
+#        nodeCoords = graph.get_data('VertexCoordinates')
+#        edgeConn = graph.get_data('EdgeConnectivity')
+#        nedgepoints = graph.get_data('NumEdgePoints')
+#        edgeCoords = graph.get_data('EdgePointCoordinates')
+#        radius = graph.get_data('Radii')
+#        flow = graph.get_data('Flow')
+#        pressure = graph.get_data('Pressure')
         
         # Generate node list
         nodeList = graph.node_list()
@@ -249,19 +281,17 @@ class InjectAgent(object):
         mxQind = np.argmax(inletQ)
         inletNodes = [inletNodes[mxQind]]
         
-        #self.inflow_ratio(nodeList)
-        #new_graph = graph.node_list_to_graph(nodeList)
-        #new_graph.write(output_directory+'flow_ratio.am')
+        edges = self.graph.edges_from_node_list(self.nodeList)
+        vedges = []
+        nedges = len(edges)
 
         for inletCount,inletNode in enumerate(inletNodes):
-            #import pdb
-            #pdb.set_trace()
             print('Inlet: {}'.format(inletNode.index))
             visited = []
             visited_edges = []
             curNode = inletNode
             
-            front = frontPKG.Front(inletNode,delay=inletNode.inletDelay,Q=inletNode.inletQ)
+            front = frontPKG.Front(inletNode,delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance)
             
             # START WALK...
             endloop = False
@@ -269,67 +299,92 @@ class InjectAgent(object):
                 
                 if len(front.Q)>0:
                     mnQ = np.min(front.Q)
-                    print('front size: {}, min Q: {}'.format(front.front_size,mnQ))
+                    mxQ = np.max(front.Q)
+                    print('front size: {}, minQ,maxQ: {} {}'.format(front.front_size,mnQ,mxQ))
 
                 if front.front_size>0:              
-                    (current_nodes,delay,Q) = front.get_current_front()
+                    (current_nodes,delay,Q,distance) = front.get_current_front()
                     
                     for n,curNode in enumerate(current_nodes):
                         
-                        visited.append(curNode.index)
+                        if curNode.index not in visited:
+                            visited.append(curNode.index)
                         
-                        res = [(nodeList[nodeIndex],curNode.edges[i],curNode.Q[i]) for i,nodeIndex in enumerate(curNode.connecting_node) if curNode.flow[i]>0.]
-                                #if curNode.edges[i].index not in visited_edges and curNode[i].flow>=0.]
+                        res = [(nodeList[nodeIndex],curNode.edges[i],curNode.Q[i]) for i,nodeIndex in enumerate(curNode.connecting_node) if curNode.Q[i]>0.]
+                        if len(res)!=len(curNode.connecting_node):
+                            import pdb
+                            pdb.set_trace()
+                            
                         if len(res)>0:
-                            # Choose which branch
+                            
+                            # Select qualifying branches
                             next_nodes = [r[0] for r in res if r[2]!=0.]
                             via_edges = [r[1] for r in res if r[2]!=0.]
                             edge_Q = [r[2] for r in res if r[2]!=0.]
                             
                             delay_from = []
                             Q_from = []
+                            distance_from = []
                             for ve,via_edge in enumerate(via_edges):
-                                visited_edges.append(via_edge.index)
+                                #import pdb
+                                #pdb.set_trace()
+                                if via_edge not in vedges:
+                                    vedges.append(via_edge)
+                                if via_edge.index not in visited_edges:
+                                    visited_edges.append(via_edge.index)
+                                    via_edge.distance = distance[n]
                                 try:
                                     conc = Q[n]*edge_Q[ve]*self.parker(self.time,delay[n])
-                                    if np.all(conc==0):
+                                    via_edge.concentration += np.repeat([conc],via_edge.npoints,axis=0)
+                                    if np.max(via_edge.concentration)<=0.:
                                         import pdb
                                         pdb.set_trace()
-                                    via_edge.concentration += np.repeat([conc],via_edge.npoints,axis=0)
                                 except:
                                     import pdb
                                     pdb.set_trace()
                         
-                                delay_from.append(np.sum(via_edge.delay))
+                                delay_from.append(np.sum(via_edge.delay)+delay[n])
                                 Q_from.append(Q[n]*edge_Q[ve])
+                                distance_from.append(np.sum(via_edge.length)+distance[n])
                                 
                             # Eliminate nodes that have a Q lower than limit
                             inds = [i for i,q in enumerate(Q_from) if q>self.Q_limit]
                             if len(inds)>0:
                                 front.step_front([next_nodes[i] for i in inds],
                                                  delay=[delay_from[i] for i in inds],
-                                                 Q=[Q_from[i] for i in inds])
+                                                 Q=[Q_from[i] for i in inds],
+                                                 distance=[distance_from[i] for i in inds])
                             else:
                                 pass
-                                #print('Exit Q: {}'.format(Q_from))
                         else:
-                            #endloop = True
                             pass
-
+                    maxConc = [np.max(e.concentration) for e in vedges]
+                    sind = np.where(maxConc<=0.)
+                    if sind[0].shape[0]>0:
+                        import pdb
+                        pdb.set_trace()
                     front.complete_step()
                 else:
                     endloop = True
                     print('Exit step {} - front size 0'.format(front.nstep))
                     break
                 
+            #edges = self.graph.edges_from_node_list(self.nodeList)
+            #vedges = [e for e in edges if e.index in visited_edges]
+            maxConc = [np.max(e.concentration) for e in vedges]
+            import pdb
+            pdb.set_trace()
+
             self.save_graph(output_directory=output_directory)
             
-dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
-#pDir = dir+'paths\'
-f = dir_+'spatialGraph_RIN.am'
+#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+#f = dir_+'spatialGraph_RIN.am'
+dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+f = dir_ + 'Flow2AmiraPressure.am'
 graph = spatialgraph.SpatialGraph()
+print('Reading graph...')
 graph.read(f)
-sfile = dir_+'ct_var_output.sav'
+print('Graph read')
 ia = InjectAgent()
 try:
     ia.inject(graph,output_directory=dir_)

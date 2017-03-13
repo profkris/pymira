@@ -11,6 +11,8 @@ from mpl_toolkits import mplot3d
 from matplotlib import pyplot
 import math
 
+def make_epilpsoid(rad1,rad2)
+
 def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation):
 
     #Create the length array
@@ -28,11 +30,36 @@ def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation):
     Y = radius * np.sin(A)
 
     #Tile/repeat indices so all unique pairs are present
-    pz = np.tile(I, nalpha)
-    px = np.repeat(X, nlength)
-    py = np.repeat(Y, nlength)
+    #pz = np.tile(I, nalpha)
+    #px = np.repeat(X, nlength)
+    #py = np.repeat(Y, nlength)
+    pz = np.repeat(I, nalpha)
+    px = np.tile(X, nlength)
+    py = np.tile(Y, nlength)
 
     points = np.vstack(( pz, px, py )).T
+    
+    # Define triangular faces
+    faces = []
+    for i in range(nalpha):
+        if i<nalpha-1:
+            faces.append([i,i+1,nalpha+i])
+            faces.append([nalpha+i,nalpha+i+1,i+1])
+        else:
+            faces.append([i,0,nalpha+i])
+            faces.append([nalpha+i,nalpha,0])
+    faces = np.asarray(faces)
+        
+#    oldfaces = np.array([\
+#           [0,1,nalpha],
+#           [nalpha,nalpha+1,1],
+#           [1,2,nalpha+1],
+#           [nalpha+1,nalpha+2,2],
+#           [2,3,nalpha+2],
+#           [nalpha+2,nalpha+3,3],
+#           [3,0,nalpha+3],
+#           [nalpha+3,nalpha,0],
+#                    ])
 
     #Shift to center
     shift = np.array(center) - np.mean(points, axis=0)
@@ -52,14 +79,26 @@ def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation):
     cylvec = np.array([1,0,0])
 
     if np.allclose(cylvec, ovec):
-        return points
+        return points,faces
 
     #Get orthogonal axis and rotation
     oaxis = np.cross(ovec, cylvec)
     rot = np.arccos(np.dot(ovec, cylvec))
 
     R = rotation_matrix(oaxis, rot)
-    return points.dot(R)
+    return points.dot(R),faces
+    
+def make_tube(radius, thickness, length):
+    
+    center = [0,0,0]
+    orient = [1,0,0]
+    nlength = 2
+    alpha = 360.
+    nalpha = 16
+    
+    outer_cylinder = make_cylinder(radius,length,nlength,alpha,nalpha,center,orient)
+    inner_cylinder = make_cylinder(radius+thickness,length,nlength,alpha,nalpha,center,orient)
+    return [outer_cylinder,inner_cylinder]
 
 # Define the 8 vertices of the cube
 vertices = np.array([\
@@ -85,6 +124,9 @@ faces = np.array([\
     [3,7,6],
     [0,1,5],
     [0,5,4]])
+    
+#CYLINDER
+vertices,faces = make_cylinder(1, 5, 2, 360, 16, [0,0,0], [1,0,0])
 
 # Create the mesh
 cube = mesh.Mesh(np.zeros(faces.shape[0], dtype=mesh.Mesh.dtype))
@@ -102,11 +144,12 @@ axes = mplot3d.Axes3D(figure)
 axes.add_collection3d(mplot3d.art3d.Poly3DCollection(cube.vectors))
 
 # Auto scale to the mesh size
+meshes = [cube]
 scale = np.concatenate([m.points for m in meshes]).flatten(-1)
 axes.auto_scale_xyz(scale, scale, scale)
 
 # Show the plot to the screen
 pyplot.show() 
 
-#CYLINDER
-vertices = make_cylinder(3, 5, 5, 360, 10, [0,2,0], [1,0,0])          
+dir_ = 'C:\\Users\\simon\\Dropbox\\'
+cube.save(dir_+'cylinder.stl')

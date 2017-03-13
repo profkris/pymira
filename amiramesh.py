@@ -41,7 +41,7 @@ class AmiraMesh(object):
                 return
         
     def _dataline(self,curLine):
-        endPat = '1234567890@ \n'
+        endPat = '1234567890@ \n\r'
         chk = len([x for x in curLine if x in endPat])==len(curLine) and '@' in curLine
         marker = None
         markerIndex = 0

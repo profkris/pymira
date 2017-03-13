@@ -11,6 +11,7 @@ amdata = spatialgraph.SpatialGraph()
 
 dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\' 
 dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\' 
+dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
 fo = dir_+'spatialGraph.am'
 ofile = dir_ + 'spatialGraph_RIN.am'
 

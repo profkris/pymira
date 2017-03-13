@@ -20,7 +20,8 @@ def merge_graphs(graph1,graph2):
         graph1.fields.append(f)
 
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'  
-dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
 fp = dir_+'Press2Amira.txt'
 ff = dir_+'Flow2Amira.txt'
 fs = dir_+'Stress2Amira.txt'

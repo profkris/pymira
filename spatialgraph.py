@@ -178,6 +178,38 @@ class SpatialGraph(amiramesh.AmiraMesh): #
         rz = [np.min(nodecoords[:,2]),np.max(nodecoords[:,2])]
         return [rx,ry,rz]
         
+    def edge_spatial_extent(self):
+        
+        coords = self.get_data('EdgePointCoordinates')
+        rx = [np.min(coords[:,0]),np.max(coords[:,0])]
+        ry = [np.min(coords[:,1]),np.max(coords[:,1])]
+        rz = [np.min(coords[:,2]),np.max(coords[:,2])]
+        return [rx,ry,rz]
+        
+    def edge_point_index(self):
+        
+        coords = self.get_data('EdgePointCoordinates')
+        nedgepoint = self.get_data('NumEdgePoints')
+        npoint = coords.shape[0]
+        edgeInd = np.zeros(npoint,dtype='int') - 1
+
+        cntr = 0
+        curN = nedgepoint[0]
+        j = 0
+        for i in range(npoint):
+            edgeInd[i] = j
+            cntr += 1
+            if cntr>=curN:
+                cntr = 0
+                j += 1
+                if j<nedgepoint.shape[0]:
+                    curN = nedgepoint[j]
+                elif i!=npoint-1:
+                    import pdb
+                    pdb.set_trace()
+                
+        return edgeInd
+        
     def constrain_nodes(self,xrange=[None,None],yrange=[None,None],zrange=[None,None],no_copy=True):
         
         assert len(xrange)==2
@@ -502,10 +534,6 @@ class Editor(object):
         
         for cntr,node in enumerate(nodeList):
             
-            if node.index==3754:
-                import pdb
-                pdb.set_trace()
-            
             # Is the current node branching (or terminal)?
             if (node.nconn==1 or node.nconn>2) and node_now_edge[node.index]==0 and node_edges_checked[node.index]==0:
                 # If so, make a new node object
@@ -755,13 +783,12 @@ class Editor(object):
 #                    pdb.set_trace()
 
         #return new_nodeList
-        se = np.where(edge_converted==0)
-        elu = np.where(edge_index_lookup<0)
-        incomplete_edges = [e for e in new_edgeList if e.complete is False]
-        incomp = np.where(edge_converted==0)
-        node2 = [n for n in new_nodeList if n.nconn==2]
-        import pdb
-        pdb.set_trace()
+        #se = np.where(edge_converted==0)
+        #elu = np.where(edge_index_lookup<0)
+        #incomplete_edges = [e for e in new_edgeList if e.complete is False]
+        #incomp = np.where(edge_converted==0)
+        #node2 = [n for n in new_nodeList if n.nconn==2]
+
         new_nedge = newEdgeCount
         new_nnode = newNodeCount
         
@@ -838,6 +865,14 @@ class Node(object):
             self.connecting_node.append(edge.start_node_index)
         self.nconn += 1
         return True
+        
+    def remove_edge(self,edgeIndex):
+        keep_edge_ind = [i for i,e in enumerate(self.edges) if e.index not in edgeIndex]
+        self.edges = [self.edges[i] for i in keep_edge_ind]
+        self.edge_indices = [self.edge_indices[i] for i in keep_edge_ind]
+        self.edge_indices_rev = [self.edge_indices_rev[i] for i in keep_edge_ind]
+        self.connecting_node = [self.connecting_node[i] for i in keep_edge_ind]
+        self.nconn = len(self.edges)
         
     def add_scalar(self,name,values):
         
@@ -988,7 +1023,7 @@ class Edge(object):
             
     def add_scalar(self,name,values):
         
-        # TO DO: add support for repeated scalars
+        # TODO: add support for repeated scalars
         
         if len(values)!=self.npoints:
             print('Error: Scalar field has incorrect number of points')
