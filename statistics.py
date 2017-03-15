@@ -62,6 +62,7 @@ class Statistics(object):
         bfrac = np.zeros(nstep)
         radius = np.zeros(nstep)
         length = np.zeros(nstep)
+        flows = np.zeros(nstep)
         
         for i in range(nstep[0]):
             for j in range(nstep[1]):
@@ -84,7 +85,7 @@ class Statistics(object):
                         for ed in curEdges:
                             try:
                                 cin2 = self.coords_in_cube(ed.coordinates,[x0,x1,y0,y1,z0,z1])
-                                radii,lengths,volumes,coords = self.blood_volume([ed],sum_edge=False)
+                                radii,lengths,volumes,coords,flow = self.blood_volume([ed],sum_edge=False)
                                 volumes = np.append([0.],[volumes])
                                 bvol += np.sum(volumes[cin2])
                             except Exception,e:
@@ -92,6 +93,8 @@ class Statistics(object):
                                 import pdb
                                 pdb.set_trace()
                         blood_volume[i,j,k] = bvol
+                        if flow is not None:
+                            flows[i,j,k] = np.mean(flow)
                         pixel_volume = np.product(voxel_size)
                         bfrac[i,j,k] = bvol / pixel_volume
                         radius[i,j,k] = np.mean(radii)
@@ -108,6 +111,10 @@ class Statistics(object):
         
         img = nib.Nifti1Image(length,affine=np.eye(4))
         ofile = 'C:\\Users\\simon\\Dropbox\\length.nii'
+        nib.save(img,ofile)
+        
+        img = nib.Nifti1Image(flow,affine=np.eye(4))
+        ofile = 'C:\\Users\\simon\\Dropbox\\flow.nii'
         nib.save(img,ofile)
         
     def edge_geometry(self,edges):
@@ -177,22 +184,31 @@ class Statistics(object):
         lengths = np.zeros(0)
         volumes = np.zeros(0)
         coords = []
+        if 'Flow' in edges[0].scalarNames:
+            flow = np.zeros(0)
+        else:
+            flow = None
+            
         for edge in edges:
             rad = edge.get_scalar('Radii')
             radii = np.append(radii,rad)
             lengths = np.append(lengths,edge.length)
             curVol = np.pi*np.square(rad[1:])*edge.length
             volumes = np.append(volumes,curVol)
+            if flow is not None:
+                curFlow = edge.get_scalar('Flow')
+                flow = np.append(flow,curFlow)
+            
             if sum_edge:
                 curVol = np.sum(curVol)
                 lengths = np.sum(lengths)
             coords.append(edge.coordinates)
             
-        return radii,lengths,volumes,coords
+        return radii,lengths,volumes,coords,flow
         
     def do_stats(self,output_directory=None):
         
-        radii,lengths,volumes,_ = self.blood_volume(self.edges)
+        radii,lengths,volumes,_,_ = self.blood_volume(self.edges)
 
         nconn = np.asarray([node.nconn for node in self.nodes])
         ba = np.zeros(0)
