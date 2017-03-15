@@ -332,9 +332,14 @@ class SpatialGraph(amiramesh.AmiraMesh): #
 
     def edges_from_node_list(self,nodeList):
         
-        edges = [n.edges for n in nodeList]
-        import itertools
-        edges = np.asarray(list(set(itertools.chain(*edges)))) # Flatten and get unique entries
+        edges = []
+        indices = []
+        for n in nodeList:
+            for e in n.edges:
+                if e.index not in indices:
+                    edges.append(e)
+                    indices.append(e.index)
+                
         return edges        
 
     def node_list_to_graph(self,nodeList):

@@ -13,19 +13,21 @@ import pickle
 import warnings
 import matplotlib.pyplot as plt
 
-np.seterr(all='warn')
-warnings.filterwarnings('error')
+#np.seterr(all='warn')
+#warnings.filterwarnings('error')
 
 class InjectAgent(object):
     
     def __init__(self):
         self.dt = 0.1
-        self.nt = 100
-        self.time = np.arange(0,self.nt,self.dt)
+        self.nt = 1000
+        self.max_time = self.dt*self.nt
+        self.time = np.arange(0,self.max_time,self.dt)
+        self.output_times = np.arange(0,self.max_time,self.dt)
         # To convert from (nL/min) to (um^3/s) use conversion below
         self.fluxConversion = 1e6/60.
         
-        self.Q_limit = 1e-7
+        self.Q_limit = 1e-8
         
         self.nodeList = None
         self.graph = None
@@ -53,12 +55,12 @@ class InjectAgent(object):
             
             delta_pressure = (pressure[-1]-pressure[0])
             if delta_pressure>0.:
-                # Pressure increasing along vessel - inflow
+                # Pressure increasing along vessel, towards node - inflow
                 flowDir = -1
                 eFlow = flow[0] #-np.abs(flow[0])
                 node.inFlow += np.abs(flow[0])
             elif delta_pressure<0.:
-                # Pressure decreasing along vessel - outflow
+                # Pressure decreasing along vessel, away from node - outflow
                 flowDir = 1
                 eFlow = flow[0] #np.abs(flow[0])
                 node.outFlow += np.abs(flow[0])
@@ -83,7 +85,7 @@ class InjectAgent(object):
             edge.delay = delay
             edge.concentration = np.zeros([edge.npoints,len(self.time)])
 
-        # Sort out flow direciton in edges with no pressure drop            
+        # Sort out flow direction in edges with no pressure drop            
         if 0 in node.flow_direction:
             # Find combination that minimises inflow/outflow difference
             inFlow = [node.flow[i] for i,dir in enumerate(node.flow_direction) if dir>0]
@@ -92,6 +94,7 @@ class InjectAgent(object):
             noPDInds = [i for i,dir in enumerate(node.flow_direction) if dir==0]
             mnState = None
             mn = 1e6
+            print('{} zero pressure drop edges to fix'.format(len(noPDInds)))
             from itertools import product
             for i,state in enumerate(product([-1,1], repeat=len(noPDInds))): 
                 prod = np.sum(inFlow)-np.sum(outFlow)-np.sum([v*s for (v,s) in zip(noPD,state)])
@@ -104,10 +107,10 @@ class InjectAgent(object):
             node.inFlow = np.sum([node.flow[i] for i,dir in enumerate(node.flow_direction) if dir>0])
             node.outFlow = np.sum([node.flow[i] for i,dir in enumerate(node.flow_direction) if dir<0])
             
-        if node.inFlow==0. and node.outFlow>0:
+        node.is_inlet = False
+        #if (node.outFlow>0.) and (node.inFlow==0.):
+        if node.nconn==1 and node.outFlow>0:
             node.is_inlet = True
-        else:
-            node.is_inlet = False
             
 #        if node.nconn==1:
         if node.inFlow==0:
@@ -151,20 +154,33 @@ class InjectAgent(object):
             wo = alpha * np.exp(-beta*tMin) / (1. + np.exp(-s*(tMin-tau)))
             conc = r1 + r2 + wo
             
-            s = np.where(tMin<0.)
-            if len(s[0])>0:
-                conc[s[0]] = 0.
+            conc[tMin<0] = 0.
+            conc[conc<0] = 0.
+            conc[~np.isfinite(conc)] = 0.
+            
+            #s = np.where(tMin<0.)
+            #if len(s[0])>0:
+            #    conc[s[0]] = 0.
                 
-            if np.any(conc<0.):
-                import pdb
-                pdb.set_trace()
-                
-            if not np.all(np.isfinite(conc)):
-                conc[:] = 0.
-        except:
+#            if np.any(conc<0.):
+#                import pdb
+#                pdb.set_trace()
+#                
+#            if not np.all(np.isfinite(conc)):
+#                conc[:] = 0.
+        except Exception,e:
+            print(e)
             import pdb
             pdb.set_trace()
             
+        return conc
+        
+    def impulse(self,t,delay):
+        length = 1. #s
+        pos = delay
+        conc = np.zeros(t.shape[0])
+        conc[t>=delay] = 1.
+        conc[t>(delay+length)] = 0.
         return conc
         
     def auc(self,edges):
@@ -215,7 +231,9 @@ class InjectAgent(object):
         edges = self.graph.edges_from_node_list(self.nodeList)
         self.auc(edges)
         # Add concentration(t=1s) as a scalar field
-        self.add_concentration(edges,self.time,conc_time=1.)
+        timePoints = self.output_times
+        for tp in timePoints:
+            self.add_concentration(edges,self.time,conc_time=tp)
         self.add_distance(edges)
         
         # Not working yet!
@@ -277,13 +295,18 @@ class InjectAgent(object):
             inletNode.inletQ = inletNode.flow[0] / total_inflow
             inletNode.inletDelay = 0.
             
-        inletQ = [n.outFlow for n in inletNodes]
-        mxQind = np.argmax(inletQ)
-        inletNodes = [inletNodes[mxQind]]
+        # Limit to inlet with highest Q
+        highestQinlet = False
+        if highestQinlet:
+            inletQ = [n.outFlow for n in inletNodes]
+            mxQind = np.argmax(inletQ)
+            inletNodes = [inletNodes[mxQind]]
         
         edges = self.graph.edges_from_node_list(self.nodeList)
         vedges = []
         nedges = len(edges)
+        
+        #delays = [e.delay for e in edges]
 
         for inletCount,inletNode in enumerate(inletNodes):
             print('Inlet: {}'.format(inletNode.index))
@@ -311,9 +334,6 @@ class InjectAgent(object):
                             visited.append(curNode.index)
                         
                         res = [(nodeList[nodeIndex],curNode.edges[i],curNode.Q[i]) for i,nodeIndex in enumerate(curNode.connecting_node) if curNode.Q[i]>0.]
-                        if len(res)!=len(curNode.connecting_node):
-                            import pdb
-                            pdb.set_trace()
                             
                         if len(res)>0:
                             
@@ -334,12 +354,12 @@ class InjectAgent(object):
                                     visited_edges.append(via_edge.index)
                                     via_edge.distance = distance[n]
                                 try:
-                                    conc = Q[n]*edge_Q[ve]*self.parker(self.time,delay[n])
+                                    conc = Q[n]*edge_Q[ve]*self.impulse(self.time,delay[n])
                                     via_edge.concentration += np.repeat([conc],via_edge.npoints,axis=0)
                                     if np.max(via_edge.concentration)<=0.:
                                         import pdb
                                         pdb.set_trace()
-                                except:
+                                except Exception,e:
                                     import pdb
                                     pdb.set_trace()
                         
@@ -367,15 +387,15 @@ class InjectAgent(object):
                 else:
                     endloop = True
                     print('Exit step {} - front size 0'.format(front.nstep))
-                    break
+                    #break
                 
             #edges = self.graph.edges_from_node_list(self.nodeList)
             #vedges = [e for e in edges if e.index in visited_edges]
             maxConc = [np.max(e.concentration) for e in vedges]
-            import pdb
-            pdb.set_trace()
+            #import pdb
+            #pdb.set_trace()
 
-            self.save_graph(output_directory=output_directory)
+        self.save_graph(output_directory=output_directory)
             
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
 #f = dir_+'spatialGraph_RIN.am'
