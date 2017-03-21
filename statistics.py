@@ -10,6 +10,7 @@ import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 import pickle
 import nibabel as nib
+import progressbar
 
 class Statistics(object):
     
@@ -43,78 +44,80 @@ class Statistics(object):
                 res[i] = False
         return res
         
-    def summary_image(self,voxel_size=[250,250,250.],parameter='Radii'):
-        
-        #if parameter=='Radii':
-        #    values = self.radii
-        
-        nodeCoords = self.graph.get_data('VertexCoordinates')
-        edgeCoords = self.graph.get_data('EdgePointCoordinates')
-         
+    def summary_image(self,voxel_size=[250,250,250.],parameter='Radii',output_path=''):
+
         nse = self.graph.edge_spatial_extent()
         dnse = [np.abs(x[1]-x[0]) for x in nse]
         
-        epi = self.graph.edge_point_index() # maps edge points to edge indicess
-        
         nstep = [np.int(np.ceil(dnse[i] / np.float(voxel_size[i]))) for i in range(3)]
+        pixel_volume = np.product(voxel_size)
         
-        blood_volume = np.zeros(nstep)
+        volume = np.zeros(nstep)
         bfrac = np.zeros(nstep)
         radius = np.zeros(nstep)
         length = np.zeros(nstep)
-        flows = np.zeros(nstep)
+        flow = np.zeros(nstep)
+        count = np.zeros(nstep)
         
-        for i in range(nstep[0]):
-            for j in range(nstep[1]):
-                for k in range(nstep[2]):
-                    x0 = i*voxel_size[0] + nse[0][0]
-                    x1 = x0 + voxel_size[0] - 1
-                    y0 = j*voxel_size[1] + nse[1][0]
-                    y1 = y0 + voxel_size[1] - 1
-                    z0 = k*voxel_size[2] + nse[2][0]
-                    z1 = z0 + voxel_size[2] - 1
+        x = np.linspace(nse[0][0],nse[0][1],num=nstep[0])
+        y = np.linspace(nse[1][0],nse[1][1],num=nstep[1])
+        z = np.linspace(nse[2][0],nse[2][1],num=nstep[2])
+        
+        #bar = progressbar.ProgressBar(maxval=len(self.edges),redirect_stdout=True)#,max_value=len(self.edges))
+                    
+        for ei,edge in enumerate(self.edges):
+            #bar.update(ei)
 
-                    cin = self.coords_in_cube(edgeCoords,[x0,x1,y0,y1,z0,z1])
-
-                    if np.any(cin):
-                        edgePointInds = np.asarray([ind for ind,v in enumerate(cin) if v])
-                        curEdges = np.unique([e for e in self.edges if e.index in epi[edgePointInds]])
+            radii,lengths,volumes,coords,flows = self.blood_volume([edge],sum_edge=False)
+            
+            for cInd,coords in enumerate(edge.coordinates):
+                xInds = [i1 for i1,xp in enumerate(x) if (xp-coords[0])>=0]
+                yInds = [i1 for i1,yp in enumerate(y) if (yp-coords[1])>=0]
+                zInds = [i1 for i1,zp in enumerate(z) if (zp-coords[2])>=0]
+                try:
+                    i = xInds[0]
+                    j = yInds[0]
+                    k = zInds[0]
+                except Exception,e:
+                    print e
+                    import pdb
+                    pdb.set_trace()
+                    
+                #print i,j,k,len(volumes),coords.shape
+                
+                if cInd<volumes.shape[0]:
+                    volume[i,j,k] += volumes[cInd]
+                    if flows is not None:
+                        flow[i,j,k] += flows[cInd]
                         
-                        # Filter any points outside voxel
-                        bvol = 0.
-                        for ed in curEdges:
-                            try:
-                                cin2 = self.coords_in_cube(ed.coordinates,[x0,x1,y0,y1,z0,z1])
-                                radii,lengths,volumes,coords,flow = self.blood_volume([ed],sum_edge=False)
-                                volumes = np.append([0.],[volumes])
-                                bvol += np.sum(volumes[cin2])
-                            except Exception,e:
-                                print(e)
-                                import pdb
-                                pdb.set_trace()
-                        blood_volume[i,j,k] = bvol
-                        if flow is not None:
-                            flows[i,j,k] = np.mean(flow)
-                        pixel_volume = np.product(voxel_size)
-                        bfrac[i,j,k] = bvol / pixel_volume
-                        radius[i,j,k] = np.mean(radii)
-                        length[i,j,k] = np.mean(lengths)
-                        print i,j,k,bfrac[i,j,k],radius[i,j,k],length[i,j,k]
+                    radius[i,j,k] += radii[cInd]
+                    length[i,j,k] += lengths[cInd]
+                    count[i,j,k] += 1
+        
+        # Take averages
+        radius = radius / count
+        radius[~np.isfinite(radius)] = 0.
+        length = length / count
+        length[~np.isfinite(length)] = 0.
+        bfrac = volume / pixel_volume
 
         img = nib.Nifti1Image(bfrac,affine=np.eye(4))
-        ofile = 'C:\\Users\\simon\\Dropbox\\blood_volume.nii'
+        ofile = output_path+'blood_volume.nii'
         nib.save(img,ofile)
     
         img = nib.Nifti1Image(radius,affine=np.eye(4))
-        ofile = 'C:\\Users\\simon\\Dropbox\\radius.nii'
+        ofile = output_path+'radius.nii'
+        #ofile = 'C:\\Users\\simon\\Dropbox\\radius.nii'
         nib.save(img,ofile)
         
         img = nib.Nifti1Image(length,affine=np.eye(4))
-        ofile = 'C:\\Users\\simon\\Dropbox\\length.nii'
+        #ofile = 'C:\\Users\\simon\\Dropbox\\length.nii'
+        ofile = output_path+'length.nii'
         nib.save(img,ofile)
         
-        img = nib.Nifti1Image(flow,affine=np.eye(4))
-        ofile = 'C:\\Users\\simon\\Dropbox\\flow.nii'
+        img = nib.Nifti1Image(flows,affine=np.eye(4))
+        #ofile = 'C:\\Users\\simon\\Dropbox\\flow.nii'
+        ofile = output_path+'flow.nii'
         nib.save(img,ofile)
         
     def edge_geometry(self,edges):
@@ -288,8 +291,11 @@ class Statistics(object):
 dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
-
 f = dir_+'spatialGraph_RIN.am'
+
+#dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#1"
+#f = dir_+r'\ls1_vessel_seg_skel_with_radius.SptGraph.am'
+
 from pymira import spatialgraph
 graph = spatialgraph.SpatialGraph()
 print('Reading graph...')
@@ -307,7 +313,9 @@ print('Graph read')
 #import pdb
 #pdb.set_trace()
 
+#import pdb
+#pdb.set_trace()
 stats = Statistics(graph)
 #stats.do_stats(output_directory=dir_)
-#stats.do_stats(output_directory=None)
-stats.summary_image(voxel_size=[250.,250.,250.])
+stats.do_stats(output_directory=None)
+stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)

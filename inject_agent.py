@@ -94,7 +94,7 @@ class InjectAgent(object):
             noPDInds = [i for i,dir in enumerate(node.flow_direction) if dir==0]
             mnState = None
             mn = 1e6
-            print('{} zero pressure drop edges to fix'.format(len(noPDInds)))
+            #print('{} zero pressure drop edges to fix'.format(len(noPDInds)))
             from itertools import product
             for i,state in enumerate(product([-1,1], repeat=len(noPDInds))): 
                 prod = np.sum(inFlow)-np.sum(outFlow)-np.sum([v*s for (v,s) in zip(noPD,state)])
@@ -174,6 +174,15 @@ class InjectAgent(object):
             pdb.set_trace()
             
         return conc
+        
+    def ca1(self,t,delay):
+        t_half = 9.02 * 60. # mins (http://clincancerres.aacrjournals.org/content/10/4/1446.figures-only)
+        cmax = 16.4 # ug/ml
+        mol_weight = 580.237e6 # ug/mol
+        dose = 100. #mg/kg
+        mass = 0.025 # kg
+        dose_mass = dose * mass * 1000. # ug
+        #n_mols = mol_weight / 
         
     def impulse(self,t,delay):
         length = 1. #s
@@ -356,12 +365,13 @@ class InjectAgent(object):
                                 try:
                                     conc = Q[n]*edge_Q[ve]*self.impulse(self.time,delay[n])
                                     via_edge.concentration += np.repeat([conc],via_edge.npoints,axis=0)
-                                    if np.max(via_edge.concentration)<=0.:
-                                        import pdb
-                                        pdb.set_trace()
-                                except Exception,e:
-                                    import pdb
-                                    pdb.set_trace()
+                                    #if np.max(via_edge.concentration)<=0.:
+                                    #    import pdb
+                                    #    pdb.set_trace()
+                                except Exception,err:
+                                    print err
+                                    #import pdb
+                                    #pdb.set_trace()
                         
                                 delay_from.append(np.sum(via_edge.delay)+delay[n])
                                 Q_from.append(Q[n]*edge_Q[ve])
@@ -397,10 +407,11 @@ class InjectAgent(object):
 
         self.save_graph(output_directory=output_directory)
             
-#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
 #f = dir_+'spatialGraph_RIN.am'
-dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-f = dir_ + 'Flow2AmiraPressure.am'
+#dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+#f = dir_ + 'Flow2AmiraPressure.am'
+f = dir_ + 'spatialGraph_RIN.am'
 graph = spatialgraph.SpatialGraph()
 print('Reading graph...')
 graph.read(f)
