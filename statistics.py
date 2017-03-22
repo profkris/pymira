@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import pickle
 import nibabel as nib
 import progressbar
+import os
 
 class Statistics(object):
     
@@ -115,7 +116,7 @@ class Statistics(object):
         ofile = output_path+'length.nii'
         nib.save(img,ofile)
         
-        img = nib.Nifti1Image(flows,affine=np.eye(4))
+        img = nib.Nifti1Image(flow,affine=np.eye(4))
         #ofile = 'C:\\Users\\simon\\Dropbox\\flow.nii'
         ofile = output_path+'flow.nii'
         nib.save(img,ofile)
@@ -288,19 +289,29 @@ class Statistics(object):
         
 #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
 #f = dir_ + 'Flow2AmiraPressure.am'
-dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
-f = dir_+'spatialGraph_RIN.am'
+#f = dir_+'spatialGraph_RIN.am'
 
-#dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#1"
-#f = dir_+r'\ls1_vessel_seg_skel_with_radius.SptGraph.am'
+dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#1"
+f = dir_+r'\ls1_vessel_seg_skel_with_radius.SptGraph.am'
+pixsize = 6.98
+dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#2"
+f = dir_+r'\LS2_bg_removed_frangi_response_skeletonised_with_radius.SptGraph.am'
+pixsize = 8.21
+#dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#4"
+#pixsize = 8.21
 
 from pymira import spatialgraph
 graph = spatialgraph.SpatialGraph()
 print('Reading graph...')
 graph.read(f)
 print('Graph read')
+
+ofile = dir_+'\spatialGraph_scaled.am'
+graph.rescale_coordinates(pixsize,pixsize,pixsize)
+graph.rescale_radius(pixsize,ofile=ofile)
 
 #epi = graph.edge_point_index()
 #edgeCoords = graph.get_data('EdgePointCoordinates')
@@ -316,6 +327,6 @@ print('Graph read')
 #import pdb
 #pdb.set_trace()
 stats = Statistics(graph)
-#stats.do_stats(output_directory=dir_)
-stats.do_stats(output_directory=None)
-stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
+stats.do_stats(output_directory=dir_+os.sep)
+#stats.do_stats(output_directory=None)
+#stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)

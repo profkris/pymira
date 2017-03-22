@@ -89,6 +89,27 @@ class SpatialGraph(amiramesh.AmiraMesh): #
             self.nedgepoint = self.get_definition('POINT')['size'][0]
         except:
             pass
+        
+    def rescale_coordinates(self,xscale,yscale,zscale,ofile=None):
+        nodeCoords = self.get_data('VertexCoordinates')
+        edgeCoords = self.get_data('EdgePointCoordinates')
+        
+        for i,n in enumerate(nodeCoords):
+            nodeCoords[i] = [n[0]*xscale,n[1]*yscale,n[2]*zscale]
+        for i,n in enumerate(edgeCoords):
+            edgeCoords[i] = [n[0]*xscale,n[1]*yscale,n[2]*zscale]
+        
+        if ofile is not None:
+            self.write(ofile)
+            
+    def rescale_radius(self,rscale,ofile=None):
+        radii = self.get_data('Radii')
+        mnR = np.min(radii)
+        for i,r in enumerate(radii):
+            radii[i] = r * rscale / mnR
+            
+        if ofile is not None:
+            self.write(ofile)
     
     def reset_data(self):
         for x in self.fields:

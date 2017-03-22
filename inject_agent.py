@@ -27,7 +27,7 @@ class InjectAgent(object):
         # To convert from (nL/min) to (um^3/s) use conversion below
         self.fluxConversion = 1e6/60.
         
-        self.Q_limit = 1e-8
+        self.Q_limit = 1e-9
         
         self.nodeList = None
         self.graph = None
