@@ -343,11 +343,11 @@ class SpatialGraph(amiramesh.AmiraMesh): #
         indices = []
         for n in nodeList:
             for e in n.edges:
-                if e.index not in indices:
+                if e.index not in indices: # only unique edges
                     edges.append(e)
                     indices.append(e.index)
                 
-        return edges        
+        return edges
 
     def node_list_to_graph(self,nodeList):
         
