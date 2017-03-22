@@ -34,7 +34,7 @@ def graph_to_stl(graph):
             length = np.linalg.norm(pts[i]-pts[i+1])
             vec = (pts[i+1]-pts[i])/length
             center = np.mean(np.vstack((pts[i],pts[i+1])), axis=0)
-            verts,faces = make_tube(radius[i:i+1]*2.,[thickness,thickness],lengthorientation=vec,center=center,outer_only=True)
+            #verts,faces = make_tube(radius[i:i+1]*2.,[thickness,thickness],lengthorientation=vec,center=center,outer_only=True)
             
             #print('Points:{}{}, center:{}, orient:{}'.format(pts[i],pts[i+1],center,vec))
             tubes.append(tube_mesh(np.mean(radius[i:i+1]*2),thickness,length,orientation=vec,center=center,outer_only=True))
@@ -174,6 +174,8 @@ def rot_matrix(angle, direction, point=None):
 def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation):
 
     #Create the length array
+    if type(length) is not list:
+        length = [length]
     if len(length)==1:
         I = np.linspace(0, length, nlength)
     elif len(length)==nlength-1:
@@ -190,6 +192,8 @@ def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation):
         A = np.linspace(0, alpha, num=nalpha)/180*np.pi
 
     #Calculate X and Y
+    if type(radius) is not list:
+        radius = [radius]
     if len(radius)==1:
         X = np.asarray(radius) * np.cos(A)
         Y = np.asarray(radius) * np.sin(A)

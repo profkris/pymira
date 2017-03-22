@@ -20,11 +20,19 @@ class Statistics(object):
         self.edges = None
         
         if self.nodes is None:
+            print('Generating node list...')
             self.nodes = self.graph.node_list()
+            print('Node list complete')
+            print('Generating node geometry...')
             self.node_geometry(self.nodes)
+            print('Node geometry complete')
         if self.edges is None:
+            print('Generating edge list...')
             self.edges = self.graph.edges_from_node_list(self.nodes)
+            print('Edge list complete')
+            print('Generating edge geometry...')
             self.edge_geometry(self.edges)
+            print('Edge geometry complete')
         
         self.radii = None
         self.nconn = None
@@ -128,7 +136,9 @@ class Statistics(object):
             edge.euclidean = np.linalg.norm(pts[-1]-pts[0])
             
     def _branching_angle(self,vec1,vec2):
-        
+
+        if np.linalg.norm(vec1)*np.linalg.norm(vec2)==0.:
+            return 0.
         rad = np.arccos(np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2)))
         deg = np.rad2deg(rad)
         return deg
@@ -208,6 +218,7 @@ class Statistics(object):
         
     def do_stats(self,output_directory=None):
         
+        print('Calculating statistics...')
         radii,lengths,volumes,_,_ = self.blood_volume(self.edges)
 
         nconn = np.asarray([node.nconn for node in self.nodes])
@@ -222,7 +233,7 @@ class Statistics(object):
         self.lengths = lengths
         self.volumes = volumes
 
-        plt.figure()          
+        plt.figure()
         self.histogram(ba,range=[0,180],nbins=50,xlabel='Vessel branching angle (deg)')
         if output_directory is not None:
             plotfile = output_directory+'branching_angle_histogram.pdf'
@@ -285,9 +296,9 @@ class Statistics(object):
         
 #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
 #f = dir_ + 'Flow2AmiraPressure.am'
-dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
+dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
 
 f = dir_+'spatialGraph_RIN.am'
 from pymira import spatialgraph
@@ -308,6 +319,6 @@ print('Graph read')
 #pdb.set_trace()
 
 stats = Statistics(graph)
-#stats.do_stats(output_directory=dir_)
+stats.do_stats(output_directory=dir_)
 #stats.do_stats(output_directory=None)
-stats.summary_image(voxel_size=[250.,250.,250.])
+#stats.summary_image(voxel_size=[250.,250.,250.])

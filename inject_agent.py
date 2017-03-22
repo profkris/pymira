@@ -227,7 +227,7 @@ class InjectAgent(object):
         if self.graph is None or self.nodeList is None:
             return
 
-        # Calculate AUC        
+        # Calculate AUC
         edges = self.graph.edges_from_node_list(self.nodeList)
         self.auc(edges)
         # Add concentration(t=1s) as a scalar field
@@ -268,13 +268,6 @@ class InjectAgent(object):
     def inject(self, graph, output_directory=None):
 
         self.graph = graph        
-#        nodeCoords = graph.get_data('VertexCoordinates')
-#        edgeConn = graph.get_data('EdgeConnectivity')
-#        nedgepoints = graph.get_data('NumEdgePoints')
-#        edgeCoords = graph.get_data('EdgePointCoordinates')
-#        radius = graph.get_data('Radii')
-#        flow = graph.get_data('Flow')
-#        pressure = graph.get_data('Pressure')
         
         # Generate node list
         nodeList = graph.node_list()
@@ -305,11 +298,9 @@ class InjectAgent(object):
         edges = self.graph.edges_from_node_list(self.nodeList)
         vedges = []
         nedges = len(edges)
-        
-        #delays = [e.delay for e in edges]
 
         for inletCount,inletNode in enumerate(inletNodes):
-            print('Inlet: {}'.format(inletNode.index))
+            print('Inlet index: {} ({} of {})'.format(inletNode.index,inletCount+1,len(inletNodes)))
             visited = []
             visited_edges = []
             curNode = inletNode
@@ -329,6 +320,8 @@ class InjectAgent(object):
                     (current_nodes,delay,Q,distance) = front.get_current_front()
                     
                     for n,curNode in enumerate(current_nodes):
+                        #print('Q: {}'.format(curNode.Q))
+                        #print('dP: {}'.format(curNode.delta_pressure))
                         
                         if curNode.index not in visited:
                             visited.append(curNode.index)
@@ -346,8 +339,11 @@ class InjectAgent(object):
                             Q_from = []
                             distance_from = []
                             for ve,via_edge in enumerate(via_edges):
-                                #import pdb
-                                #pdb.set_trace()
+                                if np.max(via_edge.scalars[0])>20:
+                                    pass
+                                    #import pdb
+                                    #pdb.set_trace()
+                                
                                 if via_edge not in vedges:
                                     vedges.append(via_edge)
                                 if via_edge.index not in visited_edges:
@@ -359,7 +355,8 @@ class InjectAgent(object):
                                     if np.max(via_edge.concentration)<=0.:
                                         import pdb
                                         pdb.set_trace()
-                                except Exception,e:
+                                except Exception,err:
+                                    print(err)
                                     import pdb
                                     pdb.set_trace()
                         
@@ -392,8 +389,6 @@ class InjectAgent(object):
             #edges = self.graph.edges_from_node_list(self.nodeList)
             #vedges = [e for e in edges if e.index in visited_edges]
             maxConc = [np.max(e.concentration) for e in vedges]
-            #import pdb
-            #pdb.set_trace()
 
         self.save_graph(output_directory=output_directory)
             

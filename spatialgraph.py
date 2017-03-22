@@ -12,6 +12,10 @@ class SpatialGraph(amiramesh.AmiraMesh): #
     
     def __init__(self,header_from=None,initialise=False,scalars=[],node_scalars=[]):
         amiramesh.AmiraMesh.__init__(self)
+        
+        self.nodeList = None
+        self.edgeList = None
+        
         if header_from is not None:
             import copy
             self.parameters = copy.deepcopy(header_from.parameters)
@@ -164,7 +168,10 @@ class SpatialGraph(amiramesh.AmiraMesh): #
         # Convert graph to a list of node (and edge) objects
         nodeCoords = self.get_field('VertexCoordinates')['data']
         nnode = nodeCoords.shape[0]
-        return [Node(graph=self,index=nodeIndex) for nodeIndex in range(nnode)]
+        self.nodeList = []
+        for nodeIndex in range(nnode):
+            self.nodeList.append(Node(graph=self,index=nodeIndex))
+        return self.nodeList
         
     def clone(self):
         import copy
@@ -818,6 +825,11 @@ class Node(object):
         self.scalarNames = []
         
         if graph is not None:
+            # Initialise edge list in graph object
+            if graph.edgeList is None:
+                graph.edgeList = []
+            edgeInds = [e.index for e in graph.edgeList]
+                
             vertCoords = graph.get_field('VertexCoordinates')['data']
             edgeConn = graph.get_field('EdgeConnectivity')['data']
             
@@ -841,13 +853,35 @@ class Node(object):
     
             for e in s0[0]:
                 self.edge_indices.append(e)
-                self.edges.append(Edge(graph=graph,index=e))
+                if e not in edgeInds:                  
+                    newEdge = Edge(graph=graph,index=e)
+                    edgeInds.append(e)
+                    graph.edgeList.append(newEdge)
+                else:
+                    newEdge = [edge for edge in graph.edgeList if edge.index==e]
+                    if len(newEdge)==1:
+                        newEdge = newEdge[0]
+                    else:
+                        import pdb
+                        pdb.set_trace()
+                self.edges.append(newEdge)
                 self.edge_indices_rev.append(False)
                 self.connecting_node.append(edgeConn[e,1])
             for e in s1[0]:
                 self.edge_indices.append(e)
                 self.edge_indices_rev.append(True)
-                self.edges.append(Edge(graph=graph,index=e))
+                if e not in edgeInds:                  
+                    newEdge = Edge(graph=graph,index=e)
+                    edgeInds.append(e)
+                    graph.edgeList.append(newEdge)
+                else:
+                    newEdge = [edge for edge in graph.edgeList if edge.index==e]
+                    if len(newEdge)==1:
+                        newEdge = newEdge[0]
+                    else:
+                        import pdb
+                        pdb.set_trace()
+                self.edges.append(newEdge)
                 self.connecting_node.append(edgeConn[e,0])
                 
     def add_edge(self,edge,reverse=False):
