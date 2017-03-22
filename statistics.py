@@ -301,12 +301,10 @@ class Statistics(object):
 #f = dir_ + 'Flow2AmiraPressure.am'
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-<<<<<<< HEAD
+
 dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
 
-=======
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
->>>>>>> 7a0af08bb3c315d690beb1c9a587e5314ec43f52
 f = dir_+'spatialGraph_RIN.am'
 
 #dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#1"
@@ -332,12 +330,9 @@ print('Graph read')
 #import pdb
 #pdb.set_trace()
 stats = Statistics(graph)
-<<<<<<< HEAD
 stats.do_stats(output_directory=dir_)
 #stats.do_stats(output_directory=None)
 #stats.summary_image(voxel_size=[250.,250.,250.])
-=======
 #stats.do_stats(output_directory=dir_)
 stats.do_stats(output_directory=None)
 stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
->>>>>>> 7a0af08bb3c315d690beb1c9a587e5314ec43f52
