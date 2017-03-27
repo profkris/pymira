@@ -10,7 +10,7 @@ import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 import pickle
 import nibabel as nib
-import progressbar
+#import progressbar
 
 class Statistics(object):
     
@@ -123,7 +123,7 @@ class Statistics(object):
         ofile = output_path+'length.nii'
         nib.save(img,ofile)
         
-        img = nib.Nifti1Image(flows,affine=np.eye(4))
+        img = nib.Nifti1Image(flow,affine=np.eye(4))
         #ofile = 'C:\\Users\\simon\\Dropbox\\flow.nii'
         ofile = output_path+'flow.nii'
         nib.save(img,ofile)
@@ -299,10 +299,10 @@ class Statistics(object):
         
 #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
 #f = dir_ + 'Flow2AmiraPressure.am'
-#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
 
-dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
+#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
 
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
 f = dir_+'spatialGraph_RIN.am'
@@ -330,9 +330,9 @@ print('Graph read')
 #import pdb
 #pdb.set_trace()
 stats = Statistics(graph)
-stats.do_stats(output_directory=dir_)
-#stats.do_stats(output_directory=None)
-#stats.summary_image(voxel_size=[250.,250.,250.])
 #stats.do_stats(output_directory=dir_)
 stats.do_stats(output_directory=None)
+#stats.summary_image(voxel_size=[250.,250.,250.])
+#stats.do_stats(output_directory=dir_)
+#stats.do_stats(output_directory=None)
 stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)

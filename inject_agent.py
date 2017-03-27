@@ -13,8 +13,57 @@ import pickle
 import warnings
 import matplotlib.pyplot as plt
 
-#np.seterr(all='warn')
-#warnings.filterwarnings('error')
+def parker(t,delay):
+    
+    # PARKER (average arterial input function from human population)
+    import numpy as np
+    try:
+        a1 = 0.833
+        a2 = 0.336
+        t1 = 0.171
+        t2 = 0.364
+        sigma1 = 0.055 
+        sigma2 = 0.134
+        alpha = 1.064
+        beta = 0.166
+        s = 37.772
+        tau = 0.482
+        tMin = (t-delay) / 60.
+        r1 = (a1 / (sigma1*np.sqrt(2.*np.pi))) * np.exp(-np.square(tMin-t1)/(2.*np.square(sigma1)))
+        r2 = (a2 / (sigma2*np.sqrt(2.*np.pi))) * np.exp(-np.square(tMin-t2)/(2.*np.square(sigma2)))
+        wo = alpha * np.exp(-beta*tMin) / (1. + np.exp(-s*(tMin-tau)))
+        conc = r1 + r2 + wo
+        
+        conc[tMin<0] = 0.
+        conc[conc<0] = 0.
+        conc[~np.isfinite(conc)] = 0.
+        
+    except Exception,e:
+        print(e)
+        import pdb
+        pdb.set_trace()
+        
+    return conc
+    
+def ca1(t,delay):
+    
+    t_half = 9.02 * 60. # mins (http://clincancerres.aacrjournals.org/content/10/4/1446.figures-only)
+    cmax = 16.4 # ug/ml
+    mol_weight = 580.237e6 # ug/mol
+    dose = 100. #mg/kg
+    mass = 0.025 # kg
+    dose_mass = dose * mass * 1000. # ug
+    #n_mols = mol_weight / 
+    
+def impulse(t,delay):
+    
+    import numpy as np
+    length = 1. #s
+    pos = delay
+    conc = np.zeros(t.shape[0])
+    conc[t>=delay] = 1.
+    conc[t>(delay+length)] = 0.
+    return conc
 
 class InjectAgent(object):
     
@@ -27,7 +76,7 @@ class InjectAgent(object):
         # To convert from (nL/min) to (um^3/s) use conversion below
         self.fluxConversion = 1e6/60.
         
-        self.Q_limit = 1e-8
+        self.Q_limit = 1e-9
         
         self.nodeList = None
         self.graph = None
@@ -134,63 +183,6 @@ class InjectAgent(object):
             else:
                 #edge.Q = 0.
                 node.Q[i] = 0.
-                
-    def parker(self,t,delay):
-        # PARKER (average arterial input function from human population)
-        try:
-            a1 = 0.833
-            a2 = 0.336
-            t1 = 0.171
-            t2 = 0.364
-            sigma1 = 0.055 
-            sigma2 = 0.134
-            alpha = 1.064
-            beta = 0.166
-            s = 37.772
-            tau = 0.482
-            tMin = (t-delay) / 60.
-            r1 = (a1 / (sigma1*np.sqrt(2.*np.pi))) * np.exp(-np.square(tMin-t1)/(2.*np.square(sigma1)))
-            r2 = (a2 / (sigma2*np.sqrt(2.*np.pi))) * np.exp(-np.square(tMin-t2)/(2.*np.square(sigma2)))
-            wo = alpha * np.exp(-beta*tMin) / (1. + np.exp(-s*(tMin-tau)))
-            conc = r1 + r2 + wo
-            
-            conc[tMin<0] = 0.
-            conc[conc<0] = 0.
-            conc[~np.isfinite(conc)] = 0.
-            
-            #s = np.where(tMin<0.)
-            #if len(s[0])>0:
-            #    conc[s[0]] = 0.
-                
-#            if np.any(conc<0.):
-#                import pdb
-#                pdb.set_trace()
-#                
-#            if not np.all(np.isfinite(conc)):
-#                conc[:] = 0.
-        except Exception,e:
-            print(e)
-            import pdb
-            pdb.set_trace()
-            
-        return conc
-        
-    def ca1(self,t,delay):
-        t_half = 9.02 * 60. # mins (http://clincancerres.aacrjournals.org/content/10/4/1446.figures-only)
-        cmax = 16.4 # ug/ml
-        mol_weight = 580.237e6 # ug/mol
-        dose = 100. #mg/kg
-        mass = 0.025 # kg
-        dose_mass = dose * mass * 1000. # ug
-        #n_mols = mol_weight / 
-        
-    def impulse(self,t,delay):
-        length = 1. #s
-        pos = delay
-        conc = np.zeros(t.shape[0])
-        conc[t>=delay] = 1.
-        conc[t>(delay+length)] = 0.
-        return conc
         
     def auc(self,edges):
         
@@ -276,154 +268,254 @@ class InjectAgent(object):
     
     def inject(self, graph, output_directory=None):
 
-        self.graph = graph        
-        
-        # Generate node list
-        nodeList = graph.node_list()
-        self.nodeList = nodeList
-        for node in nodeList:
-            self.vertex_flow_ordering(node)
-        
-        nconn = np.asarray([x.nconn for x in nodeList])
-        
-        sTerminal = np.where(nconn==1)[0]
-        nTerminal = len(sTerminal)
-        
-        sInlet = [node.index for node in nodeList if node.is_inlet==True]# and node.flow_direction[0]>=0]
-        nInlet = len(sInlet)
-        total_inflow = np.abs(np.sum([nodeList[i].flow[0] for i in sInlet]))
-        inletNodes = [nodeList[x] for x in sInlet]
-        for inletNode in inletNodes:
-            inletNode.inletQ = inletNode.flow[0] / total_inflow
-            inletNode.inletDelay = 0.
-            
-        # Limit to inlet with highest Q
-        highestQinlet = False
-        if highestQinlet:
-            inletQ = [n.outFlow for n in inletNodes]
-            mxQind = np.argmax(inletQ)
-            inletNodes = [inletNodes[mxQind]]
-        
-        edges = self.graph.edges_from_node_list(self.nodeList)
-        vedges = []
-        nedges = len(edges)
+        self.graph = graph   
 
-        for inletCount,inletNode in enumerate(inletNodes):
-            print('Inlet index: {} ({} of {})'.format(inletNode.index,inletCount+1,len(inletNodes)))
-            visited = []
-            visited_edges = []
-            curNode = inletNode
+        import dill as pickle
+        
+        nodeFile = output_directory+'nodeList.dill'
+        #if True:
+        if not os.path.isfile(nodeFile):
+            print 'Generating node list...'
+            nodeList = graph.node_list()
+            self.nodeList = nodeList
+            print 'Calculating flow ordering...'
+            for node in nodeList:
+                self.vertex_flow_ordering(node)
+                nconn = np.asarray([x.nconn for x in self.nodeList])
+        
+            sTerminal = np.where(nconn==1)[0]
+            nTerminal = len(sTerminal)
             
-            front = frontPKG.Front(inletNode,delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance)
-            
-            # START WALK...
-            endloop = False
-            while endloop is False:
+            sInlet = [node.index for node in self.nodeList if node.is_inlet==True]# and node.flow_direction[0]>=0]
+            nInlet = len(sInlet)
+            total_inflow = np.abs(np.sum([self.nodeList[i].flow[0] for i in sInlet]))
+            inletNodes = [self.nodeList[x] for x in sInlet]
+            for inletNode in inletNodes:
+                inletNode.inletQ = inletNode.flow[0] / total_inflow
+                inletNode.inletDelay = 0.
                 
-                if len(front.Q)>0:
-                    mnQ = np.min(front.Q)
-                    mxQ = np.max(front.Q)
-                    print('front size: {}, minQ,maxQ: {} {}'.format(front.front_size,mnQ,mxQ))
-
-                if front.front_size>0:              
-                    (current_nodes,delay,Q,distance) = front.get_current_front()
-                    
-                    for n,curNode in enumerate(current_nodes):
-                        #print('Q: {}'.format(curNode.Q))
-                        #print('dP: {}'.format(curNode.delta_pressure))
-                        
-                        if curNode.index not in visited:
-                            visited.append(curNode.index)
-                        
-                        res = [(nodeList[nodeIndex],curNode.edges[i],curNode.Q[i]) for i,nodeIndex in enumerate(curNode.connecting_node) if curNode.Q[i]>0.]
-                            
-                        if len(res)>0:
-                            
-                            # Select qualifying branches
-                            next_nodes = [r[0] for r in res if r[2]!=0.]
-                            via_edges = [r[1] for r in res if r[2]!=0.]
-                            edge_Q = [r[2] for r in res if r[2]!=0.]
-                            
-                            delay_from = []
-                            Q_from = []
-                            distance_from = []
-                            for ve,via_edge in enumerate(via_edges):
-                                if np.max(via_edge.scalars[0])>20:
-                                    pass
-                                    #import pdb
-                                    #pdb.set_trace()
-                                
-                                if via_edge not in vedges:
-                                    vedges.append(via_edge)
-                                if via_edge.index not in visited_edges:
-                                    visited_edges.append(via_edge.index)
-                                    via_edge.distance = distance[n]
-                                try:
-                                    conc = Q[n]*edge_Q[ve]*self.impulse(self.time,delay[n])
-                                    via_edge.concentration += np.repeat([conc],via_edge.npoints,axis=0)
-
-                                    if np.max(via_edge.concentration)<=0.:
-                                        import pdb
-                                        pdb.set_trace()
-                                except Exception,err:
-                                    print(err)
-                                    import pdb
-                                    pdb.set_trace()
-                                    #if np.max(via_edge.concentration)<=0.:
-                                    #    import pdb
-                                    #    pdb.set_trace()
-                                except Exception,err:
-                                    print err
-                                    #import pdb
-                                    #pdb.set_trace()
-                        
-                                delay_from.append(np.sum(via_edge.delay)+delay[n])
-                                Q_from.append(Q[n]*edge_Q[ve])
-                                distance_from.append(np.sum(via_edge.length)+distance[n])
-                                
-                            # Eliminate nodes that have a Q lower than limit
-                            inds = [i for i,q in enumerate(Q_from) if q>self.Q_limit]
-                            if len(inds)>0:
-                                front.step_front([next_nodes[i] for i in inds],
-                                                 delay=[delay_from[i] for i in inds],
-                                                 Q=[Q_from[i] for i in inds],
-                                                 distance=[distance_from[i] for i in inds])
-                            else:
-                                pass
-                        else:
-                            pass
-                    maxConc = [np.max(e.concentration) for e in vedges]
-                    sind = np.where(maxConc<=0.)
-                    if sind[0].shape[0]>0:
-                        import pdb
-                        pdb.set_trace()
-                    front.complete_step()
-                else:
-                    endloop = True
-                    print('Exit step {} - front size 0'.format(front.nstep))
-                    #break
+            # Limit to inlet with highest Q
+            highestQinlet = False
+            if highestQinlet:
+                inletQ = [n.outFlow for n in inletNodes]
+                mxQind = np.argmax(inletQ)
+                inletNodes = [inletNodes[mxQind]]
+            
+            print('Pickling node list...')
+            #import pdb
+            #pdb.set_trace()
+            with open(nodeFile,'wb') as fo:
+                pickle.dump(nodeList,fo)
+        else:
+            with open(nodeFile ,'rb') as fo:
+                self.nodeList = pickle.load(fo)
                 
-            #edges = self.graph.edges_from_node_list(self.nodeList)
-            #vedges = [e for e in edges if e.index in visited_edges]
-            maxConc = [np.max(e.concentration) for e in vedges]
+        edgeFile = output_directory+'edgeList.dill'
+        if True:
+        #if not os.path.isfile(nodeFile):
+            edges = graph.edges_from_node_list(self.nodeList)
+        #    with open(edgeFile,'wb') as fo:
+        #        pickle.dump(edges,fo)
+        else:
+            with open(edgeFile ,'rb') as fo:
+                edges = pickle.load(fo)
+            
+        graphFile = output_directory+'graph.dill'
+        #if not os.path.isfile(graphFile):
+        #    with open(graphFile,'wb') as fo:
+        #        pickle.dump(graph,fo)
+                
+        timeFile = output_directory+'time.dill'
+        if not os.path.isfile(timeFile):
+            with open(timeFile,'wb') as fo:
+                pickle.dump(self.time,fo)
+
+        import pathos.multiprocessing as multiprocessing
+        #import multiprocessing
+        ncpu = multiprocessing.cpu_count()
+        p = multiprocessing.ProcessingPool(ncpu)
+        
+        argList = [[nodeFile,edgeFile,graphFile,n.index,impulse,timeFile,output_directory] for n in inletNodes]
+        parallel = True
+        if parallel:
+            p.map(_worker_function,argList)
+        else:
+            for arg in argList:
+                _worker_function(arg)
+                
+        eDir = output_directory+'edge_calcs\\'
+        for f in os.listdir(eDir):
+            with open(eDir+f,'rb') as fo:
+                curEdges,ind = pickle.load(fo)
+
+            for curEdge in curEdges:
+                srcEdge = [e for e in edges if e.index==curEdge.index]
+                srcEdge[0].concentration += curEdge.concentration      
 
         self.save_graph(output_directory=output_directory)
+        
+def _worker_function(args):
+    
+    #print inletNodeIndex
+    #return
+    #global GLOBAL
+    #self = GLOBAL
+    #nodeList = self.nodeList
+    import pymira.front as frontPKG
+    import numpy as np
+    import dill as pickle
+    
+    Q_limit = 1e-9
+    
+    nodeListFile,edgeFile,graphFile,inletNodeIndex,concFunc,timeFile,odir = args[0],args[1],args[2],args[3],args[4],args[5],args[6]
+    
+    with open(nodeListFile ,'rb') as fo:
+        nodeList = pickle.load(fo)
+    #with open(edgeFile ,'rb') as fo:
+    #    edges = pickle.load(fo)
+    #with open(graphFile ,'rb') as fo:
+    #    graph = pickle.load(fo)
+    with open(timeFile ,'rb') as fo:
+        time = pickle.load(fo)
+    
+    inletNode = [n for n in nodeList if n.index==inletNodeIndex][0]
+    print('Inlet index: {}'.format(inletNode.index))
+    
+    vedges = []
+    #nedges = len(edges)
+    
+    visited = []
+    visited_edges = []
+    edgesOut = []
+    curNode = inletNode
+    
+    #print('Inlet node info: delay: {} Q:{}'.format(inletNode.inletDelay,inletNode.inletQ))
+    front = frontPKG.Front(inletNode,delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance)
+    
+    # START WALK...
+    endloop = False
+    count = 0
+    while endloop is False:
+        count += 1
+        #print count
+        
+        if len(front.Q)>0:
+            mnQ = np.min(front.Q)
+            mxQ = np.max(front.Q)
+            print('front size: {}, minQ,maxQ: {} {}'.format(front.front_size,mnQ,mxQ))
+
+        if front.front_size>0:              
+            (current_nodes,delay,Q,distance) = front.get_current_front()
             
-dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
-#f = dir_+'spatialGraph_RIN.am'
-#dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-#f = dir_ + 'Flow2AmiraPressure.am'
-f = dir_ + 'spatialGraph_RIN.am'
-graph = spatialgraph.SpatialGraph()
-print('Reading graph...')
-graph.read(f)
-print('Graph read')
-ia = InjectAgent()
-try:
-    ia.inject(graph,output_directory=dir_)
-except KeyboardInterrupt:
-    print('Ctrl-C interrupt! Saving graph')
-    ia.save_graph(output_directory=dir_)
-#except Exception,e:
-#    import pdb
-#    pdb.set_trace()
+            for n,curNode in enumerate(current_nodes):
+                #print('Q: {}'.format(curNode.Q))
+                #print('dP: {}'.format(curNode.delta_pressure))
+                
+                if curNode.index not in visited:
+                    visited.append(curNode.index)
+                
+                res = [(nodeList[nodeIndex],curNode.edges[i],curNode.Q[i]) for i,nodeIndex in enumerate(curNode.connecting_node) if curNode.Q[i]>0.]
+                    
+                if len(res)>0:
+                    
+                    # Select qualifying branches
+                    next_nodes = [r[0] for r in res if r[2]!=0.]
+                    via_edges = [r[1] for r in res if r[2]!=0.]
+                    edge_Q = [r[2] for r in res if r[2]!=0.]
+                    
+                    delay_from = []
+                    Q_from = []
+                    distance_from = []
+                    for ve,via_edge in enumerate(via_edges):
+                        if np.max(via_edge.scalars[0])>20:
+                            pass
+                            #import pdb
+                            #pdb.set_trace()
+                        
+                        if via_edge not in vedges:
+                            vedges.append(via_edge)
+                        if via_edge.index not in visited_edges:
+                            visited_edges.append(via_edge.index)
+                            edgesOut.append(via_edge)
+                            via_edge.distance = distance[n]
+                        try:
+                            conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n])
+                            via_edge.concentration += np.repeat([conc],via_edge.npoints,axis=0)
+
+#                                    if np.max(via_edge.concentration)<=0.:
+#                                        import pdb
+#                                        pdb.set_trace()
+                        except Exception,err:
+                            print('Error, conc calc {}'.format(err))
+                            #import pdb
+                            #pdb.set_trace()
+                            #if np.max(via_edge.concentration)<=0.:
+                            #    import pdb
+                            #    pdb.set_trace()
+                        except Exception,err:
+                            print err
+                            #import pdb
+                            #pdb.set_trace()
+                
+                        delay_from.append(np.sum(via_edge.delay)+delay[n])
+                        Q_from.append(Q[n]*edge_Q[ve])
+                        distance_from.append(np.sum(via_edge.length)+distance[n])
+                        
+                    # Eliminate nodes that have a Q lower than limit
+                    inds = [i for i,q in enumerate(Q_from) if q>Q_limit]
+                    if len(inds)>0:
+                        front.step_front([next_nodes[i] for i in inds],
+                                         delay=[delay_from[i] for i in inds],
+                                         Q=[Q_from[i] for i in inds],
+                                         distance=[distance_from[i] for i in inds])
+                    else:
+                        pass
+                else:
+                    pass
+            maxConc = [np.max(e.concentration) for e in vedges]
+            sind = np.where(maxConc<=0.)
+            if sind[0].shape[0]>0:
+                print('Shapes incompatable!')
+                #import pdb
+                #pdb.set_trace()
+            front.complete_step()
+        else:
+            endloop = True
+            print('Exit step {} - front size 0'.format(front.nstep))
+            #break
+            
+    import os
+    if not os.path.exists(odir+'edge_calcs'):
+        os.makedirs(odir+'edge_calcs')
+    ofile = odir + 'edge_calcs\\edges_inlet{}.dill'.format(inletNodeIndex)
+
+    with open(ofile,'wb') as fo:
+        pickle.dump((edgesOut,inletNodeIndex),fo)
+        
+    #edges = self.graph.edges_from_node_list(self.nodeList)
+    #vedges = [e for e in edges if e.index in visited_edges]
+    #maxConc = [np.max(e.concentration) for e in vedges]
+    #return edges
+
+def main():         
+    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    f = dir_+'spatialGraph_RIN.am'
+    #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+    #f = dir_ + 'Flow2AmiraPressure.am'
+
+    graph = spatialgraph.SpatialGraph()
+    print('Reading graph...')
+    graph.read(f)
+    print('Graph read')
+    ia = InjectAgent()
+    try:
+        ia.inject(graph,output_directory=dir_)
+    except KeyboardInterrupt:
+        print('Ctrl-C interrupt! Saving graph')
+        ia.save_graph(output_directory=dir_)
+    #except Exception,e:
+    #    import pdb
+    #    pdb.set_trace()
+        
+if __name__ == "__main__":
+    main()
