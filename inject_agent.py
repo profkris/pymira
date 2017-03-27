@@ -402,7 +402,7 @@ def _worker_function(args):
         if len(front.Q)>0:
             mnQ = np.min(front.Q)
             mxQ = np.max(front.Q)
-            print('front size: {}, minQ,maxQ: {} {}'.format(front.front_size,mnQ,mxQ))
+            print('Inlet: {}. front size: {}, minQ,maxQ: {} {}'.format(inletNodeIndex,front.front_size,mnQ,mxQ))
 
         if front.front_size>0:              
             (current_nodes,delay,Q,distance) = front.get_current_front()
