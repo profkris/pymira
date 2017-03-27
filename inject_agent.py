@@ -227,6 +227,16 @@ class InjectAgent(object):
         
         if self.graph is None or self.nodeList is None:
             return
+            
+        # Reconstruct individual inlet results
+        eDir = output_directory+'edge_calcs\\'
+        for f in os.listdir(eDir):
+            with open(eDir+f,'rb') as fo:
+                curEdges,ind = pickle.load(fo)
+
+            for curEdge in curEdges:
+                srcEdge = [e for e in edges if e.index==curEdge.index]
+                srcEdge[0].concentration += curEdge.concentration   
 
         # Calculate AUC
         edges = self.graph.edges_from_node_list(self.nodeList)
@@ -309,6 +319,7 @@ class InjectAgent(object):
         else:
             with open(nodeFile ,'rb') as fo:
                 self.nodeList = pickle.load(fo)
+            inletNodes = [n for n in self.nodeList if n.is_inlet]
                 
         edgeFile = output_directory+'edgeList.dill'
         if True:
@@ -342,15 +353,6 @@ class InjectAgent(object):
         else:
             for arg in argList:
                 _worker_function(arg)
-                
-        eDir = output_directory+'edge_calcs\\'
-        for f in os.listdir(eDir):
-            with open(eDir+f,'rb') as fo:
-                curEdges,ind = pickle.load(fo)
-
-            for curEdge in curEdges:
-                srcEdge = [e for e in edges if e.index==curEdge.index]
-                srcEdge[0].concentration += curEdge.concentration      
 
         self.save_graph(output_directory=output_directory)
         
@@ -365,7 +367,7 @@ def _worker_function(args):
     import numpy as np
     import dill as pickle
     
-    Q_limit = 1e-9
+    Q_limit = 1e-12
     
     nodeListFile,edgeFile,graphFile,inletNodeIndex,concFunc,timeFile,odir = args[0],args[1],args[2],args[3],args[4],args[5],args[6]
     
@@ -498,7 +500,7 @@ def _worker_function(args):
     #return edges
 
 def main():         
-    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
     f = dir_+'spatialGraph_RIN.am'
     #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
     #f = dir_ + 'Flow2AmiraPressure.am'
