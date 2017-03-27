@@ -362,9 +362,9 @@ class InjectAgent(object):
                                     conc = Q[n]*edge_Q[ve]*self.impulse(self.time,delay[n])
                                     via_edge.concentration += np.repeat([conc],via_edge.npoints,axis=0)
 
-                                    if np.max(via_edge.concentration)<=0.:
-                                        import pdb
-                                        pdb.set_trace()
+#                                    if np.max(via_edge.concentration)<=0.:
+#                                        import pdb
+#                                        pdb.set_trace()
                                 except Exception,err:
                                     print(err)
                                     import pdb
@@ -409,7 +409,7 @@ class InjectAgent(object):
 
         self.save_graph(output_directory=output_directory)
             
-dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
 #f = dir_+'spatialGraph_RIN.am'
 #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
 #f = dir_ + 'Flow2AmiraPressure.am'

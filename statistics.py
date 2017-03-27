@@ -10,8 +10,12 @@ import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 import pickle
 import nibabel as nib
+<<<<<<< HEAD
 import progressbar
 import os
+=======
+#import progressbar
+>>>>>>> 10040b990df4c8c8e02eab2c3ddfb2eb986e92d3
 
 class Statistics(object):
     
@@ -300,10 +304,10 @@ class Statistics(object):
         
 #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
 #f = dir_ + 'Flow2AmiraPressure.am'
-#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
 
-dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
+#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
 
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
 #f = dir_+'spatialGraph_RIN.am'
@@ -341,6 +345,7 @@ graph.rescale_radius(pixsize,ofile=ofile)
 #import pdb
 #pdb.set_trace()
 stats = Statistics(graph)
+<<<<<<< HEAD
 stats.do_stats(output_directory=dir_+os.sep)
 #stats.do_stats(output_directory=None)
 #stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
@@ -350,3 +355,11 @@ stats.do_stats(output_directory=dir_)
 #stats.do_stats(output_directory=dir_)
 stats.do_stats(output_directory=None)
 stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
+=======
+#stats.do_stats(output_directory=dir_)
+stats.do_stats(output_directory=None)
+#stats.summary_image(voxel_size=[250.,250.,250.])
+#stats.do_stats(output_directory=dir_)
+#stats.do_stats(output_directory=None)
+stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
+>>>>>>> 10040b990df4c8c8e02eab2c3ddfb2eb986e92d3
