@@ -8,7 +8,7 @@ Created on Thu Dec 01 11:49:52 2016
 from pymira import amiramesh
 import numpy as np
 
-class SpatialGraph(amiramesh.AmiraMesh): #
+class SpatialGraph(amiramesh.AmiraMesh):
     
     def __init__(self,header_from=None,initialise=False,scalars=[],node_scalars=[]):
         amiramesh.AmiraMesh.__init__(self)
@@ -185,13 +185,20 @@ class SpatialGraph(amiramesh.AmiraMesh): #
            
        return nConn
        
-    def node_list(self):
+    def node_list(self,output_directory=None):
         # Convert graph to a list of node (and edge) objects
         nodeCoords = self.get_field('VertexCoordinates')['data']
         nnode = nodeCoords.shape[0]
         self.nodeList = []
         for nodeIndex in range(nnode):
             self.nodeList.append(Node(graph=self,index=nodeIndex))
+            
+        if output_directory is not None:
+            import dill as pickle
+            ofile = output_directory + 'nodeList.dill'
+            with open(ofile,'wb') as fo:
+                pickle.dump(self.nodeList,fo)
+            
         return self.nodeList
         
     def clone(self):

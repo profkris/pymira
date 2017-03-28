@@ -367,7 +367,7 @@ def _worker_function(args):
     import numpy as np
     import dill as pickle
     
-    Q_limit = 1e-12
+    Q_limit = 1e-9
     
     nodeListFile,edgeFile,graphFile,inletNodeIndex,concFunc,timeFile,odir = args[0],args[1],args[2],args[3],args[4],args[5],args[6]
     
