@@ -10,12 +10,8 @@ import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 import pickle
 import nibabel as nib
-<<<<<<< HEAD
 import progressbar
 import os
-=======
-#import progressbar
->>>>>>> 10040b990df4c8c8e02eab2c3ddfb2eb986e92d3
 
 class Statistics(object):
     
