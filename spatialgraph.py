@@ -7,6 +7,8 @@ Created on Thu Dec 01 11:49:52 2016
 
 from pymira import amiramesh
 import numpy as np
+import os
+from tqdm import tqdm # progress bar
 
 class SpatialGraph(amiramesh.AmiraMesh):
     
@@ -15,6 +17,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         self.nodeList = None
         self.edgeList = None
+        self.path = None
         
         if header_from is not None:
             import copy
@@ -185,19 +188,52 @@ class SpatialGraph(amiramesh.AmiraMesh):
            
        return nConn
        
-    def node_list(self,output_directory=None):
+    def write_node_list(self,path=None):
+        
+        if path is not None:
+            self.path = path
+            import dill as pickle
+            ofile = os.path.join(path,'nodeList.dill')
+            with open(ofile,'wb') as fo:
+                pickle.dump(self.nodeList,fo)
+            
+    def load_node_list(self,path=None):
+        
+        if path is not None:
+            self.path = path
+            try:
+                nfile = os.path.join(path,'nodeList.dill')
+                if os.path.isfile(nfile):
+                    print('Loading node list from file: {}'.format(nfile))
+                    import dill as pickle
+                    with open(nfile,'rb') as fo:
+                        nodeList = pickle.load(fo)
+                    return nodeList
+            except Exception,e:
+                print(e)
+        return None
+       
+    def node_list(self,path=None):
+        
+        # Try and load from pickle file
+        nodeList = self.load_node_list(path=path)
+        if nodeList is not None:
+            self.nodeList = nodeList
+            return self.nodeList
+        
         # Convert graph to a list of node (and edge) objects
         nodeCoords = self.get_field('VertexCoordinates')['data']
         nnode = nodeCoords.shape[0]
         self.nodeList = []
+        
+        pbar = tqdm(total=nnode) # progress bar
         for nodeIndex in range(nnode):
+            pbar.update(1)
             self.nodeList.append(Node(graph=self,index=nodeIndex))
+        pbar.close()
             
-        if output_directory is not None:
-            import dill as pickle
-            ofile = output_directory + 'nodeList.dill'
-            with open(ofile,'wb') as fo:
-                pickle.dump(self.nodeList,fo)
+        if path is not None:
+            self.write_node_list(path=path)
             
         return self.nodeList
         
@@ -545,13 +581,13 @@ class Editor(object):
         graph.set_graph_sizes()
         return graph
     
-    def remove_intermediate_nodes(self,graph,file=None,nodeList=None):
+    def remove_intermediate_nodes(self,graph,file=None,nodeList=None,path=None):
         
         import pickle
         import os
 
         print 'Generating node list...'
-        nodeList = graph.node_list()
+        nodeList = graph.node_list(path=path)
         print 'Node list complete.'
         
         nnode = graph.nnode
@@ -610,10 +646,6 @@ class Editor(object):
 
                     # Compile connecting edges -
                     connecting_edge = [e for x,e in zip(node.connecting_node,node.edges) if x==connecting_node_index]
-                    
-                    if connecting_edge[0].index==4098:
-                        import pdb
-                        pdb.set_trace()
                         
                     for connEdge in connecting_edge:
 

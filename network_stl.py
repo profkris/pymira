@@ -29,11 +29,29 @@ def graph_to_stl(graph):
     for edge in edges:
         pts = edge.coordinates
         radius = edge.get_scalar('Radii')
+        strtNode = nodeList[edge.start_node_index]
+        endNode = nodeList[edge.end_node_index]
+        
+        strtBranchInd = [i for i,e in enumerate(strtNode.edges) if e.index==edge.index][0]
+        strtRev = strtNode.edge_indices_rev[strtBranchInd]
+        endBranchInd = [i for i,e in enumerate(endNode.edges) if e.index==edge.index][0]
+        endRev = endNode.edge_indices_rev[endBranchInd]
+        
+        if strtNode.nconn==1:
+            strt_ba = 0.
+        elif strtNode.nconn==2:
+            strt_ba = np.arccos(np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2)))
+            deg = np.rad2deg(rad)
+        else:
+            import pdb
+            pdb.set_trace()
         
         for i in range(pts.shape[0]-1):
             length = np.linalg.norm(pts[i]-pts[i+1])
             vec = (pts[i+1]-pts[i])/length
             center = np.mean(np.vstack((pts[i],pts[i+1])), axis=0)
+            import pdb
+            pdb.set_trace()
             #verts,faces = make_tube(radius[i:i+1]*2.,[thickness,thickness],lengthorientation=vec,center=center,outer_only=True)
             
             #print('Points:{}{}, center:{}, orient:{}'.format(pts[i],pts[i+1],center,vec))

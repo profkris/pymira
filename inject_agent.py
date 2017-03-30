@@ -223,14 +223,36 @@ class InjectAgent(object):
         for i,edge in enumerate(edges):
             conc[i,:] = edge.concentration
             
+    def reconstruct_results(self, graph, output_directory=None):
+
+        self.graph = graph   
+
+        import dill as pickle
+        nodeFile = output_directory+'nodeList.dill'
+        if not os.path.isfile(nodeFile):
+            print 'Generating node list...'
+            self.nodeList = self.graph.node_list()
+        else:
+            with open(nodeFile ,'rb') as fo:
+                self.nodeList = pickle.load(fo)
+                
+        self.save_graph(output_directory=output_directory)
+            
     def save_graph(self,output_directory=None,remove_zeros=False):
         
         if self.graph is None or self.nodeList is None:
             return
+          
+        print('Generating edge list...')
+        edges = self.graph.edges_from_node_list(self.nodeList)
             
         # Reconstruct individual inlet results
+        print('Loading results...')
         eDir = output_directory+'edge_calcs\\'
-        for f in os.listdir(eDir):
+        files = os.listdir(eDir)
+        nfiles = len(files)
+        for fi,f in enumerate(files):
+            print('Reading file {} of {}: {}'.format(fi+1,nfiles,f))
             with open(eDir+f,'rb') as fo:
                 curEdges,ind = pickle.load(fo)
 
@@ -239,12 +261,13 @@ class InjectAgent(object):
                 srcEdge[0].concentration += curEdge.concentration   
 
         # Calculate AUC
-        edges = self.graph.edges_from_node_list(self.nodeList)
+        print('Calculating AUC...')
         self.auc(edges)
         # Add concentration(t=1s) as a scalar field
         timePoints = self.output_times
         for tp in timePoints:
             self.add_concentration(edges,self.time,conc_time=tp)
+        print('Calculating distance...')
         self.add_distance(edges)
         
         # Not working yet!
@@ -263,6 +286,7 @@ class InjectAgent(object):
             #print('Deleting {} NODES'.format(ndelcount))
             #self.nodeList = [n for nInd,n in enumerate(self.nodeList) if node_to_delete[nInd]==1]
         
+        print('Creating new graph...')
         new_graph = self.graph.node_list_to_graph(self.nodeList)
         if output_directory is not None:
             ofile = os.path.join(output_directory,'')+'ct_output.am'
@@ -276,11 +300,27 @@ class InjectAgent(object):
             #with open(ofile, 'wb') as handle:
             #    pickle.dump(ofile, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
-    def inject(self, graph, output_directory=None):
+    def inject(self, graph, output_directory=None, resume=False):
 
         self.graph = graph   
 
         import dill as pickle
+        
+        if resume:
+            eDir = output_directory+'edge_calcs\\'
+            files = os.listdir(eDir)
+            nfiles = len(files)
+            inletVisited = []
+            prefix = 'edges_inlet'
+            suffix = '.dill'
+            for fi,f in enumerate(files):
+                try:
+                    ind = int((f.replace('edges_inlet','')).replace('.dill',''))
+                    inletVisited.append(ind)
+                except Exception,e:
+                    print('Could not load {}'.format(f))
+        else:
+            inletVisited = []
         
         nodeFile = output_directory+'nodeList.dill'
         #if True:
@@ -312,14 +352,16 @@ class InjectAgent(object):
                 inletNodes = [inletNodes[mxQind]]
             
             print('Pickling node list...')
-            #import pdb
-            #pdb.set_trace()
             with open(nodeFile,'wb') as fo:
                 pickle.dump(nodeList,fo)
         else:
             with open(nodeFile ,'rb') as fo:
                 self.nodeList = pickle.load(fo)
             inletNodes = [n for n in self.nodeList if n.is_inlet]
+
+        import pdb
+        pdb.set_trace()            
+        inletNodes = [n for n in inletNodes if n.index not in inletVisited]
                 
         edgeFile = output_directory+'edgeList.dill'
         if True:
@@ -509,15 +551,19 @@ def main():
     print('Reading graph...')
     graph.read(f)
     print('Graph read')
+    
     ia = InjectAgent()
-    try:
-        ia.inject(graph,output_directory=dir_)
-    except KeyboardInterrupt:
-        print('Ctrl-C interrupt! Saving graph')
-        ia.save_graph(output_directory=dir_)
-    #except Exception,e:
-    #    import pdb
-    #    pdb.set_trace()
+    
+    recon = False
+    resume = True
+    if recon:
+        ia.reconstruct_results(graph,output_directory=dir_)
+    else:
+        try:
+            ia.inject(graph,output_directory=dir_,resume=resume)
+        except KeyboardInterrupt:
+            print('Ctrl-C interrupt! Saving graph')
+            ia.save_graph(output_directory=dir_)
         
 if __name__ == "__main__":
     main()
