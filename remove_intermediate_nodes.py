@@ -15,11 +15,16 @@ dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post
 fo = dir_+'spatialGraph.am'
 ofile = dir_ + 'spatialGraph_RIN.am'
 
+dir_ = 'C:\\Users\\simon\\Dropbox\\VDA_1_lectin\\Control\LS#1\\'
+fo = dir_+'LS1_spatialGraph_scaled.am'
+ofile = dir_+'LS1_spatialGraph_RIN.am'
+
 print 'Loading graph...'
 amdata.read(fo)
 print('Graph loaded')
 
 editor = spatialgraph.Editor()
-new_graph = editor.remove_intermediate_nodes(amdata)
+new_graph = editor.remove_intermediate_nodes(amdata,path=dir_)
 new_graph.sanity_check(deep=True)
 new_graph.write(ofile)
+#new_graph.write_node_list()

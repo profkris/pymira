@@ -10,7 +10,7 @@ import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 import pickle
 import nibabel as nib
-import progressbar
+from tqdm import tqdm # progress bar
 import os
 
 class Statistics(object):
@@ -72,10 +72,10 @@ class Statistics(object):
         y = np.linspace(nse[1][0],nse[1][1],num=nstep[1])
         z = np.linspace(nse[2][0],nse[2][1],num=nstep[2])
         
-        #bar = progressbar.ProgressBar(maxval=len(self.edges),redirect_stdout=True)#,max_value=len(self.edges))
+        pbar = tqdm(total=len(self.edges))
                     
         for ei,edge in enumerate(self.edges):
-            #bar.update(ei)
+            pbar.update(ei)
 
             radii,lengths,volumes,coords,flows = self.blood_volume([edge],sum_edge=False)
             
@@ -102,6 +102,8 @@ class Statistics(object):
                     radius[i,j,k] += radii[cInd]
                     length[i,j,k] += lengths[cInd]
                     count[i,j,k] += 1
+                    
+        pbar.close()
         
         # Take averages
         radius = radius / count
@@ -202,8 +204,10 @@ class Statistics(object):
             flow = np.zeros(0)
         else:
             flow = None
-            
+        
+        pbar = tqdm(total=len(edges))
         for edge in edges:
+            pbar.update(1)
             rad = edge.get_scalar('Radii')
             radii = np.append(radii,rad)
             lengths = np.append(lengths,edge.length)
@@ -217,13 +221,16 @@ class Statistics(object):
                 curVol = np.sum(curVol)
                 lengths = np.sum(lengths)
             coords.append(edge.coordinates)
+        pbar.close()
             
         return radii,lengths,volumes,coords,flow
         
     def do_stats(self,output_directory=None):
         
         print('Calculating statistics...')
+        print('Estimating network parameters...')
         radii,lengths,volumes,_,_ = self.blood_volume(self.edges)
+        print('Finished estimating network parameters...')
 
         nconn = np.asarray([node.nconn for node in self.nodes])
         ba = np.zeros(0)
@@ -298,24 +305,24 @@ class Statistics(object):
             with open(output_directory+'vessel_volume.p','wb') as fo:
                 pickle.dump(volumes,fo)
         
-#dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-#f = dir_ + 'Flow2AmiraPressure.am'
-dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
-#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
+# #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+# #f = dir_ + 'Flow2AmiraPressure.am'
+# dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+# #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
 
-#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
+# #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
 
-#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
-#f = dir_+'spatialGraph_RIN.am'
+# #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
+# #f = dir_+'spatialGraph_RIN.am'
 
-dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#1"
-f = dir_+r'\ls1_vessel_seg_skel_with_radius.SptGraph.am'
-pixsize = 6.98
-dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#2"
-f = dir_+r'\LS2_bg_removed_frangi_response_skeletonised_with_radius.SptGraph.am'
-pixsize = 8.21
-#dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#4"
-#pixsize = 8.21
+dir_ = r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\LS#1"
+f = dir_+r'\LS1_spatialGraph_scaled.am'
+# pixsize = 6.98
+# dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#2"
+# f = dir_+r'\LS2_bg_removed_frangi_response_skeletonised_with_radius.SptGraph.am'
+# pixsize = 8.21
+# #dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#4"
+# #pixsize = 8.21
 
 from pymira import spatialgraph
 graph = spatialgraph.SpatialGraph()
@@ -323,39 +330,39 @@ print('Reading graph...')
 graph.read(f)
 print('Graph read')
 
-ofile = dir_+'\spatialGraph_scaled.am'
-graph.rescale_coordinates(pixsize,pixsize,pixsize)
-graph.rescale_radius(pixsize,ofile=ofile)
+# ofile = dir_+'\spatialGraph_scaled.am'
+# graph.rescale_coordinates(pixsize,pixsize,pixsize)
+# graph.rescale_radius(pixsize,ofile=ofile)
 
-#epi = graph.edge_point_index()
-#edgeCoords = graph.get_data('EdgePointCoordinates')
-#nodes = graph.node_list()
-#edges = graph.edges_from_node_list(nodes)
-#testInd = 1000
-#testCoords = edgeCoords[testInd]
-#testEdge = [e for e in edges if e.index==epi[testInd]]
-#testCoords in testEdge[0].coordinates
-#import pdb
-#pdb.set_trace()
+# #epi = graph.edge_point_index()
+# #edgeCoords = graph.get_data('EdgePointCoordinates')
+# #nodes = graph.node_list()
+# #edges = graph.edges_from_node_list(nodes)
+# #testInd = 1000
+# #testCoords = edgeCoords[testInd]
+# #testEdge = [e for e in edges if e.index==epi[testInd]]
+# #testCoords in testEdge[0].coordinates
+# #import pdb
+# #pdb.set_trace()
 
-#import pdb
-#pdb.set_trace()
+# #import pdb
+# #pdb.set_trace()
 stats = Statistics(graph)
-<<<<<<< HEAD
+
 stats.do_stats(output_directory=dir_+os.sep)
-#stats.do_stats(output_directory=None)
-#stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
-stats.do_stats(output_directory=dir_)
-#stats.do_stats(output_directory=None)
-#stats.summary_image(voxel_size=[250.,250.,250.])
-#stats.do_stats(output_directory=dir_)
-stats.do_stats(output_directory=None)
-stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
-=======
-#stats.do_stats(output_directory=dir_)
-stats.do_stats(output_directory=None)
-#stats.summary_image(voxel_size=[250.,250.,250.])
-#stats.do_stats(output_directory=dir_)
-#stats.do_stats(output_directory=None)
-stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
->>>>>>> 10040b990df4c8c8e02eab2c3ddfb2eb986e92d3
+# #stats.do_stats(output_directory=None)
+# #stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
+# stats.do_stats(output_directory=dir_)
+# #stats.do_stats(output_directory=None)
+# #stats.summary_image(voxel_size=[250.,250.,250.])
+# #stats.do_stats(output_directory=dir_)
+# stats.do_stats(output_directory=None)
+# stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
+
+# #stats.do_stats(output_directory=dir_)
+# stats.do_stats(output_directory=None)
+# #stats.summary_image(voxel_size=[250.,250.,250.])
+# #stats.do_stats(output_directory=dir_)
+# #stats.do_stats(output_directory=None)
+# stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
+
