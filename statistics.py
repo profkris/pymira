@@ -140,6 +140,11 @@ class Statistics(object):
                 length[i] = np.linalg.norm(pts[i+1]-pts[i]) # Length (um)
             edge.length = length
             edge.euclidean = np.linalg.norm(pts[-1]-pts[0])
+            totLen = np.sum(length)
+            if totLen>0:
+                edge.tortuosity = edge.euclidean / totLen
+            else:
+                edge.tortuosity = 0.
             
     def _branching_angle(self,vec1,vec2):
 
@@ -204,6 +209,9 @@ class Statistics(object):
             flow = np.zeros(0)
         else:
             flow = None
+            
+        import pdb
+        pdb.set_trace()
         
         pbar = tqdm(total=len(edges))
         for edge in edges:
@@ -229,7 +237,9 @@ class Statistics(object):
         
         print('Calculating statistics...')
         print('Estimating network parameters...')
-        radii,lengths,volumes,_,_ = self.blood_volume(self.edges)
+        import pdb
+        pdb.set_trace()
+        #radii,lengths,volumes,_,_ = self.blood_volume(self.edges)
         print('Finished estimating network parameters...')
 
         nconn = np.asarray([node.nconn for node in self.nodes])
@@ -305,64 +315,73 @@ class Statistics(object):
             with open(output_directory+'vessel_volume.p','wb') as fo:
                 pickle.dump(volumes,fo)
         
-# #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-# #f = dir_ + 'Flow2AmiraPressure.am'
-# dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
-# #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
+def main():
+    # #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+    # #f = dir_ + 'Flow2AmiraPressure.am'
+    # dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    # #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
+    
+    # #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
+    
+    # #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
+    # #f = dir_+'spatialGraph_RIN.am'
+    
+    dir_ = r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\LS#1"
+    f = dir_+r'\LS1_spatialGraph_scaled.am'
+    # pixsize = 6.98
+    # dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#2"
+    # f = dir_+r'\LS2_bg_removed_frangi_response_skeletonised_with_radius.SptGraph.am'
+    # pixsize = 8.21
+    # #dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#4"
+    # #pixsize = 8.21
+    
+    from pymira import spatialgraph
+    graph = spatialgraph.SpatialGraph()
+    print('Reading graph...')
+    graph.read(f)
+    print('Graph read')
+    
+    # ofile = dir_+'\spatialGraph_scaled.am'
+    # graph.rescale_coordinates(pixsize,pixsize,pixsize)
+    # graph.rescale_radius(pixsize,ofile=ofile)
+    
+    # #epi = graph.edge_point_index()
+    # #edgeCoords = graph.get_data('EdgePointCoordinates')
+    # #nodes = graph.node_list()
+    # #edges = graph.edges_from_node_list(nodes)
+    # #testInd = 1000
+    # #testCoords = edgeCoords[testInd]
+    # #testEdge = [e for e in edges if e.index==epi[testInd]]
+    # #testCoords in testEdge[0].coordinates
+    # #import pdb
+    # #pdb.set_trace()
+    
+    # #import pdb
+    # #pdb.set_trace()
+    stats = Statistics(graph)
+    
+    stats.do_stats(output_directory=dir_+os.sep)
+    # #stats.do_stats(output_directory=None)
+    # #stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
+    # stats.do_stats(output_directory=dir_)
+    # #stats.do_stats(output_directory=None)
+    # #stats.summary_image(voxel_size=[250.,250.,250.])
+    # #stats.do_stats(output_directory=dir_)
+    # stats.do_stats(output_directory=None)
+    # stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
+    
+    # #stats.do_stats(output_directory=dir_)
+    # stats.do_stats(output_directory=None)
+    # #stats.summary_image(voxel_size=[250.,250.,250.])
+    # #stats.do_stats(output_directory=dir_)
+    # #stats.do_stats(output_directory=None)
+    # stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
 
-# #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
-
-# #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
-# #f = dir_+'spatialGraph_RIN.am'
-
-dir_ = r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\LS#1"
-f = dir_+r'\LS1_spatialGraph_scaled.am'
-# pixsize = 6.98
-# dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#2"
-# f = dir_+r'\LS2_bg_removed_frangi_response_skeletonised_with_radius.SptGraph.am'
-# pixsize = 8.21
-# #dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#4"
-# #pixsize = 8.21
-
-from pymira import spatialgraph
-graph = spatialgraph.SpatialGraph()
-print('Reading graph...')
-graph.read(f)
-print('Graph read')
-
-# ofile = dir_+'\spatialGraph_scaled.am'
-# graph.rescale_coordinates(pixsize,pixsize,pixsize)
-# graph.rescale_radius(pixsize,ofile=ofile)
-
-# #epi = graph.edge_point_index()
-# #edgeCoords = graph.get_data('EdgePointCoordinates')
-# #nodes = graph.node_list()
-# #edges = graph.edges_from_node_list(nodes)
-# #testInd = 1000
-# #testCoords = edgeCoords[testInd]
-# #testEdge = [e for e in edges if e.index==epi[testInd]]
-# #testCoords in testEdge[0].coordinates
-# #import pdb
-# #pdb.set_trace()
-
-# #import pdb
-# #pdb.set_trace()
-stats = Statistics(graph)
-
-stats.do_stats(output_directory=dir_+os.sep)
-# #stats.do_stats(output_directory=None)
-# #stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
-# stats.do_stats(output_directory=dir_)
-# #stats.do_stats(output_directory=None)
-# #stats.summary_image(voxel_size=[250.,250.,250.])
-# #stats.do_stats(output_directory=dir_)
-# stats.do_stats(output_directory=None)
-# stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
-
-# #stats.do_stats(output_directory=dir_)
-# stats.do_stats(output_directory=None)
-# #stats.summary_image(voxel_size=[250.,250.,250.])
-# #stats.do_stats(output_directory=dir_)
-# #stats.do_stats(output_directory=None)
-# stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
-
+if __name__=='__main__':
+    try:
+        import cProfile
+        cProfile.run('main()')
+    except:
+        pass
+    import pdb
+    pdb.set_trace()

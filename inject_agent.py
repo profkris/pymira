@@ -300,7 +300,7 @@ class InjectAgent(object):
             #with open(ofile, 'wb') as handle:
             #    pickle.dump(ofile, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
-    def inject(self, graph, output_directory=None, resume=False):
+    def inject(self, graph, output_directory=None, resume=False, parallel=True):
 
         self.graph = graph   
 
@@ -358,9 +358,7 @@ class InjectAgent(object):
             with open(nodeFile ,'rb') as fo:
                 self.nodeList = pickle.load(fo)
             inletNodes = [n for n in self.nodeList if n.is_inlet]
-
-        import pdb
-        pdb.set_trace()            
+           
         inletNodes = [n for n in inletNodes if n.index not in inletVisited]
                 
         edgeFile = output_directory+'edgeList.dill'
@@ -372,11 +370,9 @@ class InjectAgent(object):
         else:
             with open(edgeFile ,'rb') as fo:
                 edges = pickle.load(fo)
+        nedge = len(edges)
             
         graphFile = output_directory+'graph.dill'
-        #if not os.path.isfile(graphFile):
-        #    with open(graphFile,'wb') as fo:
-        #        pickle.dump(graph,fo)
                 
         timeFile = output_directory+'time.dill'
         if not os.path.isfile(timeFile):
@@ -388,8 +384,8 @@ class InjectAgent(object):
         ncpu = multiprocessing.cpu_count()
         p = multiprocessing.ProcessingPool(ncpu)
         
-        argList = [[nodeFile,edgeFile,graphFile,n.index,impulse,timeFile,output_directory] for n in inletNodes]
-        parallel = True
+        argList = [[nodeFile,n.index,impulse,timeFile,output_directory,nedge] for n in inletNodes]
+
         if parallel:
             p.map(_worker_function,argList)
         else:
@@ -400,41 +396,32 @@ class InjectAgent(object):
         
 def _worker_function(args):
     
-    #print inletNodeIndex
-    #return
-    #global GLOBAL
-    #self = GLOBAL
-    #nodeList = self.nodeList
     import pymira.front as frontPKG
     import numpy as np
     import dill as pickle
     
     Q_limit = 1e-9
     
-    nodeListFile,edgeFile,graphFile,inletNodeIndex,concFunc,timeFile,odir = args[0],args[1],args[2],args[3],args[4],args[5],args[6]
+    nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge = args[0],args[1],args[2],args[3],args[4],args[5]
     
     with open(nodeListFile ,'rb') as fo:
         nodeList = pickle.load(fo)
-    #with open(edgeFile ,'rb') as fo:
-    #    edges = pickle.load(fo)
-    #with open(graphFile ,'rb') as fo:
-    #    graph = pickle.load(fo)
     with open(timeFile ,'rb') as fo:
         time = pickle.load(fo)
+    
+    nnode = len(nodeList)
     
     inletNode = [n for n in nodeList if n.index==inletNodeIndex][0]
     print('Inlet index: {}'.format(inletNode.index))
     
     vedges = []
-    #nedges = len(edges)
-    
-    visited = []
-    visited_edges = []
+    visited = np.zeros(nnode,dtype='bool') # []
+    visited_edges = np.zeros(nedge,dtype='bool')
     edgesOut = []
     curNode = inletNode
     
     #print('Inlet node info: delay: {} Q:{}'.format(inletNode.inletDelay,inletNode.inletQ))
-    front = frontPKG.Front(inletNode,delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance)
+    front = frontPKG.Front([inletNode],delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance)
     
     # START WALK...
     endloop = False
@@ -444,8 +431,8 @@ def _worker_function(args):
         #print count
         
         if len(front.Q)>0:
-            mnQ = np.min(front.Q)
-            mxQ = np.max(front.Q)
+            mnQ = np.min(front.Q[0:front.front_size])
+            mxQ = np.max(front.Q[0:front.front_size])
             print('Inlet: {}. front size: {}, minQ,maxQ: {} {}'.format(inletNodeIndex,front.front_size,mnQ,mxQ))
 
         if front.front_size>0:              
@@ -455,8 +442,8 @@ def _worker_function(args):
                 #print('Q: {}'.format(curNode.Q))
                 #print('dP: {}'.format(curNode.delta_pressure))
                 
-                if curNode.index not in visited:
-                    visited.append(curNode.index)
+                if not visited[curNode.index]:
+                    visited[curNode.index] = True
                 
                 res = [(nodeList[nodeIndex],curNode.edges[i],curNode.Q[i]) for i,nodeIndex in enumerate(curNode.connecting_node) if curNode.Q[i]>0.]
                     
@@ -478,8 +465,8 @@ def _worker_function(args):
                         
                         if via_edge not in vedges:
                             vedges.append(via_edge)
-                        if via_edge.index not in visited_edges:
-                            visited_edges.append(via_edge.index)
+                        if not visited_edges[via_edge.index]:
+                            visited_edges[via_edge.index] = True
                             edgesOut.append(via_edge)
                             via_edge.distance = distance[n]
                         try:
@@ -555,12 +542,14 @@ def main():
     ia = InjectAgent()
     
     recon = False
-    resume = True
+    resume = False
+    parallel = True
+    
     if recon:
         ia.reconstruct_results(graph,output_directory=dir_)
     else:
         try:
-            ia.inject(graph,output_directory=dir_,resume=resume)
+            ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel)
         except KeyboardInterrupt:
             print('Ctrl-C interrupt! Saving graph')
             ia.save_graph(output_directory=dir_)

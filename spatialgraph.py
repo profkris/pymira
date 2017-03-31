@@ -227,9 +227,10 @@ class SpatialGraph(amiramesh.AmiraMesh):
         self.nodeList = []
         
         pbar = tqdm(total=nnode) # progress bar
+        self.nodeList = [0] * nnode
         for nodeIndex in range(nnode):
             pbar.update(1)
-            self.nodeList.append(Node(graph=self,index=nodeIndex))
+            self.nodeList[nodeIndex] = Node(graph=self,index=nodeIndex)
         pbar.close()
             
         if path is not None:
