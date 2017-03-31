@@ -542,8 +542,9 @@ def _worker_function(args):
     #return edges
 
 def main():         
-    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    f = dir_+'spatialGraph_RIN.am'
+    #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
+    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    f = os.path.join(dir_,'spatialGraph_RIN.am')
     #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
     #f = dir_ + 'Flow2AmiraPressure.am'
 

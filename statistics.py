@@ -15,7 +15,7 @@ import os
 
 class Statistics(object):
     
-    def __init__(self, graph):
+    def __init__(self, graph, path=None):
         
         self.graph = graph
         self.nodes = None
@@ -23,7 +23,7 @@ class Statistics(object):
         
         if self.nodes is None:
             print('Generating node list...')
-            self.nodes = self.graph.node_list()
+            self.nodes = self.graph.node_list(path=path)
             print('Node list complete')
             print('Generating node geometry...')
             self.node_geometry(self.nodes)
@@ -133,13 +133,16 @@ class Statistics(object):
         
     def edge_geometry(self,edges):
         
-        for edge in edges:        
+        pbar = tqdm(total=len(edges))
+        for edge in edges:
+            pbar.update(1)
             length = np.zeros(edge.npoints-1)
             pts = edge.coordinates
             for i in range(0,edge.npoints-1):
                 length[i] = np.linalg.norm(pts[i+1]-pts[i]) # Length (um)
             edge.length = length
             edge.euclidean = np.linalg.norm(pts[-1]-pts[0])
+        pbar.close()
             
     def _branching_angle(self,vec1,vec2):
 
@@ -155,7 +158,9 @@ class Statistics(object):
             
     def node_geometry(self,nodes):
 
+        pbar = tqdm(total=len(nodes))
         for node in nodes:
+            pbar.update(1)
             ba = []
             for i in range(0,len(node.edges)):
                 for j in range(0,len(node.edges)):
@@ -171,6 +176,7 @@ class Statistics(object):
                         if not all(x==y for x,y in zip(veci,vecj)):
                             ba.append(self._branching_angle(veci,vecj))
             node.branching_angle = np.unique(ba)
+        pbar.close()
         
     def histogram(self,v,range=None,xlabel=None,nbins=50):
         
@@ -196,36 +202,44 @@ class Statistics(object):
         
     def blood_volume(self,edges,sum_edge=True):
         
-        radii = np.zeros(0)
-        lengths = np.zeros(0)
-        volumes = np.zeros(0)
-        coords = []
+        nedge = len(edges)
+        
+        radii = [None] * nedge #np.zeros(self.graph.nedgepoint)
+        lengths = [None] * nedge #np.zeros(self.graph.nedgepoint)
+        volumes = [None] * nedge #np.zeros(self.graph.nedgepoint)
+        coords = [None] * nedge #np.zeros((self.graph.nedgepoint,3))
         if 'Flow' in edges[0].scalarNames:
-            flow = np.zeros(0)
+            flow = [None] * nedge #np.zeros(self.graph.nedgepoint)
         else:
             flow = None
         
         pbar = tqdm(total=len(edges))
-        for edge in edges:
+        #import pdb
+        #pdb.set_trace()
+        #pcount = 0
+        for ei,edge in enumerate(edges):
             pbar.update(1)
+            npoints = edge.npoints
             rad = edge.get_scalar('Radii')
-            radii = np.append(radii,rad)
-            lengths = np.append(lengths,edge.length)
-            curVol = np.pi*np.square(rad[1:])*edge.length
-            volumes = np.append(volumes,curVol)
+            radii[ei] = rad
+            lengths[ei] = np.append(edge.length,0)
+            curVol = np.pi*np.square(rad[0:-1])*edge.length
+            volumes[ei] = curVol
             if flow is not None:
                 curFlow = edge.get_scalar('Flow')
-                flow = np.append(flow,curFlow)
+                flow[ei] = curFlow
             
             if sum_edge:
-                curVol = np.sum(curVol)
-                lengths = np.sum(lengths)
-            coords.append(edge.coordinates)
+                volumes[ei] = np.sum(volumes[ei])
+                lengths[ei] = np.sum(lengths[ei])
+            coords[ei] = edge.coordinates
+            
+            #pcount += npoints
         pbar.close()
             
         return radii,lengths,volumes,coords,flow
         
-    def do_stats(self,output_directory=None):
+    def do_stats(self,path=None):
         
         print('Calculating statistics...')
         print('Estimating network parameters...')
@@ -233,10 +247,7 @@ class Statistics(object):
         print('Finished estimating network parameters...')
 
         nconn = np.asarray([node.nconn for node in self.nodes])
-        ba = np.zeros(0)
-        for node in self.nodes:
-            ba = np.append(ba,node.branching_angle)
-        ba = ba[np.isfinite(ba)]
+        ba = [n.branching_angle[np.isfinite(n.branching_angle)] for n in self.nodes]
             
         self.radii = radii
         self.nconn = nconn
@@ -245,23 +256,29 @@ class Statistics(object):
         self.volumes = volumes
 
         plt.figure()
-        self.histogram(ba,range=[0,180],nbins=50,xlabel='Vessel branching angle (deg)')
-        if output_directory is not None:
-            plotfile = output_directory+'branching_angle_histogram.pdf'
+        baFlat = [item for sublist in ba for item in sublist]
+        self.histogram(baFlat,range=[0,180],nbins=50,xlabel='Vessel branching angle (deg)')
+        if path is not None:
+            plotfile = os.path.join(path,'branching_angle_histogram.pdf')
             plt.savefig(plotfile,transparent=True)
         plt.figure()
-        self.histogram(radii,range=[0,30],nbins=30,xlabel='Vessel radius (um)')
-        if output_directory is not None:
-            plotfile = output_directory+'radius_histogram.pdf'
+        radiiFlat = [item for sublist in radii for item in sublist]
+        self.histogram(radiiFlat,range=[0,30],nbins=30,xlabel='Vessel radius (um)')
+        if path is not None:
+            plotfile = os.path.join(path,'radius_histogram.pdf')
             plt.savefig(plotfile,transparent=True)
         plt.figure()
+
+        #lengthsFlat = [item for sublist in lengths for item in sublist]
         self.histogram(lengths,range=[0,80],nbins=50,xlabel='Vessel length (um)')
-        if output_directory is not None:
-            plotfile = output_directory+'vessel_length_histogram.pdf'
+        if path is not None:
+            plotfile = os.path.join(path,'vessel_length_histogram.pdf')
             plt.savefig(plotfile,transparent=True)
+        plt.figure()
+        #volumesFlat = [item for sublist in volumes for item in sublist]
         self.histogram(volumes,range=[0,80],nbins=50,xlabel='Vessel volume (um3)')
-        if output_directory is not None:
-            plotfile = output_directory+'vessel_volume_histogram.pdf'
+        if path is not None:
+            plotfile = os.path.join(path,'vessel_volume_histogram.pdf')
             plt.savefig(plotfile,transparent=True)
 
         blood_volume = np.sum(volumes)
@@ -272,20 +289,20 @@ class Statistics(object):
         print('BLOOD VOLUME (um3): {}'.format(blood_volume))
         print('BLOOD VOLUME FRACTION: {}'.format(blood_fraction))
         
-        if output_directory is not None:
-            with open(output_directory+'volume.txt','wb') as fo:
+        if path is not None:
+            with open(os.path.join(path,'volume.txt'),'wb') as fo:
                 fo.write('TUMOUR VOLUME (um3) \t{}\n'.format(total_volume))
                 fo.write('BLOOD VOLUME (um3) \t{}\n'.format(blood_volume))
                 fo.write('BLOOD VOLUME FRACTION \t{}\n'.format(blood_fraction))
                 
-            with open(output_directory+'stats.txt','wb') as fo:
+            with open(os.path.join(path,'stats.txt'),'wb') as fo:
                 
                 # Write header
                 hdr = ['PARAM','Mean','SD','median','min','max']
                 hdr = '\t'.join(hdr)+'\n'
                 fo.write(hdr)
                 
-                params = [radii,lengths,nconn,ba,volumes]
+                params = [radiiFlat,lengths,nconn,baFlat,volumes]
                 paramNames = ['Radius (um)','Vessel length (um)','Number of connections','Branching angle (deg)','Vessel volume (um3)']
                 
                 for v,n in zip(params,paramNames):
@@ -294,15 +311,15 @@ class Statistics(object):
                     cur = '\t'.join(cur)+'\n'
                     fo.write(cur)
                     
-            with open(output_directory+'radii.p','wb') as fo:
+            with open(os.path.join(path,'radii.p'),'wb') as fo:
                 pickle.dump(radii,fo)
-            with open(output_directory+'branching_angle.p','wb') as fo:
+            with open(os.path.join(path,'branching_angle.p'),'wb') as fo:
                 pickle.dump(ba,fo)
-            with open(output_directory+'vessel_length.p','wb') as fo:
+            with open(os.path.join(path,'vessel_length.p'),'wb') as fo:
                 pickle.dump(lengths,fo)
-            with open(output_directory+'nconn.p','wb') as fo:
+            with open(os.path.join(path,'nconn.p'),'wb') as fo:
                 pickle.dump(nconn,fo)
-            with open(output_directory+'vessel_volume.p','wb') as fo:
+            with open(os.path.join(path,'vessel_volume.p'),'wb') as fo:
                 pickle.dump(volumes,fo)
         
 # #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
@@ -316,7 +333,7 @@ class Statistics(object):
 # #f = dir_+'spatialGraph_RIN.am'
 
 dir_ = r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\LS#1"
-f = dir_+r'\LS1_spatialGraph_scaled.am'
+f = os.path.join(dir_,r'LS1_spatialGraph_scaled.am')
 # pixsize = 6.98
 # dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#2"
 # f = dir_+r'\LS2_bg_removed_frangi_response_skeletonised_with_radius.SptGraph.am'
@@ -347,9 +364,9 @@ print('Graph read')
 
 # #import pdb
 # #pdb.set_trace()
-stats = Statistics(graph)
+stats = Statistics(graph,path=dir_)
 
-stats.do_stats(output_directory=dir_+os.sep)
+stats.do_stats(path=dir_)
 # #stats.do_stats(output_directory=None)
 # #stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
 # stats.do_stats(output_directory=dir_)

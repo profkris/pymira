@@ -12,12 +12,12 @@ from tqdm import tqdm # progress bar
 
 class SpatialGraph(amiramesh.AmiraMesh):
     
-    def __init__(self,header_from=None,initialise=False,scalars=[],node_scalars=[]):
+    def __init__(self,header_from=None,initialise=False,scalars=[],node_scalars=[],path=None):
         amiramesh.AmiraMesh.__init__(self)
         
         self.nodeList = None
         self.edgeList = None
-        self.path = None
+        self.path = path
         
         if header_from is not None:
             import copy
@@ -403,13 +403,23 @@ class SpatialGraph(amiramesh.AmiraMesh):
 
     def edges_from_node_list(self,nodeList):
         
-        edges = []
+        #import pdb
+        #pdb.set_trace()
+        nedges = self.nedge
+        edges = [None]*nedges
         indices = []
+        pbar = tqdm(total=len(nodeList))
         for n in nodeList:
+            pbar.update(1)
             for e in n.edges:
-                if e.index not in indices: # only unique edges
-                    edges.append(e)
-                    indices.append(e.index)
+                if edges[e.index] is None:
+                    edges[e.index] = e
+                #if e.index not in indices: # only unique edges
+                #    edges[e.index] = e
+                    #indices.append(e.index)
+        pbar.close()
+        if None in edges:
+            print('Warning, edge(s) missing from edge list')
                 
         return edges
 
