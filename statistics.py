@@ -75,7 +75,7 @@ class Statistics(object):
         pbar = tqdm(total=len(self.edges))
                     
         for ei,edge in enumerate(self.edges):
-            pbar.update(ei)
+            pbar.update(1)
 
             radii,lengths,volumes,coords,flows = self.blood_volume([edge],sum_edge=False)
             
@@ -251,11 +251,12 @@ class Statistics(object):
         
         print('Calculating statistics...')
         print('Estimating network parameters...')
-        import pdb
-        pdb.set_trace()
-        #radii,lengths,volumes,_,_ = self.blood_volume(self.edges)
+        #import pdb
+        #pdb.set_trace()
+        radii,lengths,volumes,_,_ = self.blood_volume(self.edges)
         print('Finished estimating network parameters...')
 
+        print('Calculating stats...')
         nconn = np.asarray([node.nconn for node in self.nodes])
         ba = [n.branching_angle[np.isfinite(n.branching_angle)] for n in self.nodes]
             
@@ -376,7 +377,7 @@ def main():
     
     # #import pdb
     # #pdb.set_trace()
-    stats = Statistics(graph)
+    stats = Statistics(graph,path=dir_)
     
     stats.do_stats(path=dir_)
     # #stats.do_stats(output_directory=None)
@@ -401,5 +402,5 @@ if __name__=='__main__':
         cProfile.run('main()')
     except:
         pass
-    import pdb
-    pdb.set_trace()
+    #import pdb
+    #pdb.set_trace()
