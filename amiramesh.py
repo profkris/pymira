@@ -89,8 +89,14 @@ class AmiraMesh(object):
             else: # Default to float
                 dtype = np.dtype('f')
             curData = np.array(curData,dtype=dtype)
-            curData = np.reshape(curData,curField['shape'])
-            curField['data'] = curData
+            try:
+                curData = np.reshape(curData,curField['shape'])
+                curField['data'] = curData
+            except Exception,e:
+                print e
+                #import pdb
+                #pdb.set_trace()
+
         elif 'binary' in self.fileType.lower():
             import pdb
             pdb.set_trace()
