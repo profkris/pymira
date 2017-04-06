@@ -344,8 +344,8 @@ def main():
     # #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
     # #f = dir_+'spatialGraph_RIN.am'
     
-    dir_ = r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\LS#1"
-    f = dir_+r'\LS1_spatialGraph_scaled.am'
+    dir_ = r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\SW#2"
+    f = dir_+r'\SW2_spatialGraph_scaled.am'
     # pixsize = 6.98
     # dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#2"
     # f = dir_+r'\LS2_bg_removed_frangi_response_skeletonised_with_radius.SptGraph.am'
@@ -378,7 +378,7 @@ def main():
     # #pdb.set_trace()
     stats = Statistics(graph)
     
-    stats.do_stats(output_directory=dir_+os.sep)
+    stats.do_stats(path=dir_)
     # #stats.do_stats(output_directory=None)
     # #stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
     # stats.do_stats(output_directory=dir_)

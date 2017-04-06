@@ -543,7 +543,7 @@ def main():
     ia = InjectAgent()
     
     recon = False
-    resume = False
+    resume = True
     parallel = True
     
     if recon:
