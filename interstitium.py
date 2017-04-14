@@ -29,46 +29,6 @@ from scipy.ndimage import filters
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
-def impulse(t,delay):
-
-    length = 20. #us
-    conc = np.zeros(t.shape[0])
-    conc[t>=delay] = 1.
-    conc[t>(delay+length)] = 0.
-    return conc
-    
-def parker(t,delay):
-    
-    # PARKER (average arterial input function from human population)
-    import numpy as np
-    try:
-        a1 = 0.833
-        a2 = 0.336
-        t1 = 0.171
-        t2 = 0.364
-        sigma1 = 0.055 
-        sigma2 = 0.134
-        alpha = 1.064
-        beta = 0.166
-        s = 37.772
-        tau = 0.482
-        tMin = (t-delay) / 60.
-        r1 = (a1 / (sigma1*np.sqrt(2.*np.pi))) * np.exp(-np.square(tMin-t1)/(2.*np.square(sigma1)))
-        r2 = (a2 / (sigma2*np.sqrt(2.*np.pi))) * np.exp(-np.square(tMin-t2)/(2.*np.square(sigma2)))
-        wo = alpha * np.exp(-beta*tMin) / (1. + np.exp(-s*(tMin-tau)))
-        conc = r1 + r2 + wo
-        
-        conc[tMin<0] = 0.
-        conc[conc<0] = 0.
-        conc[~np.isfinite(conc)] = 0.
-        
-    except Exception,e:
-        print(e)
-        import pdb
-        pdb.set_trace()
-        
-    return conc
-
 class Interstitium(object):
     
     def __init__(self):
@@ -79,20 +39,22 @@ class Interstitium(object):
         self.dy = None
         self.dz = None
         self.dt = None
+                        
+        self.ktrans = 0.2 #/min
+        self.ef = 0.2
+        self.D = 500.
+        
+        self.feNSample = 3
         
     def align_vector_rotation(self,A,B):
         
-        """ To align vector A to B:
+        """ Calculates a rotation matrix to align A to B
         B = np.transpose(U*A.T))
         """
-        
-        #mat = np.asmatrix
-        norm = np.linalg.norm
-        
+
+        norm = np.linalg.norm        
         A = A/norm(A)
         B = B/norm(B)
-        #print('A={}'.format(A))
-        #print('B={}'.format(B))
         
         if np.all(A==B):
             #print('All equal')
@@ -116,8 +78,6 @@ class Interstitium(object):
             U = Fi * G * np.linalg.inv(Fi)
         except Exception,e:
             print(e)
-            import pdb
-            pdb.set_trace()
         
         return U
     
@@ -177,7 +137,7 @@ class Interstitium(object):
         idx = (np.abs(array-value)).argmin()
         return idx #array[idx]
         
-    def radial_diffusion(self,coords,c_v,D,ktrans,k,h,nr,nt,time):
+    def radial_diffusion(self,coords,c_v,D,ktrans,ef,k,h,nr,nt,time):
         
         lam = D*k/np.square(h) # + np.power(dr,-2) + np.power(dr,-2))
         #print('Lambda: {}'.format(lam))
@@ -194,127 +154,130 @@ class Interstitium(object):
         
         #inds = np.where(r<=radius)
         inds = 0
-        filt = ktrans*np.exp(-ktrans*time)
-        conv = np.convolve(c_v,filt) # Convolve impulse response with AIF
-        conv = conv[0:len(time)]*(time[1]-time[0])
+        #filt = ef*ktrans*np.exp(-ktrans*time)
+        #conv = np.convolve(c_v,filt) # Convolve impulse response with AIF
+        #conv = conv[0:len(time)]*(time[1]-time[0])
         
-        conv = c_v
+        #conv = c_v
         
-        R[inds,0:len(c_v)] = conv
+        #R[inds,0:len(c_v)] = c_v - c_i[0,j]
+        
+        #http://iopscience.iop.org/article/10.1088/0031-9155/59/17/5175
+        #mu = ktrans
+        sb_vi_av = 333.e-4 #/um
+        ubi = 10.e4 #um/s
+        M = (c_i.shape[0]/float(self.feNSample)) * ubi * sb_vi_av #* (vessel_surfArea / interstitial_volume)
         
         for j in xrange(nt-1):
-            c_i[:,j+1] = np.dot(A,c_i[:,j]) + k*R[:,j] #(np.dot(B,R[:,j]))
+            c_i[:,j+1] = np.dot(A,c_i[:,j]) + M*(c_v[j]-c_i[:,j]) #(np.dot(B,R[:,j]))
+            
+        #c_v_out = (1.-ef) * c_v
+        c_v_out = c_v
         
-        return c_i
+        return c_i,c_v_out
         
-    def interstitial_diffusion(self,nodes,index,conc,time,plot_conc=False):
+    def set_grid_dimensions(self,nodes,time,ktrans=None,D=None,verbose=False,embed_dims=None,grid_dims=None):
+        
+        if ktrans is None:
+            ktrans = self.ktrans
+        if D is None:
+            D = self.D
+        
+        self.nr = 100
+        self.max_r = 1000. #um #dr*nr
+        self.dr = self.max_r / float(self.nr)
+
+        if embed_dims is None:
+            pad = self.max_r / 5.
+            mnx,mxx = np.min(nodes[:,0]),np.max(nodes[:,0])
+            mny,mxy = np.min(nodes[:,1]),np.max(nodes[:,1])
+            mnz,mxz = np.min(nodes[:,2]),np.max(nodes[:,2])
+            self.embedDims = [ [mnx-pad,mxx+pad],
+                          [mny-pad,mxy+pad],
+                          [mnz-pad,mxz+pad] ]
+        else:
+            self.embedDims = embed_dims
+
+        self.dt = time[1] - time[0]
+        self.max_time = time[-1]
+        self.nt = len(time)
+        
+        k = self.dt
+        h = self.dr
+        
+        if verbose:
+            print('Max TIME: {} s, {} min'.format(self.max_time,self.max_time/60.))
+            print('dt: {} s'.format(self.dt))
+            print('nt: {} s'.format(self.nt))
+            print('Max RADIUS: {} um'.format(self.max_r))
+            print('dr: {} um'.format(self.dr))
+            print('nr: {} um'.format(self.nr))
+            print('D: {} s2/um'.format(D))
+            print('Ktrans: {} /s'.format(ktrans))
+            print('Embedding dims: {} um'.format(self.embedDims))
+            print('k<=h2/2D   k (dt) = {}, h (dr) = {}, h2/2D = {}'.format(k,h,np.square(h)/(2.*D)))        
+        
+        assert k<=np.square(h)/(2.*D)
+        
+        # Regrid
+        if grid_dims is None:
+            self.ntg = self.nt
+            self.ng = [np.int(np.ceil((self.embedDims[i][1]-self.embedDims[i][0])/self.pixSize[i])) for i in range(3)]
+            self.grid_dims = [self.ntg,self.ng[0],self.ng[1],self.ng[2]]
+        else:
+            self.grid_dims = grid_dims
+            self.ntg = grid_dims[0]
+            self.ng = [grid_dims[1],grid_dims[2],grid_dims[3]]
+
+        dx = (self.embedDims[0][1]-self.embedDims[0][0]) / float(self.ng[0])
+        dy = (self.embedDims[1][1]-self.embedDims[1][0]) / float(self.ng[1])
+        dz = (self.embedDims[2][1]-self.embedDims[2][0]) / float(self.ng[2])
+        self.dx,self.dy,self.dz = dx,dy,dz
+        
+    def interstitial_diffusion(self,nodes,index,conc,time,plot_conc=False,set_grid_dims=True,progress=True):
         
         nnode = len(nodes)
         nodes = np.asarray(nodes)
-        mnx,mxx = np.min(nodes[:,0]),np.max(nodes[:,0])
-        mny,mxy = np.min(nodes[:,1]),np.max(nodes[:,1])
-        mnz,mxz = np.min(nodes[:,2]),np.max(nodes[:,2])
-    
-        #radius = [10.,10.,10.] #um
-        #delay = [0.]*nnode #s
-        ktrans = [0.2]*nnode #/min
-        D = [500.]*nnode # um2/s
+ 
+        if set_grid_dims:       
+            self.set_grid_dimensions(time,nodes,ktrans=self.ktrans,D=self.D)
+            
+        self.grid = np.zeros(self.grid_dims)
+        self.count = np.zeros(self.grid_dims)
         
-        ktrans = [k/60. for k in ktrans] #/s
-        nr = 100
-        max_r = 1000. #um #dr*nr
-        dr = max_r / float(nr)
-        r = np.linspace(0,max_r,num=nr)
-        #r = np.logspace(-10,np.log10(max_r),num=nr,endpoint=True)
+        ktrans = [self.ktrans/60.]*nnode #/min
+        ef = [self.ef]*nnode #/min
+        D = [self.D]*nnode # um2/s
         
-        #embedDims = [[0,40],[0,40],[5,15]] #um
-        pad = max_r / 5.
-        embedDims = [ [mnx-pad,mxx+pad],
-                      [mny-pad,mxy+pad],
-                      [mnz-pad,mxz+pad] ]
-        self.embedDims = embedDims
-
-        dt = time[1] - time[0]
-        max_time = time[-1]
-        nt = len(time)
-        print('Max TIME: {} s, {} min'.format(max_time,max_time/60.))
-        print('dt: {} s'.format(dt))
-        print('nt: {} s'.format(nt))
-        print('Max RADIUS: {} um'.format(max_r))
-        print('dr: {} um'.format(dr))
-        print('nr: {} um'.format(nr))
-        print('D: {} s2/um'.format(D[0]))
-        print('Ktrans: {} /s'.format(ktrans[0]))
-        print('Embedding dims: {} um'.format(embedDims))
+        r = np.linspace(0,self.max_r,num=self.nr)
         
-        k = dt
-        h = dr
+        embedDims = self.embedDims
+        xg = np.linspace(embedDims[0][0],embedDims[0][1],num=self.ng[0],dtype='float')
+        yg = np.linspace(embedDims[1][0],embedDims[1][1],num=self.ng[1],dtype='float')
+        zg = np.linspace(embedDims[2][0],embedDims[2][1],num=self.ng[2],dtype='float')
+        tg = np.linspace(0,self.max_time,num=self.ntg,dtype='float')
+        tgInd = np.linspace(0,self.nt-1,num=self.ntg,dtype='int')
         
-        self.dt = dt
-        
-        print('k<=h2/2D   k (dt) = {}, h (dr) = {}, h2/2D = {}'.format(k,h,np.square(h)/(2.*D[0])))
-        assert all(k<=np.square(h)/(2.*Dc) for Dc in D)
-        
-        #fig = plt.figure()
-        #ax = fig.add_subplot(111, projection='3d')
-        #plt.gca().set_aspect('equal', adjustable='box')
-        
-        # Regrid
-        ntg = nt
-        ng = [np.int(np.ceil((embedDims[i][1]-embedDims[i][0])/self.pixSize[i])) for i in range(3)]
-        ng[2] = 1
-        self.ng = ng
-
-        self.grid = np.zeros([ntg,ng[0],ng[1]])#,ng[2]])
-        self.count = np.zeros([ntg,ng[0],ng[1]])#,ng[2]])
-        dx = (embedDims[0][1]-embedDims[0][0]) / float(ng[0])
-        dy = (embedDims[1][1]-embedDims[1][0]) / float(ng[1])
-        dz = (embedDims[2][1]-embedDims[2][0]) / float(ng[2])
-        self.dx,self.dy,self.dz = dx,dy,dz
-        xg = np.linspace(embedDims[0][0],embedDims[0][1],num=ng[0],dtype='float')
-        yg = np.linspace(embedDims[1][0],embedDims[1][1],num=ng[1],dtype='float')
-        zg = np.linspace(embedDims[2][0],embedDims[2][1],num=ng[2],dtype='float')
-        tg = np.linspace(0,max_time,num=ntg,dtype='float')
-        tgInd = np.linspace(0,nt-1,num=ntg,dtype='int')
-        
-        print('Grid dx,dy,dz: {} {} {}'.format(dx,dy,dz))
-        
-        #import pdb
-        #pdb.set_trace()
-        
-        cm = plt.get_cmap('jet')
-        mn = 0.
-        mx = 1e-10
-        cNorm = matplotlib.colors.Normalize(vmin=mn, vmax=mx)
-        scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cm)
-        
-        pbar = tqdm(total=nnode)
+        if progress:
+            pbar = tqdm(total=nnode)
         
         for ni,curNode in enumerate(nodes):
-            
-            pbar.update(1)
+            if progress:
+                pbar.update(1)
             
             if ni<nnode-1 and index[ni]==index[ni+1]: # for cylinder only...
             
                 #ve = 0.1            
-                c_v = conc[:,ni] # impulse(time,delay[ni])
-                c_i = self.radial_diffusion(curNode,c_v,D[ni],ktrans[ni],k,h,nr,nt,time)
+                #c_v = conc[:,ni]
+                c_v = conc[ni,:]
+                c_i,c_v_out = self.radial_diffusion(curNode,c_v,D[ni],ktrans[ni],ef[ni],self.dt,self.dr,self.nr,self.nt,time)
                 
-                if plot_conc:
-                    fig = plt.figure()
-                    plt.plot(time,c_v)
-                    for i in xrange(np.max([nr,100])):
-                        plt.plot(time,c_i[i,:])
                 # Regrid
                 c_i = c_i[:,tgInd] 
-                
-                xn,yn,zn = (self.find_nearest(xg,curNode[0]),
-                           self.find_nearest(yg,curNode[1]),
-                           self.find_nearest(zg,curNode[2]))
-            
+
                 for ri,radius in enumerate(r):
                     #sph = self.sphere_coordinates(radius,curNode,10)
-                    sph = self.cylinder_coordinates(radius,curNode,nodes[ni+1],10)
+                    sph = self.cylinder_coordinates(radius,curNode,nodes[ni+1],self.feNSample)
                     xs = [x[0] for x in sph]
                     ys = [x[1] for x in sph]
                     zs = [x[2] for x in sph]
@@ -329,24 +292,32 @@ class Interstitium(object):
                                            self.find_nearest(zg,zs[i]) )
                             #if xsc!=xn or ysc!=yn:
                             #    print('Outside node! {} {}'.format(ri,c_i[ri,:]))
-                            self.grid[:,xsc,ysc] += c_i[ri,:]
-                            self.count[:,xsc,ysc] += 1
+                            self.grid[:,xsc,ysc,zsc] += c_i[ri,:]
+                            self.count[:,xsc,ysc,zsc] += 1
 
-        for i in xrange(nt):
-            self.grid[i] = scipy.ndimage.filters.median_filter(self.grid[i],size=5)
-        
-        pbar.close()
+        if progress:
+            pbar.close()
         #self.normalise()
         
     def normalise(self):
         self.grid[self.count>0] = self.grid[self.count>0] / self.count[self.count>0]
         
-    def save_grid(self,path):
+    def smooth_grid(self,n,grid=None):
+        if grid is None:
+            grid = self.grid
+        for i in xrange(grid.shape[0]):
+            grid[i] = scipy.ndimage.filters.median_filter(grid[i],size=n)
+        return grid
+        
+    def save_grid(self,path,grid=None):
                 
-        print('Max C_i: {} mM'.format(np.max(self.grid)))
+        if grid is None:
+            grid = self.grid
+            
+        print('Max C_i: {} mM'.format(np.max(grid)))
             
         import nibabel as nib
-        tmp = np.swapaxes(self.grid,0,1)
+        tmp = np.swapaxes(grid,0,1)
         tmp = np.swapaxes(tmp,1,2)
         img = nib.Nifti1Image(tmp[:,:,None,:],affine=np.eye(4))
         hdr = img.header
@@ -371,71 +342,75 @@ class Interstitium(object):
                 im = self.grid[i,:,:]
                 plt.imshow(im,vmin=0,vmax=0.01)
         
-plt.close('all')
-
-from pymira import spatialgraph
-dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-f = dir_ + 'ct_output.am'
-graph = spatialgraph.SpatialGraph()
-print('Reading graph...')
-graph.read(f)
-print('Graph read')
-
-points = graph.get_data('EdgePointCoordinates')
-npoints = points.shape[0]
-nEdgePoint = graph.get_data('NumEdgePoints')
-edgePointIndex = np.zeros(npoints,dtype='int')
-
-offset = 0
-edgeCount = 0
-for npCur in nEdgePoint:
-    edgePointIndex[offset:offset+npCur] = edgeCount
-    edgeCount += 1
-    offset += npCur
+def main():
+    plt.close('all')
     
-assert offset==npoints
-
-concFieldInds = [i for i,x in enumerate(graph.fieldNames) if 'Concentration' in x]
-concFields = [graph.fieldNames[i] for i in concFieldInds]
-time = np.asarray([float(x.replace('Concentration_','')) for x in concFields])
-
-nt = len(time)
-npoint = points.shape[0]
-
-conc = np.zeros((nt,npoint),dtype='float')
-for ci,concField in enumerate(concFieldInds):
-    field = graph.fields[concField]
-    if 'data' in field:
-        conc[ci,:] = field['data']
-    else:
-        conc[ci,:] = conc[ci-1,:]
-        print('Data missing: {}'.format(concFields[ci]))
-
-#nodes = [[10.,10.,10.],
-#         [10.,20.,10.],
-#         [30.,30.,10.]]
-
-#import pdb
-#pdb.set_trace()
-
-jump = 1
-lim = -1#jump*50
-time = time[0:lim:jump]
-conc = conc[0:lim:jump,:]
-
-#conc = conc[:,0:100]
-#points = points[0:100,:]
-#edgePointIndex = edgePointIndex[0:100]
-
-inter = Interstitium()
-
-try:
-    inter.interstitial_diffusion(points,edgePointIndex,conc,time)
-except KeyboardInterrupt:
-    print('Keyboard interrupt')
-    #inter.normalise()
-    #pass
-#import pdb
-#pdb.set_trace()
-#inter.display_grid(last=False)
-inter.save_grid(dir_)
+    from pymira import spatialgraph
+    dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+    f = dir_ + 'ct_output.am'
+    graph = spatialgraph.SpatialGraph()
+    print('Reading graph...')
+    graph.read(f)
+    print('Graph read')
+    
+    points = graph.get_data('EdgePointCoordinates')
+    npoints = points.shape[0]
+    nEdgePoint = graph.get_data('NumEdgePoints')
+    edgePointIndex = np.zeros(npoints,dtype='int')
+    
+    offset = 0
+    edgeCount = 0
+    for npCur in nEdgePoint:
+        edgePointIndex[offset:offset+npCur] = edgeCount
+        edgeCount += 1
+        offset += npCur
+        
+    assert offset==npoints
+    
+    concFieldInds = [i for i,x in enumerate(graph.fieldNames) if 'Concentration' in x]
+    concFields = [graph.fieldNames[i] for i in concFieldInds]
+    time = np.asarray([float(x.replace('Concentration_','')) for x in concFields])
+    
+    nt = len(time)
+    npoint = points.shape[0]
+    
+    conc = np.zeros((nt,npoint),dtype='float')
+    for ci,concField in enumerate(concFieldInds):
+        field = graph.fields[concField]
+        if 'data' in field:
+            conc[ci,:] = field['data']
+        else:
+            conc[ci,:] = conc[ci-1,:]
+            print('Data missing: {}'.format(concFields[ci]))
+    
+    #nodes = [[10.,10.,10.],
+    #         [10.,20.,10.],
+    #         [30.,30.,10.]]
+    
+    #import pdb
+    #pdb.set_trace()
+    
+    jump = 1
+    lim = -1#jump*50
+    time = time[0:lim:jump]
+    conc = conc[0:lim:jump,:]
+    
+    #conc = conc[:,0:100]
+    #points = points[0:100,:]
+    #edgePointIndex = edgePointIndex[0:100]
+    
+    inter = Interstitium()
+    
+    try:
+        inter.interstitial_diffusion(points,edgePointIndex,conc,time)
+    except KeyboardInterrupt:
+        print('Keyboard interrupt')
+        #inter.normalise()
+        #pass
+    #import pdb
+    #pdb.set_trace()
+    #inter.display_grid(last=False)
+    inter.save_grid(dir_)
+    
+if __name__ == "__main__":
+    main()

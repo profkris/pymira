@@ -341,6 +341,20 @@ class SpatialGraph(amiramesh.AmiraMesh):
     def get_edge(self,index):
         return Edge(graph=self,index=index)
         
+    def edgepoint_edge_indices(self):
+        # Get array relating edgepoints to the index of the edge that they're from
+        points = self.get_data('EdgePointCoordinates')
+        npoints = points.shape[0]
+        nEdgePoint = self.get_data('NumEdgePoints')
+        edgePointIndex = np.zeros(npoints,dtype='int')
+        offset = 0
+        edgeCount = 0
+        for npCur in nEdgePoint:
+            edgePointIndex[offset:offset+npCur] = edgeCount
+            edgeCount += 1
+            offset += npCur
+        return edgePointIndex
+        
     def get_scalars(self):
         return [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
         
