@@ -54,8 +54,8 @@ def ca1(t,delay):
     mouse_mass = 0.025 # kg (mouse mass)
     mouse_volume = 1.8 #ml (blood volume...)
     dose_mass = dose * mouse_mass * 1000. # ug
-    dose_moles = dose_mass / mol_weight # mol
-    cmax_mol = dose_mass * mouse_volume / mol_weight # mol
+    #dose_moles = dose_mass / mol_weight # mol
+    cmax_mol = dose_mass * mouse_volume * 1e6 / mol_weight # umol
     
     return cmax_mol*np.exp(-(t-delay)/t_half)
     
