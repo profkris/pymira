@@ -416,7 +416,9 @@ def _worker_function(args):
     import pymira.front as frontPKG
     import numpy as np
     import dill as pickle
+
     from pymira import interstitium
+
     
     Q_limit = 1e-9
     
@@ -450,17 +452,22 @@ def _worker_function(args):
     # START WALK...
     endloop = False
     count = 0
+    nStepMax = 1e5
+    fSizeHistory = np.zeros(nStepMax,dtype='int')
+    
     while endloop is False:
         count += 1
-        #print count
+        if count>=nStepMax:
+            endloop = True
         
         if len(front.Q)>0:
             mnQ = np.min(front.Q[0:front.front_size])
             mxQ = np.max(front.Q[0:front.front_size])
-            print('Inlet: {}. front size: {}, minQ,maxQ: {} {}'.format(inletNodeIndex,front.front_size,mnQ,mxQ))
+            print('Inlet: {}., iteration: {}, front size: {}, minQ,maxQ: {} {}'.format(inletNodeIndex,count,front.front_size,mnQ,mxQ))
 
-        if front.front_size>0:              
+        if front.front_size>0 and endloop is False:              
             (current_nodes,delay,Q,distance) = front.get_current_front()
+            fSizeHistory[count] = front.front_size
             
             for n,curNode in enumerate(current_nodes):
                 #print('Q: {}'.format(curNode.Q))
@@ -498,6 +505,8 @@ def _worker_function(args):
                             c_v = np.repeat([conc],via_edge.npoints,axis=0)
                         except Exception,err:
                             print('Error, conc calc {}'.format(err))
+                        except Exception,err:
+                            print err
                         try:
                             if leaky_vessels:
                                 edgeInd = np.zeros(via_edge.npoints,dtype='int')
@@ -529,6 +538,9 @@ def _worker_function(args):
                 #import pdb
                 #pdb.set_trace()
             front.complete_step()
+        elif count>=nStepMax:
+            endloop = True
+            print('Exit step {} - front size greater than maximum!'.format(front.nstep))
         else:
             endloop = True
             print('Exit step {} - front size 0'.format(front.nstep))
@@ -558,10 +570,10 @@ def _worker_function(args):
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
-    #f = os.path.join(dir_,'spatialGraph_RIN.am')
-    dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-    f = dir_ + 'Flow2AmiraPressure.am'
+    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    f = os.path.join(dir_,'spatialGraph_RIN.am')
+    #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+    #f = dir_ + 'Flow2AmiraPressure.am'
 
     graph = spatialgraph.SpatialGraph()
     print('Reading graph...')
@@ -573,7 +585,7 @@ def main():
     recon = False
     resume = False
     parallel = False
-    
+ 
     if recon:
         ia.reconstruct_results(graph,output_directory=dir_)
     else:

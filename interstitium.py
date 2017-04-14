@@ -34,7 +34,7 @@ class Interstitium(object):
     def __init__(self):
         self.grid = None
         self.count = None
-        self.pixSize = [50.,50.,20.] #um
+        self.pixSize = [50.,50.,50.] #um
         self.dx = None
         self.dy = None
         self.dz = None
@@ -220,6 +220,29 @@ class Interstitium(object):
         assert k<=np.square(h)/(2.*D)
         
         # Regrid
+        ntg = nt
+        ng = [np.int(np.ceil((embedDims[i][1]-embedDims[i][0])/self.pixSize[i])) for i in range(3)]
+        print('Embedding matrix: {}'.format(ng))
+        flatten_z = False
+        if flatten_z:
+            ng[2] = 1
+            self.grid = np.zeros([ntg,ng[0],ng[1]])#,ng[2]])
+            self.count = np.zeros([ntg,ng[0],ng[1]])#,ng[2]])
+        else:
+            self.grid = np.zeros([ntg,ng[0],ng[1],ng[2]])
+            self.count = np.zeros([ntg,ng[0],ng[1],ng[2]])
+        
+        dx = (embedDims[0][1]-embedDims[0][0]) / float(ng[0])
+        dy = (embedDims[1][1]-embedDims[1][0]) / float(ng[1])
+        dz = (embedDims[2][1]-embedDims[2][0]) / float(ng[2])
+        self.dx,self.dy,self.dz = dx,dy,dz
+        self.ng = ng
+        xg = np.linspace(embedDims[0][0],embedDims[0][1],num=ng[0],dtype='float')
+        yg = np.linspace(embedDims[1][0],embedDims[1][1],num=ng[1],dtype='float')
+        zg = np.linspace(embedDims[2][0],embedDims[2][1],num=ng[2],dtype='float')
+        tg = np.linspace(0,max_time,num=ntg,dtype='float')
+        tgInd = np.linspace(0,nt-1,num=ntg,dtype='int')
+
         if grid_dims is None:
             self.ntg = self.nt
             self.ng = [np.int(np.ceil((self.embedDims[i][1]-self.embedDims[i][0])/self.pixSize[i])) for i in range(3)]
@@ -290,10 +313,21 @@ class Interstitium(object):
                             xsc,ysc,zsc = (self.find_nearest(xg,xs[i]),
                                            self.find_nearest(yg,ys[i]),
                                            self.find_nearest(zg,zs[i]) )
-                            #if xsc!=xn or ysc!=yn:
-                            #    print('Outside node! {} {}'.format(ri,c_i[ri,:]))
-                            self.grid[:,xsc,ysc,zsc] += c_i[ri,:]
-                            self.count[:,xsc,ysc,zsc] += 1
+
+                            if flatten_z:
+                                self.grid[:,xsc,ysc] += c_i[ri,:]
+                                self.count[:,xsc,ysc] += 1
+                            else:
+                                self.grid[:,xsc,ysc,zsc] += c_i[ri,:]
+                                self.count[:,xsc,ysc,zsc] += 1
+
+        if med_reg:
+            pbar = tqdm(total=nt)
+            print 'Median regularisation...'
+            for i in xrange(nt):
+                pbar.update(1)
+                self.grid[i] = scipy.ndimage.filters.median_filter(self.grid[i],size=13)
+            pbar.close()
 
         if progress:
             pbar.close()
