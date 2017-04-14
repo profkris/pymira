@@ -74,7 +74,7 @@ class Interstitium(object):
     def __init__(self):
         self.grid = None
         self.count = None
-        self.pixSize = [50.,50.,20.] #um
+        self.pixSize = [50.,50.,50.] #um
         self.dx = None
         self.dy = None
         self.dz = None
@@ -207,7 +207,7 @@ class Interstitium(object):
         
         return c_i
         
-    def interstitial_diffusion(self,nodes,index,conc,time,plot_conc=False):
+    def interstitial_diffusion(self,nodes,index,conc,time,plot_conc=False,save_every=None,med_reg=False):
         
         nnode = len(nodes)
         nodes = np.asarray(nodes)
@@ -262,15 +262,21 @@ class Interstitium(object):
         # Regrid
         ntg = nt
         ng = [np.int(np.ceil((embedDims[i][1]-embedDims[i][0])/self.pixSize[i])) for i in range(3)]
-        ng[2] = 1
-        self.ng = ng
-
-        self.grid = np.zeros([ntg,ng[0],ng[1]])#,ng[2]])
-        self.count = np.zeros([ntg,ng[0],ng[1]])#,ng[2]])
+        print('Embedding matrix: {}'.format(ng))
+        flatten_z = False
+        if flatten_z:
+            ng[2] = 1
+            self.grid = np.zeros([ntg,ng[0],ng[1]])#,ng[2]])
+            self.count = np.zeros([ntg,ng[0],ng[1]])#,ng[2]])
+        else:
+            self.grid = np.zeros([ntg,ng[0],ng[1],ng[2]])
+            self.count = np.zeros([ntg,ng[0],ng[1],ng[2]])
+        
         dx = (embedDims[0][1]-embedDims[0][0]) / float(ng[0])
         dy = (embedDims[1][1]-embedDims[1][0]) / float(ng[1])
         dz = (embedDims[2][1]-embedDims[2][0]) / float(ng[2])
         self.dx,self.dy,self.dz = dx,dy,dz
+        self.ng = ng
         xg = np.linspace(embedDims[0][0],embedDims[0][1],num=ng[0],dtype='float')
         yg = np.linspace(embedDims[1][0],embedDims[1][1],num=ng[1],dtype='float')
         zg = np.linspace(embedDims[2][0],embedDims[2][1],num=ng[2],dtype='float')
@@ -314,7 +320,7 @@ class Interstitium(object):
             
                 for ri,radius in enumerate(r):
                     #sph = self.sphere_coordinates(radius,curNode,10)
-                    sph = self.cylinder_coordinates(radius,curNode,nodes[ni+1],10)
+                    sph = self.cylinder_coordinates(radius,curNode,nodes[ni+1],3)
                     xs = [x[0] for x in sph]
                     ys = [x[1] for x in sph]
                     zs = [x[2] for x in sph]
@@ -329,13 +335,23 @@ class Interstitium(object):
                                            self.find_nearest(zg,zs[i]) )
                             #if xsc!=xn or ysc!=yn:
                             #    print('Outside node! {} {}'.format(ri,c_i[ri,:]))
-                            self.grid[:,xsc,ysc] += c_i[ri,:]
-                            self.count[:,xsc,ysc] += 1
+                            if flatten_z:
+                                self.grid[:,xsc,ysc] += c_i[ri,:]
+                                self.count[:,xsc,ysc] += 1
+                            else:
+                                self.grid[:,xsc,ysc,zsc] += c_i[ri,:]
+                                self.count[:,xsc,ysc,zsc] += 1
 
-        for i in xrange(nt):
-            self.grid[i] = scipy.ndimage.filters.median_filter(self.grid[i],size=5)
-        
         pbar.close()
+
+        if med_reg:
+            pbar = tqdm(total=nt)
+            print 'Median regularisation...'
+            for i in xrange(nt):
+                pbar.update(1)
+                self.grid[i] = scipy.ndimage.filters.median_filter(self.grid[i],size=13)
+            pbar.close()
+        
         #self.normalise()
         
     def normalise(self):
@@ -374,7 +390,8 @@ class Interstitium(object):
 plt.close('all')
 
 from pymira import spatialgraph
-dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+#dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
 f = dir_ + 'ct_output.am'
 graph = spatialgraph.SpatialGraph()
 print('Reading graph...')
@@ -430,7 +447,7 @@ conc = conc[0:lim:jump,:]
 inter = Interstitium()
 
 try:
-    inter.interstitial_diffusion(points,edgePointIndex,conc,time)
+    inter.interstitial_diffusion(points,edgePointIndex,conc,time,save_every=200)
 except KeyboardInterrupt:
     print('Keyboard interrupt')
     #inter.normalise()

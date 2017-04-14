@@ -399,6 +399,9 @@ def _worker_function(args):
     import pymira.front as frontPKG
     import numpy as np
     import dill as pickle
+    import time
+    
+    t0 = time.time()
     
     Q_limit = 1e-9
     
@@ -426,17 +429,22 @@ def _worker_function(args):
     # START WALK...
     endloop = False
     count = 0
+    nStepMax = 1e5
+    fSizeHistory = np.zeros(nStepMax,dtype='int')
+    
     while endloop is False:
         count += 1
-        #print count
+        if count>=nStepMax:
+            endloop = True
         
         if len(front.Q)>0:
             mnQ = np.min(front.Q[0:front.front_size])
             mxQ = np.max(front.Q[0:front.front_size])
-            print('Inlet: {}. front size: {}, minQ,maxQ: {} {}'.format(inletNodeIndex,front.front_size,mnQ,mxQ))
+            print('Inlet: {}., iteration: {}, front size: {}, minQ,maxQ: {} {}'.format(inletNodeIndex,count,front.front_size,mnQ,mxQ))
 
-        if front.front_size>0:              
+        if front.front_size>0 and endloop is False:              
             (current_nodes,delay,Q,distance) = front.get_current_front()
+            fSizeHistory[count] = front.front_size
             
             for n,curNode in enumerate(current_nodes):
                 #print('Q: {}'.format(curNode.Q))
@@ -478,15 +486,8 @@ def _worker_function(args):
 #                                        pdb.set_trace()
                         except Exception,err:
                             print('Error, conc calc {}'.format(err))
-                            #import pdb
-                            #pdb.set_trace()
-                            #if np.max(via_edge.concentration)<=0.:
-                            #    import pdb
-                            #    pdb.set_trace()
                         except Exception,err:
                             print err
-                            #import pdb
-                            #pdb.set_trace()
                 
                         delay_from.append(np.sum(via_edge.delay)+delay[n])
                         Q_from.append(Q[n]*edge_Q[ve])
@@ -510,6 +511,9 @@ def _worker_function(args):
                 #import pdb
                 #pdb.set_trace()
             front.complete_step()
+        elif count>=nStepMax:
+            endloop = True
+            print('Exit step {} - front size greater than maximum!'.format(front.nstep))
         else:
             endloop = True
             print('Exit step {} - front size 0'.format(front.nstep))
