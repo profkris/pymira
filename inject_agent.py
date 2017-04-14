@@ -5,7 +5,7 @@ Created on Tue Feb 28 09:23:48 2017
 @author: simon
 """
 
-from pymira import spatialgraph
+from pymira import spatialgraph, interstitium
 import pymira.front as frontPKG
 import numpy as np
 import os
@@ -47,13 +47,17 @@ def parker(t,delay):
     
 def ca1(t,delay):
     
-    t_half = 9.02 * 60. # mins (http://clincancerres.aacrjournals.org/content/10/4/1446.figures-only)
+    t_half = 9.02 * 60. * 60. # s (http://clincancerres.aacrjournals.org/content/10/4/1446.figures-only)
     cmax = 16.4 # ug/ml
     mol_weight = 580.237e6 # ug/mol
     dose = 100. #mg/kg
-    mass = 0.025 # kg
-    dose_mass = dose * mass * 1000. # ug
-    #n_mols = mol_weight / 
+    mouse_mass = 0.025 # kg (mouse mass)
+    mouse_volume = 1.8 #ml (blood volume...)
+    dose_mass = dose * mouse_mass * 1000. # ug
+    dose_moles = dose_mass / mol_weight # mol
+    cmax_mol = dose_mass * mouse_volume / mol_weight # mol
+    
+    return cmax_mol*np.exp(-(t-delay)/t_half)
     
 def impulse(t,delay):
     
@@ -68,9 +72,12 @@ def impulse(t,delay):
 class InjectAgent(object):
     
     def __init__(self):
-        self.dt = 0.1
+        self.dt = 60. # 0.1
         self.nt = 1000
-        self.max_time = self.dt*self.nt
+        #self.max_time = self.dt*self.nt
+        self.max_time = 90.*60.
+        self.dt = self.max_time  / float(self.nt)
+        self.nt = int(self.max_time / self.dt)
         self.time = np.arange(0,self.max_time,self.dt)
         self.output_times = np.arange(0,self.max_time,self.dt)
         # To convert from (nL/min) to (um^3/s) use conversion below
@@ -80,6 +87,8 @@ class InjectAgent(object):
         
         self.nodeList = None
         self.graph = None
+        
+        self.interstitium = interstitium.Interstitium()
         
     def vertex_flow_ordering(self,node):
         
@@ -360,6 +369,10 @@ class InjectAgent(object):
             inletNodes = [n for n in self.nodeList if n.is_inlet]
            
         inletNodes = [n for n in inletNodes if n.index not in inletVisited]
+        
+        largest_inflow = False
+        if largest_inflow:
+            inletNodes = [inletNodes[np.argmax([n.inletQ for n in inletNodes])]]
                 
         edgeFile = output_directory+'edgeList.dill'
         if True:
@@ -384,7 +397,11 @@ class InjectAgent(object):
         ncpu = multiprocessing.cpu_count()
         p = multiprocessing.ProcessingPool(ncpu)
         
-        argList = [[nodeFile,n.index,impulse,timeFile,output_directory,nedge] for n in inletNodes]
+        #intr = interstitium.Interstitium()
+        #intr.set_grid_dimensions(graph.get_data('EdgePointCoordinates'),self.time)
+        
+        #argList = [[nodeFile,n.index,ca1,timeFile,output_directory,nedge,intr.grid_dims,intr.embedDims] for n in inletNodes]
+        argList = [[nodeFile,n.index,ca1,timeFile,output_directory,nedge,None,None] for n in inletNodes]
 
         if parallel:
             p.map(_worker_function,argList)
@@ -399,13 +416,13 @@ def _worker_function(args):
     import pymira.front as frontPKG
     import numpy as np
     import dill as pickle
-    import time
-    
-    t0 = time.time()
+
+    from pymira import interstitium
+
     
     Q_limit = 1e-9
     
-    nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge = args[0],args[1],args[2],args[3],args[4],args[5]
+    nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7]
     
     with open(nodeListFile ,'rb') as fo:
         nodeList = pickle.load(fo)
@@ -422,6 +439,12 @@ def _worker_function(args):
     visited_edges = np.zeros(nedge,dtype='bool')
     edgesOut = []
     curNode = inletNode
+    
+    leaky_vessels = False
+    if leaky_vessels:
+        intr = interstitium.Interstitium()
+        intr.set_grid_dimensions(nodeList,time,grid_dims=grid_dims,embed_dims=embed_dims)
+        grid = np.zeros(intr.grid_dims,dtype='float')
     
     #print('Inlet node info: delay: {} Q:{}'.format(inletNode.inletDelay,inletNode.inletQ))
     front = frontPKG.Front([inletNode],delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance)
@@ -479,15 +502,19 @@ def _worker_function(args):
                             via_edge.distance = distance[n]
                         try:
                             conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n])
-                            via_edge.concentration += np.repeat([conc],via_edge.npoints,axis=0)
-
-#                                    if np.max(via_edge.concentration)<=0.:
-#                                        import pdb
-#                                        pdb.set_trace()
+                            c_v = np.repeat([conc],via_edge.npoints,axis=0)
                         except Exception,err:
                             print('Error, conc calc {}'.format(err))
                         except Exception,err:
                             print err
+                        try:
+                            if leaky_vessels:
+                                edgeInd = np.zeros(via_edge.npoints,dtype='int')
+                                intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,set_grid_dims=False,progress=False)
+                                grid += intr.grid
+                            via_edge.concentration = c_v
+                        except Exception,err:
+                            print('Error, interstitium calc {}'.format(err))                        
                 
                         delay_from.append(np.sum(via_edge.delay)+delay[n])
                         Q_from.append(Q[n]*edge_Q[ve])
@@ -523,9 +550,18 @@ def _worker_function(args):
     if not os.path.exists(odir+'edge_calcs'):
         os.makedirs(odir+'edge_calcs')
     ofile = odir + 'edge_calcs\\edges_inlet{}.dill'.format(inletNodeIndex)
-
     with open(ofile,'wb') as fo:
         pickle.dump((edgesOut,inletNodeIndex),fo)
+        
+    if leaky_vessels:
+        if not os.path.exists(odir+'interstitium_calcs'):
+            os.makedirs(odir+'interstitium_calcs')
+        ofile = odir + 'interstitium_calcs\\interstitium_inlet{}.npy'.format(inletNodeIndex)
+        np.save(ofile,grid)
+        #with open(ofile,'wb') as fo:
+        #    pickle.dump((grid,inletNodeIndex),fo)
+        #grid = intr.smooth_grid(11,grid=grid)
+        #intr.save_grid(ofile,grid=grid)
         
     #edges = self.graph.edges_from_node_list(self.nodeList)
     #vedges = [e for e in edges if e.index in visited_edges]
@@ -547,9 +583,9 @@ def main():
     ia = InjectAgent()
     
     recon = False
-    resume = True
-    parallel = True
-    
+    resume = False
+    parallel = False
+ 
     if recon:
         ia.reconstruct_results(graph,output_directory=dir_)
     else:
@@ -561,3 +597,4 @@ def main():
         
 if __name__ == "__main__":
     main()
+    #pass

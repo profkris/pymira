@@ -134,12 +134,38 @@ class Statistics(object):
     def edge_geometry(self,edges):
         
         pbar = tqdm(total=len(edges))
+
+        edgeInds = self.graph.edgepoint_edge_indices()
+        points = self.graph.get_data('EdgePointCoordinates')
+        radii = self.graph.get_data('Radii')
+        
+        #import pdb
+        #pdb.set_trace()
         for edge in edges:
             pbar.update(1)
-            length = np.zeros(edge.npoints-1)
             pts = edge.coordinates
+            rads = edge.get_scalar('Radii')
+            rng = [np.min(pts,axis=0),np.max(pts,axis=0)]
+            lim = 100. #um
+            #curPoints = [p for p in points if p[0]>(rng[0][0]-lim) and p[0]>(rng[1][0]-lim) and p[1]>(rng[0][1]-lim) and p[1]>(rng[1][1]-lim) and p[2]>(rng[0][2]-lim) and p[2]>(rng[1][2]-lim) ]
+            #curPoints = points[(points >= 6) & (a <= 10)]
+            inds = [(points[:,0]>rng[0][0]-lim) & (points[:,0]<rng[1][0]+lim) & (points[:,1]>rng[0][1]-lim) & (points[:,1]<rng[1][1]+lim) & (points[:,2]>rng[0][2]-lim) & (points[:,2]<rng[1][2]+lim) & (edgeInds!=edge.index)]
+            if len(inds)>0:
+                curPoints = points[inds[0]]
+                curRadii = radii[inds[0]]
+            #curInds = edgeInds[inds]
+            length = np.zeros(edge.npoints-1)
+            dist = np.zeros(edge.npoints-1)
+            
             for i in range(0,edge.npoints-1):
                 length[i] = np.linalg.norm(pts[i+1]-pts[i]) # Length (um)
+                if len(curPoints)>0:
+                    dist[i] = np.min([np.linalg.norm(pts[i]-p)-rads[i]-curRadii[j] for j,p in enumerate(curPoints)])
+                    
+            if len(curPoints)>0:
+                edge.intervessel_distance = np.max(dist)
+            else:
+                edge.intervessel_distance = -1.
             edge.length = length
             edge.euclidean = np.linalg.norm(pts[-1]-pts[0])
 
@@ -259,12 +285,16 @@ class Statistics(object):
         print('Calculating stats...')
         nconn = np.asarray([node.nconn for node in self.nodes])
         ba = [n.branching_angle[np.isfinite(n.branching_angle)] for n in self.nodes]
+
+        #ivd = [e.intervessel_distance[e.intervessel_distance>0.] for e in self.edges]]
+        ivd = [e.intervessel_distance for e in self.edges if e.intervessel_distance>0.]
             
         self.radii = radii
         self.nconn = nconn
         self.branching_angle = ba
         self.lengths = lengths
         self.volumes = volumes
+        self.ivd = ivd
 
         plt.figure()
         baFlat = [item for sublist in ba for item in sublist]
@@ -294,7 +324,11 @@ class Statistics(object):
 
         blood_volume = np.sum(volumes)
         coords = self.graph.get_data('VertexCoordinates')
-        total_volume = self.volume(coords)
+        try:
+            total_volume = self.volume(coords)
+        except Exception,e:
+            print(e)
+            total_volume = -1.
         blood_fraction = blood_volume / total_volume
         print('TUMOUR VOLUME (um3): {}'.format(total_volume))
         print('BLOOD VOLUME (um3): {}'.format(blood_volume))
@@ -313,8 +347,8 @@ class Statistics(object):
                 hdr = '\t'.join(hdr)+'\n'
                 fo.write(hdr)
                 
-                params = [radiiFlat,lengths,nconn,baFlat,volumes]
-                paramNames = ['Radius (um)','Vessel length (um)','Number of connections','Branching angle (deg)','Vessel volume (um3)']
+                params = [radiiFlat,lengths,ivd,nconn,baFlat,volumes]
+                paramNames = ['Radius (um)','Vessel length (um)','Intervessel distance( um)','Number of connections','Branching angle (deg)','Vessel volume (um3)']
                 
                 for v,n in zip(params,paramNames):
                     cur = [n,np.mean(v),np.std(v),np.median(v),np.min(v),np.max(v)]
@@ -332,11 +366,13 @@ class Statistics(object):
                 pickle.dump(nconn,fo)
             with open(os.path.join(path,'vessel_volume.p'),'wb') as fo:
                 pickle.dump(volumes,fo)
+            with open(os.path.join(path,'intervessel_distance.p'),'wb') as fo:
+                pickle.dump(ivd,fo)
         
 
 def main():
-    # #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-    # #f = dir_ + 'Flow2AmiraPressure.am'
+    #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+    #f = dir_ + 'Flow2AmiraPressure.am'
     # dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
     # #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
     
@@ -345,8 +381,8 @@ def main():
     # #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
     # #f = dir_+'spatialGraph_RIN.am'
     
-    dir_ = r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\SW#2"
-    f = dir_+r'\SW2_spatialGraph_scaled.am'
+    #dir_ = r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\SW#1"
+    #f = dir_+r'\SW1_spatialGraph_scaled.am'
     # pixsize = 6.98
     # dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#2"
     # f = dir_+r'\LS2_bg_removed_frangi_response_skeletonised_with_radius.SptGraph.am'
@@ -354,11 +390,21 @@ def main():
     # #dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#4"
     # #pixsize = 8.21
     
-    from pymira import spatialgraph
-    graph = spatialgraph.SpatialGraph()
-    print('Reading graph...')
-    graph.read(f)
-    print('Graph read')
+    dirs = [r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\SW#2",
+            r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\SW#3"]
+    fs = [r'\SW2_spatialGraph_scaled.am',
+          r'\SW3_spatialGraph_scaled.am']
+          
+    for dir_,f in zip(dirs,fs):
+          
+        from pymira import spatialgraph
+        graph = spatialgraph.SpatialGraph()
+        print('Reading graph...')
+        graph.read(dir_+f)
+        print('Graph read')
+        
+        stats = Statistics(graph,path=dir_)    
+        stats.do_stats(path=dir_)
     
     # ofile = dir_+'\spatialGraph_scaled.am'
     # graph.rescale_coordinates(pixsize,pixsize,pixsize)
@@ -377,9 +423,9 @@ def main():
     
     # #import pdb
     # #pdb.set_trace()
-    stats = Statistics(graph,path=dir_)
+    #stats = Statistics(graph,path=dir_)
     
-    stats.do_stats(path=dir_)
+    #stats.do_stats(path=dir_)
     # #stats.do_stats(output_directory=None)
     # #stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
     # stats.do_stats(output_directory=dir_)
@@ -397,10 +443,11 @@ def main():
     # stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
 
 if __name__=='__main__':
-    try:
-        import cProfile
-        cProfile.run('main()')
-    except:
-        pass
-    #import pdb
-    #pdb.set_trace()
+#    try:
+#        #import cProfile
+#        #cProfile.run('main()')
+#    except:
+#        pass
+#    #import pdb
+#    #pdb.set_trace()
+    main()
