@@ -335,6 +335,11 @@ class SpatialGraph(amiramesh.AmiraMesh):
             return
         _  = self.fields.pop(f[0][0])
         
+#    def remove_edges(self,indices):
+#        pass
+#        for ind in indices:
+#            pass
+        
     def get_node(self,index):
         return Node(graph=self,index=index)
         
@@ -481,6 +486,33 @@ class SpatialGraph(amiramesh.AmiraMesh):
             graph.set_data(s,name=nodeScalarNames[i])
         
         return graph
+        
+    def nodes_connected_to(self,nodes,path=None):
+        
+        import pymira.front as frontPKG
+        
+        nodeCoords = graph.get_data('VertexCoordinates')
+        nnodes = len(nodeCoords)
+        if self.nodeList is None:
+            nodeList = self.node_list(path=path)
+        else:
+            nodeList = self.nodeList
+        
+        connected = np.zeros(nnodes,dtype='bool')
+        for strtNode in nodes:
+            front = frontPKG.Front([strtNode])
+            endloop = False
+            curNode = strtNode
+            while endloop is False:
+                if front.front_size>0 and endloop is False:
+                    for curNode in front.get_current_front():
+                        next_nodes = [cn for cn in curNode.connecting_node if connected[cn] is False]
+                        connected[nxtNodes] = True
+                        front.step_front(next_nodes)
+                else:
+                    endloop = True
+                    
+        return connected
 
 class Editor(object):
     
@@ -495,21 +527,17 @@ class Editor(object):
         nedge = len(edgeConn)
         nedgepoint = len(edgeCoords)
         
-        # Modify node coordinates
-        #nodeCoords_ed = np.delete(nodeCoords,nodes_to_delete[0],axis=0)
         nodes_to_keep = [x for x in range(nnode) if x not in nodes_to_delete]
         nodeCoords_ed = np.asarray([nodeCoords[x] for x in nodes_to_keep])
-    
-        # Modify connected edges
+        
+        # Find connected edges
         keepEdge = np.in1d(edgeConn, nodes_to_keep).reshape(edgeConn.shape)
         keepEdge = np.asarray([all(x) for x in keepEdge])
-        edges_to_delete = np.where(keepEdge==False)
-        edges_to_keep = np.where(keepEdge==True)
-        #edgeConn_ed = np.delete(edgeConn,edges_to_delete[0],axis=0)
-        edgeConn_ed = np.asarray([edgeConn[x] for x in edges_to_keep][0])
+        edges_to_delete = np.where(keepEdge==False)[0]
+        edges_to_keep = np.where(keepEdge==True)[0]
+        edgeConn_ed = np.asarray([edgeConn[x] for x in edges_to_keep])
 
         # Offset edge indices to 0
-        #unqNodeIndices = np.unique(edgeConn_ed)
         unqNodeIndices = nodes_to_keep
         nunq = len(unqNodeIndices)
         newInds = np.arange(nunq)            
@@ -518,79 +546,34 @@ class Editor(object):
         # Update edge indices
         for i,u in enumerate(unqNodeIndices):
             sInds = np.where(edgeConn_ed==u)
-            #newIndex = newInds[np.where(nodes_to_keep==u)[0]][0]
             newIndex = newInds[i]
             edgeConn_ed_ref[sInds[0][:],sInds[1][:]] = newIndex #newInds[i]
             edgeConn_was[sInds[0][:],sInds[1][:]] = u
         edgeConn_ed = edgeConn_ed_ref
 
         # Modify edgepoint number array
-        #nedgepoints_ed = np.delete(nedgepoints,edges_to_delete[0],axis=0)
-        nedgepoints_ed = np.asarray([nedgepoints[x] for x in edges_to_keep][0])
+        nedgepoints_ed = np.asarray([nedgepoints[x] for x in edges_to_keep])
 
         # Mark which edgepoints to keep / delete
         keepEdgePoint = np.zeros(nedgepoint,dtype='bool') + True
-        for edgeIndex in edges_to_delete[0]:
+        for edgeIndex in edges_to_delete:
             npoints = nedgepoints[edgeIndex]
             strt = np.sum(nedgepoints[0:edgeIndex])
             fin = strt + npoints
             keepEdgePoint[strt:fin] = False
 
         # Modify edgepoint coordinates
-        edgepoints_to_delete = np.where(keepEdgePoint==False)
-        edgepoints_to_keep = np.where(keepEdgePoint==True)
-        #edgeCoords_ed = np.delete(edgeCoords,edgepoints_to_delete[0],axis=0)
-        edgeCoords_ed = np.asarray([edgeCoords[x] for x in edgepoints_to_keep[0]])
-        
-        # Sanity check
-        check_sanity = True
-        if check_sanity:
-            for i,ed in enumerate(edgeConn_ed):                
-                try:
-                    s_nc = nodeCoords_ed[ed[0]]
-                    f_nc = nodeCoords_ed[ed[1]]
-                    strt = np.sum(nedgepoints_ed[0:i])
-                    fin = strt + nedgepoints_ed[i]
-                    pts = edgeCoords_ed[strt:fin]
-                    if any([x!=y for x,y in zip(pts[0],s_nc)]):
-                        edOld = edgeConn_was[i]
-                        s_nc_old = nodeCoords[edOld[0]]
-                        f_nc_old = nodeCoords[edOld[1]]
-                        print('Node index {}'.format(i))
-                        print('Old start node: {}'.format(s_nc_old))
-                        print('New start node: {}'.format(s_nc))
-                        print('Start point: {}'.format(pts[0]))
-                        print('Old end node: {}'.format(f_nc_old))
-                        print('New end node: {}'.format(f_nc))
-                        print('End point: {}'.format(pts[-1]))
-                        import pdb
-                        pdb.set_trace()
-                    if any([x!=y for x,y in zip(pts[-1],f_nc)]):
-                        edOld = edgeConn_was[i]
-                        s_nc_old = nodeCoords[edOld[0]]
-                        f_nc_old = nodeCoords[edOld[1]]
-                        print('Node index {}'.format(i))
-                        print('Old start node: {}'.format(s_nc_old))
-                        print('New start node: {}'.format(s_nc))
-                        print('Start point: {}'.format(pts[0]))
-                        print('Old end node: {}'.format(f_nc_old))
-                        print('New end node: {}'.format(f_nc))
-                        print('End point: {}'.format(pts[-1]))
-                        import pdb
-                        pdb.set_trace()
-                except Exception,e:
-                    import pdb
-                    pdb.set_trace()
-        
+        edgeCoords_ed = edgeCoords[keepEdgePoint==True] #np.asarray([edgeCoords[x] for x in edgepoints_to_keep)
+
         # Update VERTEX definition
         vertex_def = graph.get_definition('VERTEX')
         vertex_def['size'] = [len(nodes_to_keep)]
         # Update EDGE definition
         edge_def = graph.get_definition('EDGE')
-        edge_def['size'] = [len(edges_to_keep[0])]
+        edge_def['size'] = [len(edges_to_keep)]
         # Update POINT definition
         edgepoint_def = graph.get_definition('POINT')
-        edgepoint_def['size'] = [len(edgepoints_to_keep[0])]
+        edgepoint_def['size'] = [len(edgeCoords_ed)]
         
         graph.set_data(nodeCoords_ed,name='VertexCoordinates')
         graph.set_data(edgeConn_ed,name='EdgeConnectivity')
@@ -598,12 +581,204 @@ class Editor(object):
         graph.set_data(edgeCoords_ed,name='EdgePointCoordinates')
         
         #Check for any other scalar fields
-        scalars = [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
+        if nedgepoint!=len(edgeCoords_ed):
+            scalars = [f for f in graph.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
+            for sc in scalars:
+                #data_ed = np.delete(sc['data'],edgepoints_to_delete[0],axis=0)
+                data = sc['data']
+                data_ed = data[keepEdgePoint==True]
+                graph.set_data(data_ed,name=sc['name'])
+            
+        graph.set_graph_sizes()
+        return graph
+    
+#    def delete_nodes(self,graph,nodes_to_delete): # NOT WORKING!
+#        
+#        nodeCoords = graph.get_data('VertexCoordinates')
+#        edgeConn = graph.get_data('EdgeConnectivity')
+#        nedgepoints = graph.get_data('NumEdgePoints')
+#        edgeCoords = graph.get_data('EdgePointCoordinates')
+#        
+#        nnode = len(nodeCoords)
+#        nedge = len(edgeConn)
+#        nedgepoint = len(edgeCoords)
+#        
+#        # Modify node coordinates
+#        #nodeCoords_ed = np.delete(nodeCoords,nodes_to_delete[0],axis=0)
+#        nodes_to_keep = [x for x in range(nnode) if x not in nodes_to_delete]
+#        nodeCoords_ed = np.asarray([nodeCoords[x] for x in nodes_to_keep])
+#    
+#        # Modify connected edges
+#        keepEdge = np.in1d(edgeConn, nodes_to_keep).reshape(edgeConn.shape)
+#        keepEdge = np.asarray([all(x) for x in keepEdge])
+#        edges_to_delete = np.where(keepEdge==False)
+#        edges_to_keep = np.where(keepEdge==True)
+#        #edgeConn_ed = np.delete(edgeConn,edges_to_delete[0],axis=0)
+#        edgeConn_ed = np.asarray([edgeConn[x] for x in edges_to_keep][0])
+#
+#        # Offset edge indices to 0
+#        #unqNodeIndices = np.unique(edgeConn_ed)
+#        unqNodeIndices = nodes_to_keep
+#        nunq = len(unqNodeIndices)
+#        newInds = np.arange(nunq)            
+#        edgeConn_ed_ref = np.zeros(edgeConn_ed.shape,dtype='int') - 1
+#        edgeConn_was = np.zeros(edgeConn_ed.shape,dtype='int') - 1
+#        # Update edge indices
+#        for i,u in enumerate(unqNodeIndices):
+#            sInds = np.where(edgeConn_ed==u)
+#            #newIndex = newInds[np.where(nodes_to_keep==u)[0]][0]
+#            newIndex = newInds[i]
+#            edgeConn_ed_ref[sInds[0][:],sInds[1][:]] = newIndex #newInds[i]
+#            edgeConn_was[sInds[0][:],sInds[1][:]] = u
+#        edgeConn_ed = edgeConn_ed_ref
+#
+#        # Modify edgepoint number array
+#        #nedgepoints_ed = np.delete(nedgepoints,edges_to_delete[0],axis=0)
+#        nedgepoints_ed = np.asarray([nedgepoints[x] for x in edges_to_keep][0])
+#
+#        # Mark which edgepoints to keep / delete
+#        keepEdgePoint = np.zeros(nedgepoint,dtype='bool') + True
+#        for edgeIndex in edges_to_delete[0]:
+#            npoints = nedgepoints[edgeIndex]
+#            strt = np.sum(nedgepoints[0:edgeIndex])
+#            fin = strt + npoints
+#            keepEdgePoint[strt:fin] = False
+#
+#        # Modify edgepoint coordinates
+#        edgepoints_to_delete = np.where(keepEdgePoint==False)
+#        edgepoints_to_keep = np.where(keepEdgePoint==True)
+#        #edgeCoords_ed = np.delete(edgeCoords,edgepoints_to_delete[0],axis=0)
+#        edgeCoords_ed = np.asarray([edgeCoords[x] for x in edgepoints_to_keep[0]])
+#        
+#        # Sanity check
+#        check_sanity = True
+#        if check_sanity:
+#            for i,ed in enumerate(edgeConn_ed):                
+#                try:
+#                    s_nc = nodeCoords_ed[ed[0]]
+#                    f_nc = nodeCoords_ed[ed[1]]
+#                    strt = np.sum(nedgepoints_ed[0:i])
+#                    fin = strt + nedgepoints_ed[i]
+#                    pts = edgeCoords_ed[strt:fin]
+#                    if any([x!=y for x,y in zip(pts[0],s_nc)]):
+#                        edOld = edgeConn_was[i]
+#                        s_nc_old = nodeCoords[edOld[0]]
+#                        f_nc_old = nodeCoords[edOld[1]]
+#                        print('Node index {}'.format(i))
+#                        print('Old start node: {}'.format(s_nc_old))
+#                        print('New start node: {}'.format(s_nc))
+#                        print('Start point: {}'.format(pts[0]))
+#                        print('Old end node: {}'.format(f_nc_old))
+#                        print('New end node: {}'.format(f_nc))
+#                        print('End point: {}'.format(pts[-1]))
+#                        import pdb
+#                        pdb.set_trace()
+#                    if any([x!=y for x,y in zip(pts[-1],f_nc)]):
+#                        edOld = edgeConn_was[i]
+#                        s_nc_old = nodeCoords[edOld[0]]
+#                        f_nc_old = nodeCoords[edOld[1]]
+#                        print('Node index {}'.format(i))
+#                        print('Old start node: {}'.format(s_nc_old))
+#                        print('New start node: {}'.format(s_nc))
+#                        print('Start point: {}'.format(pts[0]))
+#                        print('Old end node: {}'.format(f_nc_old))
+#                        print('New end node: {}'.format(f_nc))
+#                        print('End point: {}'.format(pts[-1]))
+#                        import pdb
+#                        pdb.set_trace()
+#                except Exception,e:
+#                    import pdb
+#                    pdb.set_trace()
+#        
+#        # Update VERTEX definition
+#        vertex_def = graph.get_definition('VERTEX')
+#        vertex_def['size'] = [len(nodes_to_keep)]
+#        # Update EDGE definition
+#        edge_def = graph.get_definition('EDGE')
+#        edge_def['size'] = [len(edges_to_keep[0])]
+#        # Update POINT definition
+#        edgepoint_def = graph.get_definition('POINT')
+#        edgepoint_def['size'] = [len(edgepoints_to_keep[0])]
+#        
+#        graph.set_data(nodeCoords_ed,name='VertexCoordinates')
+#        graph.set_data(edgeConn_ed,name='EdgeConnectivity')
+#        graph.set_data(nedgepoints_ed,name='NumEdgePoints')
+#        graph.set_data(edgeCoords_ed,name='EdgePointCoordinates')
+#        
+#        #Check for any other scalar fields
+#        scalars = [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
+#        for sc in scalars:
+#            data_ed = np.delete(sc['data'],edgepoints_to_delete[0],axis=0)
+#            graph.set_data(data_ed,name=sc['name'])
+#            
+#        graph.set_graph_sizes()
+#        return graph
+        
+    def delete_edges(self,graph,edges_to_delete,remove_disconnected_nodes=True):
+        
+        nodeCoords = graph.get_data('VertexCoordinates')
+        edgeConn = graph.get_data('EdgeConnectivity')
+        nedgepoints = graph.get_data('NumEdgePoints')
+        edgeCoords = graph.get_data('EdgePointCoordinates')
+        
+        #nnode = len(nodeCoords)
+        nedge = len(edgeConn)
+        nedgepoint = len(edgeCoords)
+        
+        edges_to_keep = np.asarray([x for x in range(nedge) if x not in edges_to_delete])
+        edgeConn_ed = np.asarray([edgeConn[x] for x in edges_to_keep])
+
+        # Modify edgepoint number array
+        nedgepoints_ed = np.asarray([nedgepoints[x] for x in edges_to_keep])
+
+        # Mark which edgepoints to keep / delete
+        keepEdgePoint = np.zeros(nedgepoint,dtype='bool') + True
+        for edgeIndex in edges_to_delete:
+            npoints = nedgepoints[edgeIndex]
+            strt = np.sum(nedgepoints[0:edgeIndex])
+            fin = strt + npoints
+            keepEdgePoint[strt:fin] = False
+
+        # Modify edgepoint coordinates
+        edgeCoords_ed = edgeCoords[keepEdgePoint==True] #np.asarray([edgeCoords[x] for x in edgepoints_to_keep)
+
+        # Update EDGE definition
+        edge_def = graph.get_definition('EDGE')
+        edge_def['size'] = [len(edges_to_keep)]
+        # Update POINT definition
+        edgepoint_def = graph.get_definition('POINT')
+        edgepoint_def['size'] = [len(edgeCoords_ed)]
+        
+        #graph.set_data(nodeCoords_ed,name='VertexCoordinates')
+        graph.set_data(edgeConn_ed,name='EdgeConnectivity')
+        graph.set_data(nedgepoints_ed,name='NumEdgePoints')
+        graph.set_data(edgeCoords_ed,name='EdgePointCoordinates')
+        
+        #Check for any other scalar fields
+        scalars = [f for f in graph.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
         for sc in scalars:
-            data_ed = np.delete(sc['data'],edgepoints_to_delete[0],axis=0)
+            #data_ed = np.delete(sc['data'],edgepoints_to_delete[0],axis=0)
+            data = sc['data']
+            data_ed = data[keepEdgePoint==True]
             graph.set_data(data_ed,name=sc['name'])
             
         graph.set_graph_sizes()
+        
+        if remove_disconnected_nodes:
+            graph = self.remove_disconnected_nodes(graph)
+        
+        return graph
+        
+    def remove_disconnected_nodes(self,graph):
+        nodeCoords = graph.get_data('VertexCoordinates')
+        nodeInds = np.arange(0,nodeCoords.shape[0]-1)
+        edgeConn = graph.get_data('EdgeConnectivity')
+        
+        zero_conn = [x for x in nodeInds if x not in edgeConn]
+        if len(zero_conn)==0:
+            return graph
+            
+        graph = self.delete_nodes(graph,zero_conn)
         return graph
     
     def remove_intermediate_nodes(self,graph,file=None,nodeList=None,path=None):
@@ -990,13 +1165,13 @@ class Node(object):
         self.nconn += 1
         return True
         
-    def remove_edge(self,edgeIndex):
-        keep_edge_ind = [i for i,e in enumerate(self.edges) if e.index not in edgeIndex]
-        self.edges = [self.edges[i] for i in keep_edge_ind]
-        self.edge_indices = [self.edge_indices[i] for i in keep_edge_ind]
-        self.edge_indices_rev = [self.edge_indices_rev[i] for i in keep_edge_ind]
-        self.connecting_node = [self.connecting_node[i] for i in keep_edge_ind]
-        self.nconn = len(self.edges)
+#    def remove_edge(self,edgeIndex):
+#        keep_edge_ind = [i for i,e in enumerate(self.edges) if e.index not in edgeIndex]
+#        self.edges = [self.edges[i] for i in keep_edge_ind]
+#        self.edge_indices = [self.edge_indices[i] for i in keep_edge_ind]
+#        self.edge_indices_rev = [self.edge_indices_rev[i] for i in keep_edge_ind]
+#        self.connecting_node = [self.connecting_node[i] for i in keep_edge_ind]
+#        self.nconn = len(self.edges)
         
     def add_scalar(self,name,values):
         

@@ -390,18 +390,29 @@ def main():
     # #dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#4"
     # #pixsize = 8.21
     
-    dirs = [r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\SW#2",
-            r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\SW#3"]
-    fs = [r'\SW2_spatialGraph_scaled.am',
-          r'\SW3_spatialGraph_scaled.am']
+    #dirs = [r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\SW#2",
+    #        r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\SW#3"]
+    #fs = [r'\SW2_spatialGraph_scaled.am',
+    #      r'\SW3_spatialGraph_scaled.am']
+    dirs = [r'C:\Users\simon\Dropbox\VDA_1_lectin\Treated\LS#1']
+    fs = [r'\LS1t_vessel_seg_frangi_response_skel_with_radius.am']
+    pixsize = [4.78]
           
-    for dir_,f in zip(dirs,fs):
+    for i,dir_ in enumerate(dirs):
+        
+        f = fs[i]
+        pix = pixsize[i]
           
         from pymira import spatialgraph
         graph = spatialgraph.SpatialGraph()
         print('Reading graph...')
         graph.read(dir_+f)
         print('Graph read')
+       
+        if pix is not None:
+            ofile = dir_+'\spatialGraph_scaled.am'
+            graph.rescale_coordinates(pix,pix,pix)
+            graph.rescale_radius(pix,ofile=ofile)
         
         stats = Statistics(graph,path=dir_)    
         stats.do_stats(path=dir_)
