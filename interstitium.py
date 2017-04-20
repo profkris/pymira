@@ -150,6 +150,7 @@ class Interstitium(object):
                 A[i+1,i] = lam
         
         c_i = np.zeros((nr,nt))
+        c_v_out = c_v
         R = np.zeros((nr,nt))
         
         #inds = np.where(r<=radius)
@@ -165,14 +166,15 @@ class Interstitium(object):
         #http://iopscience.iop.org/article/10.1088/0031-9155/59/17/5175
         #mu = ktrans
         sb_vi_av = 333.e-4 #/um
-        ubi = 10.e4 #um/s
+        ubi = 10.e-4 #um/s
         M = (c_i.shape[0]/float(self.feNSample)) * ubi * sb_vi_av #* (vessel_surfArea / interstitial_volume)
         
         for j in xrange(nt-1):
             c_i[:,j+1] = np.dot(A,c_i[:,j]) + M*(c_v[j]-c_i[:,j]) #(np.dot(B,R[:,j]))
+            c_v_out[j+1] += np.sum(M*(c_i[0,j]-c_v[j]))
             
         #c_v_out = (1.-ef) * c_v
-        c_v_out = c_v
+        #c_v_out = c_v
         
         return c_i,c_v_out
         
@@ -220,8 +222,8 @@ class Interstitium(object):
         assert k<=np.square(h)/(2.*D)
         
         # Regrid
-        ntg = nt
-        ng = [np.int(np.ceil((embedDims[i][1]-embedDims[i][0])/self.pixSize[i])) for i in range(3)]
+        ntg = self.nt
+        ng = [np.int(np.ceil((self.embedDims[i][1]-self.embedDims[i][0])/self.pixSize[i])) for i in range(3)]
         print('Embedding matrix: {}'.format(ng))
         flatten_z = False
         if flatten_z:
@@ -232,16 +234,12 @@ class Interstitium(object):
             self.grid = np.zeros([ntg,ng[0],ng[1],ng[2]])
             self.count = np.zeros([ntg,ng[0],ng[1],ng[2]])
         
-        dx = (embedDims[0][1]-embedDims[0][0]) / float(ng[0])
-        dy = (embedDims[1][1]-embedDims[1][0]) / float(ng[1])
-        dz = (embedDims[2][1]-embedDims[2][0]) / float(ng[2])
-        self.dx,self.dy,self.dz = dx,dy,dz
-        self.ng = ng
-        xg = np.linspace(embedDims[0][0],embedDims[0][1],num=ng[0],dtype='float')
-        yg = np.linspace(embedDims[1][0],embedDims[1][1],num=ng[1],dtype='float')
-        zg = np.linspace(embedDims[2][0],embedDims[2][1],num=ng[2],dtype='float')
-        tg = np.linspace(0,max_time,num=ntg,dtype='float')
-        tgInd = np.linspace(0,nt-1,num=ntg,dtype='int')
+        #self.ng = ng
+        #xg = np.linspace(embedDims[0][0],embedDims[0][1],num=ng[0],dtype='float')
+        #yg = np.linspace(embedDims[1][0],embedDims[1][1],num=ng[1],dtype='float')
+        #zg = np.linspace(embedDims[2][0],embedDims[2][1],num=ng[2],dtype='float')
+        #tg = np.linspace(0,max_time,num=ntg,dtype='float')
+        #tgInd = np.linspace(0,nt-1,num=ntg,dtype='int')
 
         if grid_dims is None:
             self.ntg = self.nt
@@ -257,7 +255,7 @@ class Interstitium(object):
         dz = (self.embedDims[2][1]-self.embedDims[2][0]) / float(self.ng[2])
         self.dx,self.dy,self.dz = dx,dy,dz
         
-    def interstitial_diffusion(self,nodes,index,conc,time,plot_conc=False,set_grid_dims=True,progress=True):
+    def interstitial_diffusion(self,nodes,index,conc,time,plot_conc=False,set_grid_dims=True,progress=True,flatten_z=False,med_reg=False):
         
         nnode = len(nodes)
         nodes = np.asarray(nodes)
@@ -278,11 +276,13 @@ class Interstitium(object):
         xg = np.linspace(embedDims[0][0],embedDims[0][1],num=self.ng[0],dtype='float')
         yg = np.linspace(embedDims[1][0],embedDims[1][1],num=self.ng[1],dtype='float')
         zg = np.linspace(embedDims[2][0],embedDims[2][1],num=self.ng[2],dtype='float')
-        tg = np.linspace(0,self.max_time,num=self.ntg,dtype='float')
+        #tg = np.linspace(0,self.max_time,num=self.ntg,dtype='float')
         tgInd = np.linspace(0,self.nt-1,num=self.ntg,dtype='int')
         
         if progress:
             pbar = tqdm(total=nnode)
+            
+        conc_out = conc * 0.
         
         for ni,curNode in enumerate(nodes):
             if progress:
@@ -294,6 +294,7 @@ class Interstitium(object):
                 #c_v = conc[:,ni]
                 c_v = conc[ni,:]
                 c_i,c_v_out = self.radial_diffusion(curNode,c_v,D[ni],ktrans[ni],ef[ni],self.dt,self.dr,self.nr,self.nt,time)
+                conc_out[ni,:] = c_v_out
                 
                 # Regrid
                 c_i = c_i[:,tgInd] 
@@ -322,9 +323,9 @@ class Interstitium(object):
                                 self.count[:,xsc,ysc,zsc] += 1
 
         if med_reg:
-            pbar = tqdm(total=nt)
+            pbar = tqdm(total=self.nt)
             print 'Median regularisation...'
-            for i in xrange(nt):
+            for i in xrange(self.nt):
                 pbar.update(1)
                 self.grid[i] = scipy.ndimage.filters.median_filter(self.grid[i],size=13)
             pbar.close()
@@ -332,6 +333,8 @@ class Interstitium(object):
         if progress:
             pbar.close()
         #self.normalise()
+            
+        return conc_out
         
     def normalise(self):
         self.grid[self.count>0] = self.grid[self.count>0] / self.count[self.count>0]

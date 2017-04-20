@@ -279,7 +279,7 @@ class Statistics(object):
         print('Estimating network parameters...')
         #import pdb
         #pdb.set_trace()
-        radii,lengths,volumes,_,_ = self.blood_volume(self.edges)
+        radii,lengths,volumes,coords,flow = self.blood_volume(self.edges)
         print('Finished estimating network parameters...')
 
         print('Calculating stats...')

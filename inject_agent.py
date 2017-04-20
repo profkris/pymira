@@ -72,12 +72,14 @@ def impulse(t,delay):
 class InjectAgent(object):
     
     def __init__(self):
-        self.dt = 60. # 0.1
+        self.dt = 0.1 # 60. for CA1
         self.nt = 1000
-        #self.max_time = self.dt*self.nt
-        self.max_time = 90.*60.
-        self.dt = self.max_time  / float(self.nt)
-        self.nt = int(self.max_time / self.dt)
+        self.max_time = self.dt*self.nt
+        # For CA1---
+        #self.max_time = 90.*60.
+        #self.dt = self.max_time  / float(self.nt)
+        #self.nt = int(self.max_time / self.dt)
+        #-----
         self.time = np.arange(0,self.max_time,self.dt)
         self.output_times = np.arange(0,self.max_time,self.dt)
         # To convert from (nL/min) to (um^3/s) use conversion below
@@ -353,7 +355,7 @@ class InjectAgent(object):
                 inletNode.inletQ = inletNode.flow[0] / total_inflow
                 inletNode.inletDelay = 0.
                 
-            # Limit to inlet with highest Q
+            # Limit to only inlet with highest Q
             highestQinlet = False
             if highestQinlet:
                 inletQ = [n.outFlow for n in inletNodes]
@@ -388,7 +390,8 @@ class InjectAgent(object):
         graphFile = output_directory+'graph.dill'
                 
         timeFile = output_directory+'time.dill'
-        if not os.path.isfile(timeFile):
+        #if not os.path.isfile(timeFile):
+        if True:
             with open(timeFile,'wb') as fo:
                 pickle.dump(self.time,fo)
 
@@ -401,7 +404,7 @@ class InjectAgent(object):
         #intr.set_grid_dimensions(graph.get_data('EdgePointCoordinates'),self.time)
         
         #argList = [[nodeFile,n.index,ca1,timeFile,output_directory,nedge,intr.grid_dims,intr.embedDims] for n in inletNodes]
-        argList = [[nodeFile,n.index,ca1,timeFile,output_directory,nedge,None,None] for n in inletNodes]
+        argList = [[nodeFile,n.index,impulse,timeFile,output_directory,nedge,None,None] for n in inletNodes]
 
         if parallel:
             p.map(_worker_function,argList)
@@ -440,10 +443,11 @@ def _worker_function(args):
     edgesOut = []
     curNode = inletNode
     
-    leaky_vessels = False
+    leaky_vessels = True
     if leaky_vessels:
         intr = interstitium.Interstitium()
-        intr.set_grid_dimensions(nodeList,time,grid_dims=grid_dims,embed_dims=embed_dims)
+        nodeCoords = np.asarray([n.coords for n in nodeList])
+        intr.set_grid_dimensions(nodeCoords,time,grid_dims=grid_dims,embed_dims=embed_dims)
         grid = np.zeros(intr.grid_dims,dtype='float')
     
     #print('Inlet node info: delay: {} Q:{}'.format(inletNode.inletDelay,inletNode.inletQ))
@@ -505,14 +509,13 @@ def _worker_function(args):
                             c_v = np.repeat([conc],via_edge.npoints,axis=0)
                         except Exception,err:
                             print('Error, conc calc {}'.format(err))
-                        except Exception,err:
-                            print err
                         try:
                             if leaky_vessels:
                                 edgeInd = np.zeros(via_edge.npoints,dtype='int')
-                                intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,set_grid_dims=False,progress=False)
+                                c_v_out = intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,set_grid_dims=False,progress=False)
                                 grid += intr.grid
-                            via_edge.concentration = c_v
+                                #c_v_out = np.repeat([c_v_out],via_edge.npoints,axis=0)
+                            via_edge.concentration = c_v_out
                         except Exception,err:
                             print('Error, interstitium calc {}'.format(err))                        
                 
@@ -550,8 +553,10 @@ def _worker_function(args):
     if not os.path.exists(odir+'edge_calcs'):
         os.makedirs(odir+'edge_calcs')
     ofile = odir + 'edge_calcs\\edges_inlet{}.dill'.format(inletNodeIndex)
-    with open(ofile,'wb') as fo:
-        pickle.dump((edgesOut,inletNodeIndex),fo)
+    import pdb
+    pdb.set_trace()
+    #with open(ofile,'wb') as fo:
+    #    pickle.dump((edgesOut,inletNodeIndex),fo)
         
     if leaky_vessels:
         if not os.path.exists(odir+'interstitium_calcs'):
@@ -570,8 +575,8 @@ def _worker_function(args):
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
-    f = os.path.join(dir_,'spatialGraph_RIN.am')
+    #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    #f = os.path.join(dir_,'spatialGraph_RIN.am')
     dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
     f = dir_ + 'Flow2AmiraPressure.am'
 
