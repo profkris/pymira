@@ -56,8 +56,8 @@ def ca1(t,delay):
     mouse_mass = 0.025 # kg (mouse mass)
     mouse_volume = 1.8 #ml (blood volume...)
     dose_mass = dose * mouse_mass * 1000. # ug
-    dose_moles = dose_mass / mol_weight # mol
-    cmax_mol = dose_mass * mouse_volume / mol_weight # mol
+    #dose_moles = dose_mass / mol_weight # mol
+    cmax_mol = dose_mass * mouse_volume * 1e6 / mol_weight # umol
     
     return cmax_mol*np.exp(-(t-delay)/t_half)
     
@@ -455,7 +455,11 @@ def _worker_function(args):
     endloop = False
     count = 0
     nStepMax = 1e5
-    #fSizeHistory = np.zeros(nStepMax,dtype='int')
+
+
+
+
+
     
     while endloop is False:
         count += 1
@@ -469,7 +473,7 @@ def _worker_function(args):
 
         if front.front_size>0 and endloop is False:              
             (current_nodes,delay,Q,distance) = front.get_current_front()
-            #fSizeHistory[count] = front.front_size
+
             
             for n,curNode in enumerate(current_nodes):
                 #print('Q: {}'.format(curNode.Q))
@@ -574,8 +578,8 @@ def main():
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
     dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
     f = os.path.join(dir_,'spatialGraph_RIN.am')
-    #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-    #f = dir_ + 'Flow2AmiraPressure.am'
+    dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+    f = dir_ + 'Flow2AmiraPressure.am'
 
     graph = spatialgraph.SpatialGraph()
     print('Reading graph...')
@@ -598,5 +602,5 @@ def main():
             ia.save_graph(output_directory=dir_)
         
 if __name__ == "__main__":
-    main()
-    #pass
+    # main()
+    pass
