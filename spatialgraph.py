@@ -514,6 +514,95 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     
         return connected
         
+    def connected_nodes(self,index):
+        vertCoords = self.get_data('VertexCoordinates')
+        edgeConn = self.get_data('EdgeConnectivity')
+            
+        s0 = np.where(edgeConn[:,0]==index)
+        ns0 = len(s0[0])
+        s1 = np.where(edgeConn[:,1]==index)
+        ns1 = len(s1[0])
+            
+        nconn = ns0 + ns1
+            
+        connecting_node = np.zeros(nconn,dtype='int')
+        connecting_node[0:ns0] = edgeConn[s0[0],1]
+        connecting_node[ns0:ns0+ns1] = edgeConn[s1[0],0]
+        return connecting_node
+        
+    def identify_graphs(self):
+        
+        nodeCoords = self.get_data('VertexCoordinates')
+        conn = self.get_data('EdgeConnectivity')
+        nnodes = len(nodeCoords)
+        nedge = len(conn)
+        
+        #import pdb
+        #pdb.set_trace()
+        
+        def next_count_value(graphIndex):
+            return np.max(graphIndex)+1
+
+        count = -1
+        graphIndex = np.zeros(nnodes,dtype='int') - 1
+        
+        pbar = tqdm(total=nnodes) # progress bar
+        
+        for nodeIndex,node in enumerate(nodeCoords):
+            pbar.update(1)
+            
+            if graphIndex[nodeIndex] == -1:
+                connIndex = self.connected_nodes(nodeIndex)
+                nconn = len(connIndex)
+                # See if connected nodes have been assigned a graph index
+                if nconn>0:
+                    # Get graph indices for connected nodes
+                    connGraphIndex = graphIndex[connIndex]
+                    # If one cor more connected nodes has an index, assign the minimum one to the curret node
+                    if not all(connGraphIndex==-1):
+                        mn = np.min(np.append(connGraphIndex[connGraphIndex>=0],count))
+                        unq = np.unique(np.append(connGraphIndex[connGraphIndex>=0],count))
+                        inds = [i for i,g in enumerate(graphIndex) if g in unq]
+                        graphIndex[inds] = mn
+                        graphIndex[connIndex] = mn
+                        graphIndex[nodeIndex] = count
+                        count = mn
+                    else:
+                        # No graph indices in vicinity
+                        count = next_count_value(graphIndex)
+                        graphIndex[nodeIndex] = count
+                        graphIndex[connIndex] = count
+                else:
+                    # No graph indices in vicinity and no connected nodes
+                    count = next_count_value(graphIndex)
+                    graphIndex[nodeIndex] = count
+                    
+        pbar.close()
+
+        # Make graph indices contiguous        
+        unq = np.unique(graphIndex)
+        ngraph = len(unq)
+        newInd = np.linspace(0,ngraph-1,num=ngraph,dtype='int')
+        for i,ind in enumerate(unq):
+            graphIndex[graphIndex==ind] = i
+            
+        graph_size = np.histogram(graphIndex,bins=newInd)[0]
+        
+        if self.nodeList is None:
+            self.nodeList = self.node_list()
+            
+        edges = self.edges_from_node_list(self.nodeList)
+            
+        for e in edges:
+            indS,indE = graphIndex[e.start_node_index],graphIndex[e.end_node_index]
+            if indS!=indE:
+                import pdb
+                pdb.set_trace()
+            e.add_scalar(self,'Graph',indS)
+ 
+        import pdb
+        pdb.set_trace()
+        
     def plot_histogram(self,field_name,*args,**kwargs):
         data = self.get_data(field_name)
         

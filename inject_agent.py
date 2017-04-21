@@ -460,11 +460,6 @@ def _worker_function(args):
     count = 0
     nStepMax = 1e5
 
-
-
-
-
-    
     while endloop is False:
         count += 1
         if count>=nStepMax:
@@ -478,7 +473,6 @@ def _worker_function(args):
         if front.front_size>0 and endloop is False:              
             (current_nodes,delay,Q,distance) = front.get_current_front()
 
-            
             for n,curNode in enumerate(current_nodes):
                 #print('Q: {}'.format(curNode.Q))
                 #print('dP: {}'.format(curNode.delta_pressure))
@@ -524,7 +518,7 @@ def _worker_function(args):
                             via_edge.concentration = c_v_out
                         except Exception,err:
                             print('Error, interstitium calc {}'.format(err))                        
-                
+
                         delay_from.append(np.sum(via_edge.delay)+delay[n])
                         Q_from.append(Q[n]*edge_Q[ve])
                         distance_from.append(np.sum(via_edge.length)+distance[n])
