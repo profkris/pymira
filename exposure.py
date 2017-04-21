@@ -11,9 +11,9 @@ import pickle
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
     #f = os.path.join(dir_,'spatialGraph_RIN.am')
-    #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+    dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
     f = dir_ + 'ct_output.am'
     
     editor = spatialgraph.Editor()
@@ -87,7 +87,7 @@ def main():
     
     #def add_concentration(self,edges,time,conc_time=0.):
     #out_time = np.asarray([time[0],time[int(len(time)/2.)],time[-1]])
-    out_time = np.asarray(time[-1])
+    out_time = [time[-1]] #np.asarray(time[-1])
     for idx,t in enumerate(out_time):
         #idx = (np.abs(time-conc_time)).argmin()
         #conc = np.zeros([len(edges),edges[0].concentration.shape[0]])
@@ -115,15 +115,19 @@ def main():
         new_graph = graph.node_list_to_graph(nodeList)
         remEdges = True
         if len(remEdgeInds)>0 and remEdges is True:
-            import pdb
-            pdb.set_trace()
             new_graph = editor.delete_edges(new_graph,remEdgeInds)
-            #nl = new_graph.node_list()
+            nl = new_graph.node_list()
             graphList = new_graph.identify_graphs()
             graphInds = np.unique(graphList)
             # See if any graphs have been isolated from an inlet
             for graphInd in graphInds:
-                graphNodes = nodeList[graphList==graphInd]
+                graphNodes = [nodeList[i] for i,g in enumerate(graphList) if g==graphInd]
+                hasInlet = np.any([n.nconn==1 and n.flow_direction[0]>0 for n in graphNodes])
+                hasOutlet = np.any([n.nconn==1 and n.flow_direction[0]<0 for n in graphNodes])
+                if not hasInlet or not hasOutlet:
+                    remEdgeInds = [[e.index for e in n.edges] for n in graphNodes]
+                    remEdgeInds = [item for sublist in remEdgeInds for item in sublist]
+                    new_graph = editor.delete_edges(new_graph,remEdgeInds)
 
         print 't={}, thr={}: {} {}%'.format(t,thr,count,count*100./float(len(edges)))
         new_graph.write(dir_+'exposure\exposure{}.am'.format(t))

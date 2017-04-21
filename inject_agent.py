@@ -170,12 +170,9 @@ class InjectAgent(object):
             node.outFlow = np.sum([node.flow[i] for i,dir in enumerate(node.flow_direction) if dir<0])
             
         node.is_inlet = False
-        node.is_outlet = False
         #if (node.outFlow>0.) and (node.inFlow==0.):
         if node.nconn==1 and node.outFlow>0:
             node.is_inlet = True
-        elif node.nconn==1 and node.inFlow<0:
-            node.is_outlet = True
             
 #        if node.nconn==1:
         if node.inFlow==0:
