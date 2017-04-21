@@ -553,10 +553,10 @@ def _worker_function(args):
     if not os.path.exists(odir+'edge_calcs'):
         os.makedirs(odir+'edge_calcs')
     ofile = odir + 'edge_calcs\\edges_inlet{}.dill'.format(inletNodeIndex)
-    import pdb
-    pdb.set_trace()
-    #with open(ofile,'wb') as fo:
-    #    pickle.dump((edgesOut,inletNodeIndex),fo)
+    #import pdb
+    #pdb.set_trace()
+    with open(ofile,'wb') as fo:
+        pickle.dump((edgesOut,inletNodeIndex),fo)
         
     if leaky_vessels:
         if not os.path.exists(odir+'interstitium_calcs'):
