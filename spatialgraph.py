@@ -513,6 +513,18 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     endloop = True
                     
         return connected
+        
+    def plot_histogram(self,field_name,*args,**kwargs):
+        data = self.get_data(field_name)
+        
+        import matplotlib.pyplot as plt
+        fig = plt.figure()
+        n, bins, patches = plt.hist(data,*args,**kwargs)
+        #fig.patch.set_alpha(0) # transparent
+        plt.xlabel = field_name
+        #plt.gca().set_xscale("log")
+        plt.show()
+        return fig
 
 class Editor(object):
     
