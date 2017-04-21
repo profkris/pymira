@@ -1359,6 +1359,17 @@ class Edge(object):
         else:
             return scalar[0]
             
+    def set_scalar(self,name,values):
+        scalarInd = [i for i,x in enumerate(self.scalars) if self.scalarNames[i]==name]
+        if len(scalarInd)==0:
+            print 'Scalar does not exist!'
+            return
+        oldVals = self.scalars[scalarInd[0]]
+        if len(values)!=len(oldVals):
+            print 'Incorrect number of scalar values!'
+            return
+        self.scalars[scalarInd[0]] = values
+            
     def _print(self):
         print('EDGE ({})'.format(self.index))
         print('Number of points: {}'.format(self.npoints))

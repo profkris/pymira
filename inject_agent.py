@@ -47,6 +47,8 @@ def parker(t,delay):
     
 def ca1(t,delay):
     
+    import numpy as np
+    
     t_half = 9.02 * 60. * 60. # s (http://clincancerres.aacrjournals.org/content/10/4/1446.figures-only)
     cmax = 16.4 # ug/ml
     mol_weight = 580.237e6 # ug/mol
@@ -457,7 +459,11 @@ def _worker_function(args):
     endloop = False
     count = 0
     nStepMax = 1e5
-    fSizeHistory = np.zeros(int(nStepMax),dtype='int')
+
+
+
+
+
     
     while endloop is False:
         count += 1
@@ -471,7 +477,7 @@ def _worker_function(args):
 
         if front.front_size>0 and endloop is False:              
             (current_nodes,delay,Q,distance) = front.get_current_front()
-            fSizeHistory[count] = front.front_size
+
             
             for n,curNode in enumerate(current_nodes):
                 #print('Q: {}'.format(curNode.Q))
@@ -589,7 +595,7 @@ def main():
     
     recon = False
     resume = False
-    parallel = False
+    parallel = True
  
     if recon:
         ia.reconstruct_results(graph,output_directory=dir_)
@@ -601,5 +607,5 @@ def main():
             ia.save_graph(output_directory=dir_)
         
 if __name__ == "__main__":
-    main()
-    #pass
+    # main()
+    pass
