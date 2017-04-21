@@ -6,7 +6,7 @@ Created on Fri Apr 14 15:30:01 2017
 """
 
 import numpy as np
-from pymira import spatialgraph
+from pymira import spatialgraph, inject_agent
 import pickle
 
 def main():         
@@ -78,9 +78,16 @@ def main():
     
     #import pdb
     #pdb.set_trace()
+    inj = inject_agent.InjectAgent()
+    inletNodes = []
+    for node in nodeList:
+        inj.vertex_flow_ordering(node)
+        if node.is_inlet:
+            inletNodes.append(node.index)
     
     #def add_concentration(self,edges,time,conc_time=0.):
-    out_time = np.asarray([time[0],time[int(len(time)/2.)],time[-1]])
+    #out_time = np.asarray([time[0],time[int(len(time)/2.)],time[-1]])
+    out_time = np.asarray(time[-1])
     for idx,t in enumerate(out_time):
         #idx = (np.abs(time-conc_time)).argmin()
         #conc = np.zeros([len(edges),edges[0].concentration.shape[0]])
@@ -108,8 +115,15 @@ def main():
         new_graph = graph.node_list_to_graph(nodeList)
         remEdges = True
         if len(remEdgeInds)>0 and remEdges is True:
+            import pdb
+            pdb.set_trace()
             new_graph = editor.delete_edges(new_graph,remEdgeInds)
-            #conected = new_graph.nodes_connected_to(inletNodes)
+            #nl = new_graph.node_list()
+            graphList = new_graph.identify_graphs()
+            graphInds = np.unique(graphList)
+            # See if any graphs have been isolated from an inlet
+            for graphInd in graphInds:
+                graphNodes = nodeList[graphList==graphInd]
 
         print 't={}, thr={}: {} {}%'.format(t,thr,count,count*100./float(len(edges)))
         new_graph.write(dir_+'exposure\exposure{}.am'.format(t))

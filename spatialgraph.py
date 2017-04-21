@@ -546,38 +546,52 @@ class SpatialGraph(amiramesh.AmiraMesh):
         count = -1
         graphIndex = np.zeros(nnodes,dtype='int') - 1
         
-        pbar = tqdm(total=nnodes) # progress bar
+        #pbar = tqdm(total=nnodes) # progress bar
         
         for nodeIndex,node in enumerate(nodeCoords):
-            pbar.update(1)
+            #print nodeIndex
+            #pbar.update(1)
             
-            if graphIndex[nodeIndex] == -1:
+            #if graphIndex[nodeIndex] == -1:
+            if True:
                 connIndex = self.connected_nodes(nodeIndex)
                 nconn = len(connIndex)
                 # See if connected nodes have been assigned a graph index
                 if nconn>0:
                     # Get graph indices for connected nodes
                     connGraphIndex = graphIndex[connIndex]
-                    # If one cor more connected nodes has an index, assign the minimum one to the curret node
+                    # If one or more connected nodes has an index, assign the minimum one to the curret node
                     if not all(connGraphIndex==-1):
-                        mn = np.min(np.append(connGraphIndex[connGraphIndex>=0],count))
-                        unq = np.unique(np.append(connGraphIndex[connGraphIndex>=0],count))
+                        #mn = np.min(np.append(connGraphIndex[connGraphIndex>=0],count))
+                        #unq = np.unique(np.append(connGraphIndex[connGraphIndex>=0],count))
+                        mn = np.min(connGraphIndex[connGraphIndex>=0])
+                        unq = np.unique(connGraphIndex[connGraphIndex>=0])
                         inds = [i for i,g in enumerate(graphIndex) if g in unq]
                         graphIndex[inds] = mn
                         graphIndex[connIndex] = mn
-                        graphIndex[nodeIndex] = count
+                        graphIndex[nodeIndex] = mn
+                        print 'Node {} set to {} (from neighbours)'.format(nodeIndex,mn)
                         count = mn
                     else:
                         # No graph indices in vicinity
-                        count = next_count_value(graphIndex)
-                        graphIndex[nodeIndex] = count
-                        graphIndex[connIndex] = count
+                        if graphIndex[nodeIndex] == -1:
+                            count = next_count_value(graphIndex)
+                            graphIndex[connIndex] = count
+                            graphIndex[nodeIndex] = count
+                            print 'Node {} set to {} (new index)'.format(nodeIndex,count)
+                        else:
+                            count = graphIndex[nodeIndex]
+                            graphIndex[connIndex] = count
+                            print 'Node {} neighbours set to {}'.format(nodeIndex,count)
+                        #graphIndex[nodeIndex] = count
+                        #graphIndex[connIndex] = count
                 else:
                     # No graph indices in vicinity and no connected nodes
                     count = next_count_value(graphIndex)
-                    graphIndex[nodeIndex] = count
+                    if graphIndex[nodeIndex] == -1:
+                        graphIndex[nodeIndex] = count
                     
-        pbar.close()
+        #pbar.close()
 
         # Make graph indices contiguous        
         unq = np.unique(graphIndex)
@@ -598,11 +612,10 @@ class SpatialGraph(amiramesh.AmiraMesh):
             if indS!=indE:
                 import pdb
                 pdb.set_trace()
-            e.add_scalar(self,'Graph',indS)
+            e.add_scalar('Graph',np.repeat(indS,e.npoints))
+            
+        return graphIndex
  
-        import pdb
-        pdb.set_trace()
-        
     def plot_histogram(self,field_name,*args,**kwargs):
         data = self.get_data(field_name)
         
