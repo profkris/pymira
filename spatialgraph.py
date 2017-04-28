@@ -573,7 +573,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         graphIndex[inds] = mn
                         graphIndex[connIndex] = mn
                         graphIndex[nodeIndex] = mn
-                        print 'Node {} set to {} (from neighbours)'.format(nodeIndex,mn)
+                        #print 'Node {} set to {} (from neighbours)'.format(nodeIndex,mn)
                         count = mn
                     else:
                         # No graph indices in vicinity
@@ -581,11 +581,11 @@ class SpatialGraph(amiramesh.AmiraMesh):
                             count = next_count_value(graphIndex)
                             graphIndex[connIndex] = count
                             graphIndex[nodeIndex] = count
-                            print 'Node {} set to {} (new index)'.format(nodeIndex,count)
+                            #print 'Node {} set to {} (new index)'.format(nodeIndex,count)
                         else:
                             count = graphIndex[nodeIndex]
                             graphIndex[connIndex] = count
-                            print 'Node {} neighbours set to {}'.format(nodeIndex,count)
+                            #print 'Node {} neighbours set to {}'.format(nodeIndex,count)
                         #graphIndex[nodeIndex] = count
                         #graphIndex[connIndex] = count
                 else:

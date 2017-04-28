@@ -154,6 +154,7 @@ def main():
 
             remEdgeInds = [[x] if type(x) is not list else x for x in remEdgeInds] # make sure all elemenets are lists
             remEdgeInds = [item for sublist in remEdgeInds for item in sublist] # flatten
+            count += len(remEdgeInds)
             remEdgeInds = np.unique(remEdgeInds)
             new_graph = editor.delete_edges(new_graph,remEdgeInds)
 

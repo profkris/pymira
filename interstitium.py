@@ -255,8 +255,8 @@ class Interstitium(object):
         
     def interstitial_diffusion(self,nodes,index,conc,time,plot_conc=False,set_grid_dims=True,progress=True,flatten_z=False,med_reg=False,store_results=True):
         
-       """ Simulates vascular exchange and diffusion through interstitium
-       """        
+        """ Simulates vascular exchange and diffusion through interstitium
+        """        
         
         # Get size of vessel segment
         nnode = len(nodes)
