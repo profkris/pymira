@@ -3,6 +3,9 @@
 Created on Thu Dec 01 11:49:52 2016
 
 @author: simon
+
+Amira SpatialGraph loader and writer
+
 """
 
 from pymira import amiramesh
@@ -614,7 +617,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 pdb.set_trace()
             e.add_scalar('Graph',np.repeat(indS,e.npoints))
             
-        return graphIndex
+        return graphIndex, graph_size
  
     def plot_histogram(self,field_name,*args,**kwargs):
         data = self.get_data(field_name)

@@ -3,6 +3,9 @@
 Created on Thu Mar 16 08:26:24 2017
 
 @author: simon
+
+First attempt at balloon cell growth simulation (INCOMPLETE)
+
 """
 
 import numpy as np

@@ -1,3 +1,7 @@
+"""
+Script for changing spatial dimensions of graph files
+"""
+
 path = 'C:\\Users\\simon\\Dropbox\\VDA_1_lectin\\Control\\LS#4\\'
 f = path+'ls4_vessel_seg.Smt.SptGraph.am'
 ps = 8.21

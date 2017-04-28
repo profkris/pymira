@@ -3,6 +3,10 @@
 Created on Fri Jan 13 09:37:47 2017
 
 @author: simon
+
+Merge two spatial grphs
+Required for converting Paul Sweeney's files
+
 """
 
 import pymira.spatialgraph as sp
