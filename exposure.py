@@ -11,9 +11,9 @@ import pickle
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
     #f = os.path.join(dir_,'spatialGraph_RIN.am')
-    dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+    #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
     f = dir_ + 'ct_output.am'
     
     editor = spatialgraph.Editor()
@@ -68,7 +68,7 @@ def main():
     #thr = np.linspace(np.max(exposure),np.min(exposure),num=10)
     #thr = np.max(exposure) / 100.
     #thr = np.median(exposure[-1])
-    thr = 1e-12
+    thr = 1e-15
     removedEdgePoint[exposure>thr] = 1
     
     nodeFile = dir_+'nodeList.dill'
@@ -79,15 +79,10 @@ def main():
     #import pdb
     #pdb.set_trace()
     inj = inject_agent.InjectAgent()
-    inletNodes = []
-    for node in nodeList:
-        inj.vertex_flow_ordering(node)
-        if node.is_inlet:
-            inletNodes.append(node.index)
     
     #def add_concentration(self,edges,time,conc_time=0.):
-    #out_time = np.asarray([time[0],time[int(len(time)/2.)],time[-1]])
-    out_time = [time[-1]] #np.asarray(time[-1])
+    out_time = np.asarray([time[0],time[int(len(time)/2.)],time[-1]])
+    #out_time = [time[-1]] #np.asarray(time[-1])
     for idx,t in enumerate(out_time):
         #idx = (np.abs(time-conc_time)).argmin()
         #conc = np.zeros([len(edges),edges[0].concentration.shape[0]])
@@ -115,19 +110,49 @@ def main():
         new_graph = graph.node_list_to_graph(nodeList)
         remEdges = True
         if len(remEdgeInds)>0 and remEdges is True:
-            new_graph = editor.delete_edges(new_graph,remEdgeInds)
+            #new_graph = editor.delete_edges(new_graph,remEdgeInds)
             nl = new_graph.node_list()
-            graphList = new_graph.identify_graphs()
+            inletNodes = []
+            for node in nl:
+                inj.vertex_flow_ordering(node)                    
+                if node.nconn>0 and node.is_inlet:
+                    inletNodes.append(node.index)
+                    
+            #import pdb
+            #pdb.set_trace()
+            
+            new_graph.set_graph_sizes() # shouldn't have to do this...
+            graphList, graphSize = new_graph.identify_graphs()
             graphInds = np.unique(graphList)
             # See if any graphs have been isolated from an inlet
-            for graphInd in graphInds:
-                graphNodes = [nodeList[i] for i,g in enumerate(graphList) if g==graphInd]
-                hasInlet = np.any([n.nconn==1 and n.flow_direction[0]>0 for n in graphNodes])
-                hasOutlet = np.any([n.nconn==1 and n.flow_direction[0]<0 for n in graphNodes])
-                if not hasInlet or not hasOutlet:
+            
+            #remEdgeInds = []
+                            
+            largestNet = True
+            if not largestNet:
+                for graphInd in graphInds:
+                    graphNodes = [nl[i] for i,g in enumerate(graphList) if g==graphInd]
+
+                    hasInlet = np.any([n.nconn==1 and n.flow_direction[0]>0 for n in graphNodes])
+                    hasOutlet = np.any([n.nconn==1 and n.flow_direction[0]<0 for n in graphNodes])
+                    if not hasInlet or not hasOutlet:
+                        remEdgeIndsCur = [[e.index for e in n.edges] for n in graphNodes]
+                        remEdgeIndsCur = [[x] if type(x) is not list else x for x in remEdgeIndsCur]
+                        remEdgeIndsCur = [item for sublist in remEdgeIndsCur for item in sublist] # flatten
+                        remEdgeInds.append(remEdgeIndsCur)
+            else:
+                #import pdb
+                #pdb.set_trace()
+                if len(graphSize)>0:
+                    #graph_size = np.histogram(graphList,bins=np.linspace(0,np.max(graphList),1))[0]
+                    mxGraphInd = np.argmax(graphSize)
+                    graphNodes = [nl[i] for i,g in enumerate(graphList) if g!=mxGraphInd]
                     remEdgeInds = [[e.index for e in n.edges] for n in graphNodes]
-                    remEdgeInds = [item for sublist in remEdgeInds for item in sublist]
-                    new_graph = editor.delete_edges(new_graph,remEdgeInds)
+
+            remEdgeInds = [[x] if type(x) is not list else x for x in remEdgeInds] # make sure all elemenets are lists
+            remEdgeInds = [item for sublist in remEdgeInds for item in sublist] # flatten
+            remEdgeInds = np.unique(remEdgeInds)
+            new_graph = editor.delete_edges(new_graph,remEdgeInds)
 
         print 't={}, thr={}: {} {}%'.format(t,thr,count,count*100./float(len(edges)))
         new_graph.write(dir_+'exposure\exposure{}.am'.format(t))

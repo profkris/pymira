@@ -614,7 +614,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 pdb.set_trace()
             e.add_scalar('Graph',np.repeat(indS,e.npoints))
             
-        return graphIndex
+        return graphIndex, graph_size
  
     def plot_histogram(self,field_name,*args,**kwargs):
         data = self.get_data(field_name)

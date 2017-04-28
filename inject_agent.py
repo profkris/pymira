@@ -74,13 +74,14 @@ def impulse(t,delay):
 class InjectAgent(object):
     
     def __init__(self):
-        self.dt = 0.1 # 60. for CA1
+        self.dt = 0.1 # 60. #for CA1
         self.nt = 1000
         self.max_time = self.dt*self.nt
         # For CA1---
-        #self.max_time = 90.*60.
-        #self.dt = self.max_time  / float(self.nt)
-        #self.nt = int(self.max_time / self.dt)
+        self.nt = 2000
+        self.max_time = 90.*60.
+        self.dt = self.max_time  / float(self.nt)
+        self.nt = int(self.max_time / self.dt)
         #-----
         self.time = np.arange(0,self.max_time,self.dt)
         self.output_times = np.arange(0,self.max_time,self.dt)
@@ -95,16 +96,18 @@ class InjectAgent(object):
         self.interstitium = interstitium.Interstitium()
         
     def vertex_flow_ordering(self,node):
-        
-        if node.nconn==0:
-            return
-    
+
         node.inFlow = 0.
         node.outFlow = 0.
         node.flow = []
         node.flow_direction = []
         node.delta_pressure = []
         node.distance = 0.
+        node.is_inlet = False
+        node.is_outlet = False
+        
+        if node.nconn==0:
+            return
         
         for edge in node.edges:        
             reverse = True
@@ -236,7 +239,7 @@ class InjectAgent(object):
         for i,edge in enumerate(edges):
             conc[i,:] = edge.concentration
             
-    def reconstruct_results(self, graph, output_directory=None):
+    def reconstruct_results(self, graph, output_directory=None,leaky_vessels=True):
 
         self.graph = graph   
 
@@ -250,6 +253,34 @@ class InjectAgent(object):
                 self.nodeList = pickle.load(fo)
                 
         self.save_graph(output_directory=output_directory)
+                
+        if leaky_vessels:
+            print('Reconstructing interstitial results')
+            import scipy
+            intObj = interstitium.Interstitium()
+            interDir = os.path.join(output_directory,'interstitium_calcs')
+            if os.path.isdir(interDir):
+                files = os.listdir(interDir)
+                for i,f in enumerate(files):
+                    data = np.load(os.path.join(interDir,f))
+                    curgrid = data['grid']
+                    grid_dims = data['grid_dims']
+                    embedDims = data['embedDims']
+                    if i==0:
+                        grid = curgrid
+                    else:
+                        grid += curgrid
+                #ofile = os.path.join(output_directory,'interstitium.nii')
+                sm = False
+                if sm:
+                    medwinsize = 5
+                    print('Median filtering: {}'.format(medwinsize))
+                    #import pdb
+                    #pdb.set_trace()
+                    for j in xrange(curgrid.shape[0]):
+                        #print j
+                        grid[j] = scipy.ndimage.filters.median_filter(grid[j],size=medwinsize)
+                intObj.save_grid(output_directory,grid=grid)
             
     def save_graph(self,output_directory=None,remove_zeros=False):
         
@@ -358,7 +389,7 @@ class InjectAgent(object):
                 inletNode.inletDelay = 0.
                 
             # Limit to only inlet with highest Q
-            highestQinlet = False
+            highestQinlet = True
             if highestQinlet:
                 inletQ = [n.outFlow for n in inletNodes]
                 mxQind = np.argmax(inletQ)
@@ -374,7 +405,7 @@ class InjectAgent(object):
            
         inletNodes = [n for n in inletNodes if n.index not in inletVisited]
         
-        largest_inflow = False
+        largest_inflow = True
         if largest_inflow:
             inletNodes = [inletNodes[np.argmax([n.inletQ for n in inletNodes])]]
                 
@@ -406,7 +437,7 @@ class InjectAgent(object):
         #intr.set_grid_dimensions(graph.get_data('EdgePointCoordinates'),self.time)
         
         #argList = [[nodeFile,n.index,ca1,timeFile,output_directory,nedge,intr.grid_dims,intr.embedDims] for n in inletNodes]
-        argList = [[nodeFile,n.index,impulse,timeFile,output_directory,nedge,None,None] for n in inletNodes]
+        argList = [[nodeFile,n.index,ca1,timeFile,output_directory,nedge,None,None] for n in inletNodes]
 
         if parallel:
             p.map(_worker_function,argList)
@@ -415,6 +446,14 @@ class InjectAgent(object):
                 _worker_function(arg)
 
         self.save_graph(output_directory=output_directory)
+        
+def scale_and_shift(conc,time,Q=1.,delay=0.):
+
+    dt = time[1]-time[0]
+    d = delay / dt
+    import scipy
+    cnew = Q*scipy.ndimage.interpolation.shift(conc,d)
+    return cnew.clip(min=0.)
         
 def _worker_function(args):
     
@@ -426,6 +465,7 @@ def _worker_function(args):
 
     
     Q_limit = 1e-9
+    c_limit = 1e-9
     
     nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7]
     
@@ -453,7 +493,7 @@ def _worker_function(args):
         grid = np.zeros(intr.grid_dims,dtype='float')
     
     #print('Inlet node info: delay: {} Q:{}'.format(inletNode.inletDelay,inletNode.inletQ))
-    front = frontPKG.Front([inletNode],delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance)
+    front = frontPKG.Front([inletNode],delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance,conc=None)
     
     # START WALK...
     endloop = False
@@ -468,10 +508,11 @@ def _worker_function(args):
         if len(front.Q)>0:
             mnQ = np.min(front.Q[0:front.front_size])
             mxQ = np.max(front.Q[0:front.front_size])
-            print('Inlet: {}., iteration: {}, front size: {}, minQ,maxQ: {} {}'.format(inletNodeIndex,count,front.front_size,mnQ,mxQ))
+            mxC = np.max(front.conc[0:front.front_size])
+            print('Inlet: {}., iteration: {}, front size: {},maxQ: {}, maxConc: {}'.format(inletNodeIndex,count,front.front_size,mnQ,mxC))
 
         if front.front_size>0 and endloop is False:              
-            (current_nodes,delay,Q,distance) = front.get_current_front()
+            (current_nodes,delay,Q,distance,concIn) = front.get_current_front()
 
             for n,curNode in enumerate(current_nodes):
                 #print('Q: {}'.format(curNode.Q))
@@ -492,44 +533,66 @@ def _worker_function(args):
                     delay_from = []
                     Q_from = []
                     distance_from = []
-                    for ve,via_edge in enumerate(via_edges):
-                        if np.max(via_edge.scalars[0])>20:
-                            pass
-                            #import pdb
-                            #pdb.set_trace()
-                        
+                    conc_from = np.empty(0,dtype='float')
+                    for ve,via_edge in enumerate(via_edges):                        
                         if via_edge not in vedges:
                             vedges.append(via_edge)
                         if not visited_edges[via_edge.index]:
                             visited_edges[via_edge.index] = True
                             edgesOut.append(via_edge)
                             via_edge.distance = distance[n]
-                        try:
-                            conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n])
-                            c_v = np.repeat([conc],via_edge.npoints,axis=0)
-                        except Exception,err:
-                            print('Error, conc calc {}'.format(err))
-                        try:
-                            if leaky_vessels:
+                        
+                        if leaky_vessels:
+                            try:
+                                if concIn[0] is None:
+                                    conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n])
+                                else:
+                                    import pdb
+                                    pdb.set_trace()
+                                    if len(conc_from.shape)==1:
+                                        nxtConc = concIn
+                                    else:
+                                        nxtConc = concIn[n]
+                                    conc = scale_and_shift(nxtConc,time,Q=Q[n]*edge_Q[ve],delay=delay[n])
+                                    
                                 edgeInd = np.zeros(via_edge.npoints,dtype='int')
-                                c_v_out = intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,set_grid_dims=False,progress=False)
+                                c_v = np.repeat([conc],via_edge.npoints,axis=0)
+                                c_v_out = intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,set_grid_dims=False,progress=False,store_results=False)
                                 grid += intr.grid
                                 #c_v_out = np.repeat([c_v_out],via_edge.npoints,axis=0)
-                            via_edge.concentration = c_v_out
-                        except Exception,err:
-                            print('Error, interstitium calc {}'.format(err))                        
-
+                                via_edge.concentration = c_v_out
+                            except Exception,err:
+                                print('Error, interstitium calc {}'.format(err))
+                        else:
+                            try:
+                                conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n])
+                                via_edge.concentration = np.repeat([conc],via_edge.npoints,axis=0)
+                            except Exception,err:
+                                print('Error, conc calc {}'.format(err))
+                                                
                         delay_from.append(np.sum(via_edge.delay)+delay[n])
                         Q_from.append(Q[n]*edge_Q[ve])
                         distance_from.append(np.sum(via_edge.length)+distance[n])
+                        #import pdb
+                        #pdb.set_trace()
+                        if len(conc_from)==0:
+                            conc_from = via_edge.concentration[-1,:]
+                        elif len(conc_from.shape)==1 and conc_from.shape[0]!=0:
+                            conc_from = conc_from[np.newaxis]
+                            conc_from = np.append(conc_from,via_edge.concentration[-1,:][np.newaxis],axis=0)
+                        else:
+                            conc_from = np.append(conc_from,via_edge.concentration[-1,:][np.newaxis],axis=0)
                         
                     # Eliminate nodes that have a Q lower than limit
-                    inds = [i for i,q in enumerate(Q_from) if q>Q_limit]
+                    inds = [i for i,q in enumerate(Q_from) if q>Q_limit]# and np.max(conc_from[i])>c_limit]
+                    #import pdb
+                    #pdb.set_trace()
                     if len(inds)>0:
                         front.step_front([next_nodes[i] for i in inds],
                                          delay=[delay_from[i] for i in inds],
                                          Q=[Q_from[i] for i in inds],
-                                         distance=[distance_from[i] for i in inds])
+                                         distance=[distance_from[i] for i in inds],
+                                         conc=[conc_from[i] for i in inds])
                     else:
                         pass
                 else:
@@ -561,8 +624,9 @@ def _worker_function(args):
     if leaky_vessels:
         if not os.path.exists(odir+'interstitium_calcs'):
             os.makedirs(odir+'interstitium_calcs')
-        ofile = odir + 'interstitium_calcs\\interstitium_inlet{}.npy'.format(inletNodeIndex)
-        np.save(ofile,grid)
+        ofile = odir + 'interstitium_calcs\\interstitium_inlet{}.npz'.format(inletNodeIndex)
+        print('Grid min/max: {} {}'.format(np.min(intr.grid),np.max(intr.grid)))
+        np.savez(ofile,grid=grid,grid_dims=intr.grid_dims,embedDims=intr.embedDims,dx=intr.dx,dy=intr.dy,dz=intr.dz,dt=intr.dt)
         #with open(ofile,'wb') as fo:
         #    pickle.dump((grid,inletNodeIndex),fo)
         #grid = intr.smooth_grid(11,grid=grid)
@@ -575,10 +639,10 @@ def _worker_function(args):
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
-    #f = os.path.join(dir_,'spatialGraph_RIN.am')
-    dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-    f = dir_ + 'Flow2AmiraPressure.am'
+    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    f = os.path.join(dir_,'spatialGraph_RIN.am')
+    #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+    #f = dir_ + 'Flow2AmiraPressure.am'
 
     graph = spatialgraph.SpatialGraph()
     print('Reading graph...')
@@ -589,7 +653,7 @@ def main():
     
     recon = False
     resume = False
-    parallel = True
+    parallel = False
  
     if recon:
         ia.reconstruct_results(graph,output_directory=dir_)
@@ -601,5 +665,5 @@ def main():
             ia.save_graph(output_directory=dir_)
         
 if __name__ == "__main__":
-    # main()
-    pass
+    main()
+    #pass

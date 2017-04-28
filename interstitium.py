@@ -34,15 +34,15 @@ class Interstitium(object):
     def __init__(self):
         self.grid = None
         self.count = None
-        self.pixSize = [50.,50.,50.] #um
+        self.pixSize = [80.,80.,80.] #um
         self.dx = None
         self.dy = None
         self.dz = None
         self.dt = None
                         
         self.ktrans = 0.2 #/min
-        self.ef = 0.2
-        self.D = 500.
+        self.ef = 0.2 #  not used
+        self.D = 1e-7 * 1e8 # 500. #um2/s
         
         self.feNSample = 3
         
@@ -165,9 +165,10 @@ class Interstitium(object):
         
         #http://iopscience.iop.org/article/10.1088/0031-9155/59/17/5175
         #mu = ktrans
-        sb_vi_av = 333.e-4 #/um
-        ubi = 10.e-4 #um/s
-        M = (c_i.shape[0]/float(self.feNSample)) * ubi * sb_vi_av #* (vessel_surfArea / interstitial_volume)
+        #sb_vi_av = 333.e-4 #/um
+        #ubi = 10.e-4 #um/s
+        #ktrans = sb_vi_av * ubi
+        M = (c_i.shape[0]/float(self.feNSample)) * ktrans #* (vessel_surfArea / interstitial_volume)
         
         for j in xrange(nt-1):
             c_i[:,j+1] = np.dot(A,c_i[:,j]) + M*(c_v[j]-c_i[:,j]) #(np.dot(B,R[:,j]))
@@ -178,7 +179,7 @@ class Interstitium(object):
         
         return c_i,c_v_out
         
-    def set_grid_dimensions(self,nodes,time,ktrans=None,D=None,verbose=False,embed_dims=None,grid_dims=None):
+    def set_grid_dimensions(self,nodes,time,ktrans=None,D=None,verbose=True,embed_dims=None,grid_dims=None):
         
         if ktrans is None:
             ktrans = self.ktrans
@@ -214,7 +215,7 @@ class Interstitium(object):
             print('Max RADIUS: {} um'.format(self.max_r))
             print('dr: {} um'.format(self.dr))
             print('nr: {} um'.format(self.nr))
-            print('D: {} s2/um'.format(D))
+            print('D: {} um2/s'.format(D))
             print('Ktrans: {} /s'.format(ktrans))
             print('Embedding dims: {} um'.format(self.embedDims))
             print('k<=h2/2D   k (dt) = {}, h (dr) = {}, h2/2D = {}'.format(k,h,np.square(h)/(2.*D)))        
@@ -255,23 +256,31 @@ class Interstitium(object):
         dz = (self.embedDims[2][1]-self.embedDims[2][0]) / float(self.ng[2])
         self.dx,self.dy,self.dz = dx,dy,dz
         
-    def interstitial_diffusion(self,nodes,index,conc,time,plot_conc=False,set_grid_dims=True,progress=True,flatten_z=False,med_reg=False):
+    def interstitial_diffusion(self,nodes,index,conc,time,plot_conc=False,set_grid_dims=True,progress=True,flatten_z=False,med_reg=False,store_results=True):
         
+       """ Simulates vascular exchange and diffusion through interstitium
+       """        
+        
+        # Get size of vessel segment
         nnode = len(nodes)
         nodes = np.asarray(nodes)
  
-        if set_grid_dims:       
-            self.set_grid_dimensions(time,nodes,ktrans=self.ktrans,D=self.D)
-            
-        self.grid = np.zeros(self.grid_dims)
-        self.count = np.zeros(self.grid_dims)
+        if store_results:
+            if set_grid_dims:       
+                self.set_grid_dimensions(time,nodes,ktrans=self.ktrans,D=self.D)
+                
+            self.grid = np.zeros(self.grid_dims)
+            self.count = np.zeros(self.grid_dims)
         
+        # Create lists of model parameters corresponding to number of nodes in current vessel segment
         ktrans = [self.ktrans/60.]*nnode #/min
         ef = [self.ef]*nnode #/min
         D = [self.D]*nnode # um2/s
         
+        # Set radial array for finite element calc
         r = np.linspace(0,self.max_r,num=self.nr)
         
+        # Set dimensions of embedding lattice
         embedDims = self.embedDims
         xg = np.linspace(embedDims[0][0],embedDims[0][1],num=self.ng[0],dtype='float')
         yg = np.linspace(embedDims[1][0],embedDims[1][1],num=self.ng[1],dtype='float')
@@ -279,50 +288,54 @@ class Interstitium(object):
         #tg = np.linspace(0,self.max_time,num=self.ntg,dtype='float')
         tgInd = np.linspace(0,self.nt-1,num=self.ntg,dtype='int')
         
-        if progress:
+        if progress: # progress bar
             pbar = tqdm(total=nnode)
             
+        # Initialise arrya for modified vascular component (following leakage into interstitium)
         conc_out = conc * 0.
         
+        # Loop through each node in current vessel segment
         for ni,curNode in enumerate(nodes):
-            if progress:
+            if progress: # progress bar
                 pbar.update(1)
             
             if ni<nnode-1 and index[ni]==index[ni+1]: # for cylinder only...
-            
-                #ve = 0.1            
-                #c_v = conc[:,ni]
+
                 c_v = conc[ni,:]
                 c_i,c_v_out = self.radial_diffusion(curNode,c_v,D[ni],ktrans[ni],ef[ni],self.dt,self.dr,self.nr,self.nt,time)
                 conc_out[ni,:] = c_v_out
                 
-                # Regrid
-                c_i = c_i[:,tgInd] 
+                if store_results: # To bypass finite element bit (speeds up calculation and reduces memory)
+                    # Regrid
+                    c_i = c_i[:,tgInd] 
+    
+                    for ri,radius in enumerate(r):
+                        #sph = self.sphere_coordinates(radius,curNode,10)
+                        sph = self.cylinder_coordinates(radius,curNode,nodes[ni+1],self.feNSample)
+                        xs = [x[0] for x in sph]
+                        ys = [x[1] for x in sph]
+                        zs = [x[2] for x in sph]
+                        for i,v in enumerate(xs):
+                            #print(xs[i])
+                            inGrid = all([xs[i]>=embedDims[0][0], xs[i]<=embedDims[0][1],
+                                          ys[i]>=embedDims[1][0], ys[i]<=embedDims[1][1],
+                                          zs[i]>=embedDims[2][0], zs[i]<=embedDims[2][1]] )
+                            if inGrid:
+                                xsc,ysc,zsc = (self.find_nearest(xg,xs[i]),
+                                               self.find_nearest(yg,ys[i]),
+                                               self.find_nearest(zg,zs[i]) )
+    
+                                if flatten_z:
+                                    self.grid[:,xsc,ysc] += c_i[ri,:]
+                                    self.count[:,xsc,ysc] += 1
+                                else:
+                                    self.grid[:,xsc,ysc,zsc] += c_i[ri,:]
+                                    self.count[:,xsc,ysc,zsc] += 1
+                                    
+            if ni==nnode-1 and index[ni]==index[ni-1]:
+                conc_out[ni,:] = conc_out[ni-1,:]
 
-                for ri,radius in enumerate(r):
-                    #sph = self.sphere_coordinates(radius,curNode,10)
-                    sph = self.cylinder_coordinates(radius,curNode,nodes[ni+1],self.feNSample)
-                    xs = [x[0] for x in sph]
-                    ys = [x[1] for x in sph]
-                    zs = [x[2] for x in sph]
-                    for i,v in enumerate(xs):
-                        #print(xs[i])
-                        inGrid = all([xs[i]>=embedDims[0][0], xs[i]<=embedDims[0][1],
-                                      ys[i]>=embedDims[1][0], ys[i]<=embedDims[1][1],
-                                      zs[i]>=embedDims[2][0], zs[i]<=embedDims[2][1]] )
-                        if inGrid:
-                            xsc,ysc,zsc = (self.find_nearest(xg,xs[i]),
-                                           self.find_nearest(yg,ys[i]),
-                                           self.find_nearest(zg,zs[i]) )
-
-                            if flatten_z:
-                                self.grid[:,xsc,ysc] += c_i[ri,:]
-                                self.count[:,xsc,ysc] += 1
-                            else:
-                                self.grid[:,xsc,ysc,zsc] += c_i[ri,:]
-                                self.count[:,xsc,ysc,zsc] += 1
-
-        if med_reg:
+        if med_reg and store_results:
             pbar = tqdm(total=self.nt)
             print 'Median regularisation...'
             for i in xrange(self.nt):
