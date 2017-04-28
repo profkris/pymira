@@ -3,6 +3,10 @@
 Created on Tue Feb 14 18:54:55 2017
 
 @author: simon
+
+Script for removing non-branching nodes and replacing them with edgepoints
+Required when converting from Paul Sweeney's data format 
+
 """
 from pymira import spatialgraph
 import pickle

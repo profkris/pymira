@@ -3,6 +3,10 @@
 Created on Tue Feb 28 09:23:48 2017
 
 @author: simon
+
+Simulate injection of an agent through a vascular network
+Uses flow solutions from Paul Sweeney!
+
 """
 
 from pymira import spatialgraph, interstitium

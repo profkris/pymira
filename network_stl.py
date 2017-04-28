@@ -3,6 +3,9 @@
 Created on Fri Mar 10 16:58:10 2017
 
 @author: simon
+
+Utility for converting Amira SpatiaGraphs into STL files (DEVELOPMENTAL)
+
 """
 
 import numpy as np

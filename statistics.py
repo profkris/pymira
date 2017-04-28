@@ -3,6 +3,9 @@
 Created on Wed Mar 08 09:37:29 2017
 
 @author: simon
+
+Statistical analysis of Amira SpatialGraph file
+
 """
 
 import numpy as np

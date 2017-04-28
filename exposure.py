@@ -3,6 +3,9 @@
 Created on Fri Apr 14 15:30:01 2017
 
 @author: simon
+
+Estimate exposure to a drug (uses injection simulaiton results from injectagent.py)
+
 """
 
 import numpy as np

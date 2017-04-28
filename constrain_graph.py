@@ -3,6 +3,9 @@
 Created on Tue Feb 14 18:54:55 2017
 
 @author: simon
+
+Script for limiting spatial extent of sptialgrpah files
+
 """
 from pymira import spatialgraph
 import pickle

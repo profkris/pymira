@@ -3,6 +3,9 @@
 Created on Thu Dec 01 11:49:52 2016
 
 @author: simon
+
+Amira SpatialGraph loader and writer
+
 """
 
 from pymira import amiramesh

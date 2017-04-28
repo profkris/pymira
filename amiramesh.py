@@ -3,6 +3,9 @@
 Created on Tue Nov 29 14:40:52 2016
 
 @author: simon
+
+Class for reading and writing Amira mesh files
+
 """
 
 import numpy as np

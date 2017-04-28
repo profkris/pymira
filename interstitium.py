@@ -3,13 +3,10 @@
 Created on Tue Apr 04 15:15:58 2017
 
 @author: simon
-"""
 
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Apr 03 09:38:47 2017
+Finite element analysis of interstitial diffusion and vascular leakage
+Links to injectagent.py
 
-@author: simon
 """
 
 from tqdm import tqdm # progress bar

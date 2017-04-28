@@ -3,6 +3,10 @@
 Created on Thu Mar 02 18:17:21 2017
 
 @author: simon
+
+Class for tracking progressing front through a SptialGraph file
+Used in injectagent.py
+
 """
 
 class Front(object):
@@ -52,6 +56,7 @@ class Front(object):
         self.nstep = 0
         
     def _increase_capacity(self,min_size=None,reset=False):
+        # Increase allocated memory
         while True:
             self.capacity *= 10.
             if min_size is None or self.capacity>min_size:
@@ -69,10 +74,11 @@ class Front(object):
         self.next_concs.extend([None]*ext_size)
         
     def get_current_front(self):
+        # Return current progress
         return self.current_nodes, self.delay, self.Q, self.distance, self.conc
     
     def step_front(self,nodes,delay=None,Q=None,distance=None,conc=None):
-        
+        # Add to current front
         n_to_add = len(nodes)
         if n_to_add>self.capacity:
             self._increase_capacity(min_size=self.front_size+n_to_add)
@@ -85,6 +91,7 @@ class Front(object):
         self.next_front_size += n_to_add
         
     def complete_step(self):
+        # Complete front and initialise next step
         self.previous_nodes = self.current_nodes
         self.previous_delay = self.delay
         self.previous_Qs = self.Q
