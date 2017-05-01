@@ -58,6 +58,8 @@ def graph_to_stl(graph):
             strt_face_angle = np.arccos(np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2)))
             strt_face_angle = np.rad2deg(strt_face_angle)
             print other_conn,strtNode.index,endNode.index,coords[other_conn],coords[strtNode.index],coords[endNode.index]
+            import pdb
+            pdb.set_trace()
         else:
             strt_face_angle = 0.
         #if strt_face_angle!=90.:
@@ -74,12 +76,18 @@ def graph_to_stl(graph):
             vec2 = (coords[endNode.index]-coords[strtNode.index])/length2
             end_face_angle = np.arccos(np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2)))
             end_face_angle = np.rad2deg(end_face_angle)
+            import pdb
+            pdb.set_trace()
         else:
             end_face_angle = 0.
             
+        import pdb
+        pdb.set_trace()
         fa = np.zeros(pts.shape[0])
         fa[0] = strt_face_angle
         fa[pts.shape[0]-1] = end_face_angle
+        grad = np.zeros([pts.shape[0],3])
+        #grad[0,:] = 
         
         for i in range(pts.shape[0]-1):
             length = np.linalg.norm(pts[i]-pts[i+1])
@@ -92,6 +100,10 @@ def graph_to_stl(graph):
                 vec2 = (pts[i+2]-pts[i+1])/length2
                 fa[i+1] = np.arccos(np.dot(vec,vec2)/(np.linalg.norm(vec)*np.linalg.norm(vec2)))
                 fa[i+1] = -np.rad2deg(fa[i+1]) / 2.
+            if i==0:
+                grad[i] = vec
+            elif i<pts.shape[0]-2::
+                grad[i] = pts[i+1]-pts[i]
             #verts,faces = make_tube(radius[i:i+1]*2.,[thickness,thickness],lengthorientation=vec,center=center,outer_only=True)
             
             #print('Points:{}{}, center:{}, orient:{}'.format(pts[i],pts[i+1],center,vec))
@@ -320,7 +332,7 @@ def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation,st
             faces.append([nalpha+i,nalpha,0])
     faces = np.asarray(faces)
 
-    #Orient tube to new vector    
+    #Orient tube to new vector
     U = align_vector_rotation(xaxis,orientation)
     points_p = np.dot(U,np.transpose(points)).T
     #points_p = points
@@ -332,17 +344,16 @@ def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation,st
     U = U.astype('float')
     Up = np.linalg.inv(U)
     
-    import pdb
-    pdb.set_trace()
     if start_face_angle!=0.:
         R = rot_matrix(np.deg2rad(start_face_angle),zaxis)
         pStartInds = [i for i,p in enumerate(px) if p==I[0]]
         pStart = points_p[pStartInds]
         rotPoint = np.mean(pStart,axis=0)
         pStart -= rotPoint
-        pStartR = rotate_points(pStart,Up[:3,:3])
-        pStartR = rotate_points(pStartR,R[:3,:3]) 
-        pStartR = rotate_points(pStartR,U[:3,:3]) + rotPoint
+        #pStartR = rotate_points(pStart,Up[:3,:3])
+        pStartR = rotate_points(pStart,R[:3,:3]) 
+        #pStartR = rotate_points(pStartR,U[:3,:3]) 
+        pStartR += rotPoint
         
         #pStart -= rotPoint
         #pStartR = rotate_points(pStart,R[:3,:3]) + rotPoint
@@ -356,9 +367,10 @@ def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation,st
         pEnd = points_p[pEndInds]
         rotPoint = np.mean(pEnd,axis=0)
         pEnd -= rotPoint
-        pEndR = rotate_points(pEnd,Up[:3,:3])
-        pEndR = rotate_points(pEndR,R[:3,:3]) 
-        pEndR = rotate_points(pEndR,U[:3,:3]) + rotPoint
+        #pEndR = rotate_points(pEnd,Up[:3,:3])
+        pEndR = rotate_points(pEnd,R[:3,:3]) 
+        #pEndR = rotate_points(pEndR,U[:3,:3]) 
+        pEndR += rotPoint
         points_p[pEndInds] = pEndR
     
     return points_p,faces
