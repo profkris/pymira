@@ -393,7 +393,7 @@ class InjectAgent(object):
                 inletNode.inletDelay = 0.
                 
             # Limit to only inlet with highest Q
-            highestQinlet = True
+            highestQinlet = False
             if highestQinlet:
                 inletQ = [n.outFlow for n in inletNodes]
                 mxQind = np.argmax(inletQ)
@@ -409,7 +409,7 @@ class InjectAgent(object):
            
         inletNodes = [n for n in inletNodes if n.index not in inletVisited]
         
-        largest_inflow = True
+        largest_inflow = False
         if largest_inflow:
             inletNodes = [inletNodes[np.argmax([n.inletQ for n in inletNodes])]]
                 
@@ -468,7 +468,7 @@ def _worker_function(args):
     from pymira import interstitium
 
     
-    Q_limit = 1e-9
+    Q_limit = 1e-8
     c_limit = 1e-9
     
     nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7]
@@ -502,7 +502,7 @@ def _worker_function(args):
     # START WALK...
     endloop = False
     count = 0
-    nStepMax = 1e5
+    nStepMax = 1e3
 
     while endloop is False:
         count += 1
@@ -561,7 +561,7 @@ def _worker_function(args):
                                     
                                 edgeInd = np.zeros(via_edge.npoints,dtype='int')
                                 c_v = np.repeat([conc],via_edge.npoints,axis=0)
-                                c_v_out = intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,set_grid_dims=False,progress=False,store_results=False)
+                                c_v_out = intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,set_grid_dims=False,progress=False,store_results=True)
                                 grid += intr.grid
                                 #c_v_out = np.repeat([c_v_out],via_edge.npoints,axis=0)
                                 via_edge.concentration = c_v_out
@@ -657,7 +657,7 @@ def main():
     
     recon = True
     resume = False
-    parallel = False
+    parallel = True
  
     if recon:
         ia.reconstruct_results(graph,output_directory=dir_)

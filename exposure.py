@@ -12,80 +12,95 @@ import numpy as np
 from pymira import spatialgraph, inject_agent
 import pickle
 
-def main():         
-    #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
+def main():
+    
     dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
-    #f = os.path.join(dir_,'spatialGraph_RIN.am')
-    #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-    f = dir_ + 'ct_output.am'
     
-    editor = spatialgraph.Editor()
-
-    graph = spatialgraph.SpatialGraph()
-    print('Reading graph...')
-    graph.read(f)
-    print('Graph read')
-    
-#    nodeFile = dir_+'nodeList.dill'
-#    with open(nodeFile ,'rb') as fo:
-#        nodeList = pickle.load(fo)
-#    edges = graph.edges_from_node_list(nodeList)
-    
-    points = graph.get_data('EdgePointCoordinates')
-    npoints = points.shape[0]
-    nEdgePoint = graph.get_data('NumEdgePoints')
-    edgePointIndex = np.zeros(npoints,dtype='int')
-    
-    offset = 0
-    edgeCount = 0
-    for npCur in nEdgePoint:
-        edgePointIndex[offset:offset+npCur] = edgeCount
-        edgeCount += 1
-        offset += npCur
+    if False:
+        #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
         
-    assert offset==npoints
+        #f = os.path.join(dir_,'spatialGraph_RIN.am')
+        #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+        f = dir_ + 'ct_output.am'
+        
+        editor = spatialgraph.Editor()
     
-    concFieldInds = [i for i,x in enumerate(graph.fieldNames) if 'Concentration' in x]
-    concFields = [graph.fieldNames[i] for i in concFieldInds]
-    time = np.asarray([float(x.replace('Concentration_','')) for x in concFields])
-    
-    nt = len(time)
-    npoint = points.shape[0]
-    
-    conc = np.zeros((nt,npoint),dtype='float')
-    for ci,concField in enumerate(concFieldInds):
-        field = graph.fields[concField]
-        if 'data' in field:
-            conc[ci,:] = field['data']
-        else:
-            conc[ci,:] = conc[ci-1,:]
-            print('Data missing: {}'.format(concFields[ci]))
-    
-    radii = graph.get_data('Radii')
-    epi = graph.edgepoint_edge_indices()
-    
-    dt = np.ediff1d(time)
-    dt = np.append(0.,dt)
-    exposure = np.cumsum(conc,axis=0) / (2.*np.pi*radii)
-    removedEdgePoint = np.zeros(conc.shape,dtype='int')
-    #thr = np.linspace(np.max(exposure),np.min(exposure),num=10)
-    #thr = np.max(exposure) / 100.
-    #thr = np.median(exposure[-1])
-    thr = 1e-15
-    removedEdgePoint[exposure>thr] = 1
-    
-    nodeFile = dir_+'nodeList.dill'
-    with open(nodeFile ,'rb') as fo:
-        nodeList = pickle.load(fo)
-    edges = graph.edges_from_node_list(nodeList)
-    
-    #import pdb
-    #pdb.set_trace()
-    inj = inject_agent.InjectAgent()
-    
-    #def add_concentration(self,edges,time,conc_time=0.):
-    out_time = np.asarray([time[0],time[int(len(time)/2.)],time[-1]])
-    #out_time = [time[-1]] #np.asarray(time[-1])
+        graph = spatialgraph.SpatialGraph()
+        print('Reading graph...')
+        graph.read(f)
+        print('Graph read')
+        
+    #    nodeFile = dir_+'nodeList.dill'
+    #    with open(nodeFile ,'rb') as fo:
+    #        nodeList = pickle.load(fo)
+    #    edges = graph.edges_from_node_list(nodeList)
+        
+        points = graph.get_data('EdgePointCoordinates')
+        npoints = points.shape[0]
+        nEdgePoint = graph.get_data('NumEdgePoints')
+        edgePointIndex = np.zeros(npoints,dtype='int')
+        
+        offset = 0
+        edgeCount = 0
+        for npCur in nEdgePoint:
+            edgePointIndex[offset:offset+npCur] = edgeCount
+            edgeCount += 1
+            offset += npCur
+            
+        assert offset==npoints
+        
+        concFieldInds = [i for i,x in enumerate(graph.fieldNames) if 'Concentration' in x]
+        concFields = [graph.fieldNames[i] for i in concFieldInds]
+        time = np.asarray([float(x.replace('Concentration_','')) for x in concFields])
+        
+        nt = len(time)
+        npoint = points.shape[0]
+        
+        conc = np.zeros((nt,npoint),dtype='float')
+        for ci,concField in enumerate(concFieldInds):
+            field = graph.fields[concField]
+            if 'data' in field:
+                conc[ci,:] = field['data']
+            else:
+                conc[ci,:] = conc[ci-1,:]
+                print('Data missing: {}'.format(concFields[ci]))
+        
+        radii = graph.get_data('Radii')
+        epi = graph.edgepoint_edge_indices()
+        
+        dt = np.ediff1d(time)
+        dt = np.append(0.,dt)
+        exposure = np.cumsum(conc,axis=0) / (2.*np.pi*radii)
+        removedEdgePoint = np.zeros(conc.shape,dtype='int')
+        #thr = np.linspace(np.max(exposure),np.min(exposure),num=10)
+        #thr = np.max(exposure) / 100.
+        #thr = np.median(exposure[-1])
+        thr = 1e-15
+        removedEdgePoint[exposure>thr] = 1
+        
+        nodeFile = dir_+'nodeList.dill'
+        with open(nodeFile ,'rb') as fo:
+            nodeList = pickle.load(fo)
+        edges = graph.edges_from_node_list(nodeList)
+        
+        #import pdb
+        #pdb.set_trace()
+        inj = inject_agent.InjectAgent()
+        
+        #def add_concentration(self,edges,time,conc_time=0.):
+        out_time = np.asarray([time[0],time[int(len(time)/2.)],time[-1]])
+        #out_time = [time[-1]] #np.asarray(time[-1])
+        
+        import dill
+        filename = dir_+'globalsave.pkl'
+        dill.dump_session(filename)
+    else:
+        import dill
+        filename = dir_+'globalsave.pkl'
+        dill.load_session(filename)
+        import pdb
+        pdb.set_trace()
+      
     for idx,t in enumerate(out_time):
         #idx = (np.abs(time-conc_time)).argmin()
         #conc = np.zeros([len(edges),edges[0].concentration.shape[0]])
@@ -150,10 +165,11 @@ def main():
                     #graph_size = np.histogram(graphList,bins=np.linspace(0,np.max(graphList),1))[0]
                     mxGraphInd = np.argmax(graphSize)
                     graphNodes = [nl[i] for i,g in enumerate(graphList) if g!=mxGraphInd]
-                    remEdgeInds = [[e.index for e in n.edges] for n in graphNodes]
+                    remEdgeInds.append([[e.index for e in n.edges] for n in graphNodes])
 
             remEdgeInds = [[x] if type(x) is not list else x for x in remEdgeInds] # make sure all elemenets are lists
             remEdgeInds = [item for sublist in remEdgeInds for item in sublist] # flatten
+            count += len(remEdgeInds)
             remEdgeInds = np.unique(remEdgeInds)
             new_graph = editor.delete_edges(new_graph,remEdgeInds)
 
