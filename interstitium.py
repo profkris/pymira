@@ -31,7 +31,7 @@ class Interstitium(object):
     def __init__(self):
         self.grid = None
         self.count = None
-        self.pixSize = [80.,80.,80.] #um
+        self.pixSize = [150.,150.,150.] #um
         self.dx = None
         self.dy = None
         self.dz = None
@@ -176,7 +176,7 @@ class Interstitium(object):
         
         return c_i,c_v_out
         
-    def set_grid_dimensions(self,nodes,time,ktrans=None,D=None,verbose=True,embed_dims=None,grid_dims=None):
+    def set_grid_dimensions(self,nodes,time,ktrans=None,D=None,verbose=False,embed_dims=None,grid_dims=None):
         
         if ktrans is None:
             ktrans = self.ktrans
