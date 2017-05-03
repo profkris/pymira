@@ -11,7 +11,9 @@ Used in injectagent.py
 
 class Front(object):
     
-    def __init__(self,nodes,delay=None,Q=None,distance=None,conc=None):
+    def __init__(self,nodes,delay=None,Q=None,distance=None,conc=None,nt=1000):
+        
+        self.nt = nt        
         
         if type(nodes) is not list:
             nodes = [nodes]
@@ -87,7 +89,8 @@ class Front(object):
         self.next_delays[self.next_front_size:self.next_front_size+n_to_add] = delay
         self.next_Qs[self.next_front_size:self.next_front_size+n_to_add] = Q
         self.next_distances[self.next_front_size:self.next_front_size+n_to_add] = distance
-        self.next_concs[self.next_front_size:self.next_front_size+n_to_add] = conc
+        for i in range(n_to_add):
+            self.next_concs[self.next_front_size+i] = conc[i]
         self.next_front_size += n_to_add
         
     def complete_step(self):
@@ -102,6 +105,7 @@ class Front(object):
         self.delay = self.next_delays[0:self.next_front_size]
         self.Q = self.next_Qs[0:self.next_front_size]
         self.distance = self.next_distances[0:self.next_front_size]
+        self.conc = self.next_concs[0:self.next_front_size]
         self.front_size = len(self.current_nodes)
         
         self.next_nodes = [None] * self.capacity

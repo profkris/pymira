@@ -82,10 +82,10 @@ class InjectAgent(object):
         self.nt = 1000
         self.max_time = self.dt*self.nt
         # For CA1---
-        self.nt = 2000
-        self.max_time = 90.*60.
-        self.dt = self.max_time  / float(self.nt)
-        self.nt = int(self.max_time / self.dt)
+#        self.nt = 2000
+#        self.max_time = 90.*60.
+#        self.dt = self.max_time  / float(self.nt)
+#        self.nt = int(self.max_time / self.dt)
         #-----
         self.time = np.arange(0,self.max_time,self.dt)
         self.output_times = np.arange(0,self.max_time,self.dt)
@@ -409,7 +409,7 @@ class InjectAgent(object):
            
         inletNodes = [n for n in inletNodes if n.index not in inletVisited]
         
-        largest_inflow = False
+        largest_inflow = True
         if largest_inflow:
             inletNodes = [inletNodes[np.argmax([n.inletQ for n in inletNodes])]]
                 
@@ -441,7 +441,8 @@ class InjectAgent(object):
         #intr.set_grid_dimensions(graph.get_data('EdgePointCoordinates'),self.time)
         
         #argList = [[nodeFile,n.index,ca1,timeFile,output_directory,nedge,intr.grid_dims,intr.embedDims] for n in inletNodes]
-        argList = [[nodeFile,n.index,ca1,timeFile,output_directory,nedge,None,None] for n in inletNodes]
+        concFunc = impulse
+        argList = [[nodeFile,n.index,concFunc,timeFile,output_directory,nedge,None,None] for n in inletNodes]
 
         if parallel:
             p.map(_worker_function,argList)
@@ -490,6 +491,7 @@ def _worker_function(args):
     curNode = inletNode
     
     leaky_vessels = True
+    ignore_delay = False
     if leaky_vessels:
         intr = interstitium.Interstitium()
         nodeCoords = np.asarray([n.coords for n in nodeList])
@@ -537,7 +539,7 @@ def _worker_function(args):
                     delay_from = []
                     Q_from = []
                     distance_from = []
-                    conc_from = np.empty(0,dtype='float')
+                    conc_from = [] # np.empty(0,dtype='float')
                     for ve,via_edge in enumerate(via_edges):                        
                         if via_edge not in vedges:
                             vedges.append(via_edge)
@@ -551,16 +553,19 @@ def _worker_function(args):
                                 if concIn[0] is None:
                                     conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n])
                                 else:
-                                    import pdb
-                                    pdb.set_trace()
-                                    if len(conc_from.shape)==1:
-                                        nxtConc = concIn
+                                    if len(concIn)==1:
+                                        nxtConc = concIn[0]
                                     else:
                                         nxtConc = concIn[n]
-                                    conc = scale_and_shift(nxtConc,time,Q=Q[n]*edge_Q[ve],delay=delay[n])
+                                    if not ignore_delay:
+                                        conc = scale_and_shift(nxtConc,time,Q=Q[n]*edge_Q[ve],delay=delay[n])
+                                    else:
+                                        conc = nxtConc * Q[n]*edge_Q[ve]
                                     
                                 edgeInd = np.zeros(via_edge.npoints,dtype='int')
                                 c_v = np.repeat([conc],via_edge.npoints,axis=0)
+                                #import pdb
+                                #pdb.set_trace()
                                 c_v_out = intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,set_grid_dims=False,progress=False,store_results=True)
                                 grid += intr.grid
                                 #c_v_out = np.repeat([c_v_out],via_edge.npoints,axis=0)
@@ -577,8 +582,6 @@ def _worker_function(args):
                         delay_from.append(np.sum(via_edge.delay)+delay[n])
                         Q_from.append(Q[n]*edge_Q[ve])
                         distance_from.append(np.sum(via_edge.length)+distance[n])
-                        #import pdb
-                        #pdb.set_trace()
                         if len(conc_from)==0:
                             conc_from = via_edge.concentration[-1,:]
                         elif len(conc_from.shape)==1 and conc_from.shape[0]!=0:
@@ -592,11 +595,15 @@ def _worker_function(args):
                     #import pdb
                     #pdb.set_trace()
                     if len(inds)>0:
+                        if len(conc_from.shape)==1:
+                            nxtConc = [conc_from]
+                        elif len(conc_from.shape)==2:
+                            nxtConc = conc_from[inds,:]
                         front.step_front([next_nodes[i] for i in inds],
                                          delay=[delay_from[i] for i in inds],
                                          Q=[Q_from[i] for i in inds],
                                          distance=[distance_from[i] for i in inds],
-                                         conc=[conc_from[i] for i in inds])
+                                         conc=nxtConc)
                     else:
                         pass
                 else:
@@ -657,7 +664,7 @@ def main():
     
     recon = False
     resume = False
-    parallel = True
+    parallel = False
  
     if recon:
         ia.reconstruct_results(graph,output_directory=dir_)
@@ -669,5 +676,7 @@ def main():
             ia.save_graph(output_directory=dir_)
         
 if __name__ == "__main__":
-    main()
+    import cProfile
+    cProfile.run('main()')
+    #main()
     #pass
