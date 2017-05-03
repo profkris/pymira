@@ -416,14 +416,19 @@ class InjectAgent(object):
                 #with open(ofile, 'wb') as handle:
                 #    pickle.dump(ofile, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
-    def inject(self, graph, output_directory=None, resume=False, parallel=True):
+    def inject(self, graph, output_directory=None, resume=False, parallel=True, name=None):
 
         self.graph = graph   
 
         import dill as pickle
         
+        if name is not None:
+            output_directory = os.path.join(output_directory,name)
+            if not os.path.isdir(output_directory):
+                os.mkdir(output_directory)
+        
         if resume:
-            eDir = output_directory+'edge_calcs\\'
+            eDir = os.path.join(output_directory+'edge_calcs')
             files = os.listdir(eDir)
             nfiles = len(files)
             inletVisited = []
@@ -438,7 +443,7 @@ class InjectAgent(object):
         else:
             inletVisited = []
         
-        nodeFile = output_directory+'nodeList.dill'
+        nodeFile = os.path.join(output_directory,'nodeList.dill')
         #if True:
         if not os.path.isfile(nodeFile):
             print 'Generating node list...'
@@ -477,11 +482,11 @@ class InjectAgent(object):
            
         inletNodes = [n for n in inletNodes if n.index not in inletVisited]
         
-        largest_inflow = True
+        largest_inflow = False
         if largest_inflow:
             inletNodes = [inletNodes[np.argmax([n.inletQ for n in inletNodes])]]
                 
-        edgeFile = output_directory+'edgeList.dill'
+        edgeFile = os.path.join(output_directory,'edgeList.dill')
         if True:
         #if not os.path.isfile(nodeFile):
             edges = graph.edges_from_node_list(self.nodeList)
@@ -492,9 +497,9 @@ class InjectAgent(object):
                 edges = pickle.load(fo)
         nedge = len(edges)
             
-        graphFile = output_directory+'graph.dill'
+        graphFile = os.path.join(output_directory,'graph.dill')
                 
-        timeFile = output_directory+'time.dill'
+        timeFile = os.path.join(output_directory,'time.dill')
         #if not os.path.isfile(timeFile):
         if True:
             with open(timeFile,'wb') as fo:
@@ -520,14 +525,6 @@ class InjectAgent(object):
 
         self.save_graph(output_directory=output_directory)
         
-def scale_and_shift(conc,time,Q=1.,delay=0.):
-
-    dt = time[1]-time[0]
-    d = delay / dt
-    import scipy
-    cnew = Q*scipy.ndimage.interpolation.shift(conc,d)
-    return cnew.clip(min=0.)
-        
 def _worker_function(args):
     
     import pymira.front as frontPKG
@@ -536,8 +533,14 @@ def _worker_function(args):
 
     from pymira import interstitium
 
+    def scale_and_shift(conc,time,Q=1.,delay=0.):
+        dt = time[1]-time[0]
+        d = delay / dt
+        import scipy
+        cnew = Q*scipy.ndimage.interpolation.shift(conc,d)
+        return cnew.clip(min=0.)
     
-    Q_limit = 1e-8
+    Q_limit = 1e-9
     c_limit = 1e-9
     
     nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7]
@@ -701,9 +704,10 @@ def _worker_function(args):
         pickle.dump((edgesOut,inletNodeIndex),fo)
         
     if leaky_vessels:
-        if not os.path.exists(odir+'interstitium_calcs'):
-            os.makedirs(odir+'interstitium_calcs')
-        ofile = odir + 'interstitium_calcs\\interstitium_inlet{}.npz'.format(inletNodeIndex)
+        intDir = os.path.join(odir,'interstitium_calcs')
+        if not os.path.exists(intDir):
+            os.makedir(intDir)
+        ofile = os.path.join(intDir ,'interstitium_calcs\\interstitium_inlet{}.npz'.format(inletNodeIndex))
         print('Grid min/max: {} {}'.format(np.min(intr.grid),np.max(intr.grid)))
         np.savez(ofile,grid=grid,grid_dims=intr.grid_dims,embedDims=intr.embedDims,dx=intr.dx,dy=intr.dy,dz=intr.dz,dt=intr.dt)
         #with open(ofile,'wb') as fo:
@@ -730,9 +734,9 @@ def main():
     
     ia = InjectAgent()
     
-    recon = True
+    recon = False
     resume = False
-    parallel = False
+    parallel = True
  
     if recon:
         print 'Reconstructing...'
@@ -740,13 +744,13 @@ def main():
     else:
         print 'Simulating...'
         try:
-            ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel)
+            ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name='impulse')
         except KeyboardInterrupt:
             print('Ctrl-C interrupt! Saving graph')
             ia.save_graph(output_directory=dir_)
         
 if __name__ == "__main__":
-    import cProfile
-    cProfile.run('main()')
-    #main()
+    #import cProfile
+    #cProfile.run('main()')
+    main()
     #pass

@@ -40,6 +40,7 @@ class Interstitium(object):
         self.ktrans = 0.2 #/min
         self.ef = 0.2 #  not used
         self.D = 1e-7 * 1e8 # 500. #um2/s
+        self.D = 7e-11 * 1e12 #um2/s Gd-DTPA (https://books.google.es/books?id=6fZGf8ave3wC&pg=PA343&lpg=PA343&dq=diffusion+coefficient+of+gd-dtpa&source=bl&ots=Ceg432CWar&sig=4PuxViFn9lL7pwOAkFVGwtHRe4M&hl=en&sa=X&ved=0ahUKEwjs1O-Z-NPTAhVJShQKHa6PBKQQ6AEIODAD#v=onepage&q=diffusion%20coefficient%20of%20gd-dtpa&f=false)
         
         self.feNSample = 3
         
@@ -118,7 +119,7 @@ class Interstitium(object):
                 pz = np.repeat(0.,n)
             coords = np.vstack(( px, py, pz )).T
         
-        origin, xaxis, yaxis, zaxis = [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]
+        #origin, xaxis, yaxis, zaxis = [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]
         U = self.align_vector_rotation([1,0,0],orientation)
         coords_p = np.dot(U,np.transpose(coords)).T
         coords_p = np.asarray(coords_p)
