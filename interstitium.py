@@ -356,25 +356,41 @@ class Interstitium(object):
             grid[i] = scipy.ndimage.filters.median_filter(grid[i],size=n)
         return grid
         
-    def save_grid(self,path,grid=None):
+    def save_grid(self,path,grid=None,pixdim=None,format='nifti'):
                 
         if grid is None:
             grid = self.grid
             
         print('Max C_i: {} mM'.format(np.max(grid)))
             
-        import nibabel as nib
-        tmp = np.swapaxes(grid,0,1)
-        tmp = np.swapaxes(tmp,1,2)
-        img = nib.Nifti1Image(tmp[:,:,None,:],affine=np.eye(4))
-        hdr = img.header
-        hdr['pixdim'][1] = self.dx
-        hdr['pixdim'][2] = self.dy
-        hdr['pixdim'][3] = self.dz
-        hdr['pixdim'][4] = self.dt
-        ofile = os.path.join(path,'interstitial.nii')
-        print('Saving to {}'.format(ofile))
-        nib.save(img,ofile)
+        if format.lower()=='amira':
+            pass
+        else:
+            import nibabel as nib
+            ndims = len(grid.shape)
+            if ndims==3:
+                tmp = np.swapaxes(grid,0,1)
+                tmp = np.swapaxes(tmp,1,2)
+                img = nib.Nifti1Image(tmp[:,:,None,:],affine=np.eye(4))
+            elif ndims==4:
+                tmp = np.swapaxes(grid,0,1) # Shift time from first to last dimension
+                tmp = np.swapaxes(tmp,1,2)
+                tmp = np.swapaxes(tmp,2,3)
+                img = nib.Nifti1Image(tmp,affine=np.eye(4))
+            hdr = img.header
+            if pixdim is None:
+                hdr['pixdim'][1] = self.dx
+                hdr['pixdim'][2] = self.dy
+                hdr['pixdim'][3] = self.dz
+                hdr['pixdim'][4] = self.dt
+            else:
+                hdr['pixdim'][1] = pixdim[0]
+                hdr['pixdim'][2] = pixdim[1]
+                hdr['pixdim'][3] = pixdim[2]
+                hdr['pixdim'][4] = pixdim[3]
+            ofile = os.path.join(path,'interstitial.nii')
+            print('Saving to {}'.format(ofile))
+            nib.save(img,ofile)
     
     def display_grid(self,last=True):
         #scalarMap.set_array([mn,mx])

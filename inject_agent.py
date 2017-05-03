@@ -255,25 +255,35 @@ class InjectAgent(object):
         else:
             with open(nodeFile ,'rb') as fo:
                 self.nodeList = pickle.load(fo)
-                
+
+        #import pdb
+        #pdb.set_trace()                
         self.save_graph(output_directory=output_directory)
-                
+        #pdb.set_trace()
+        return
+               
         if leaky_vessels:
-            print('Reconstructing interstitial results')
+            print('Reconstructing interstitial results...')
             import scipy
             intObj = interstitium.Interstitium()
             interDir = os.path.join(output_directory,'interstitium_calcs')
+            nadded = 0
             if os.path.isdir(interDir):
                 files = os.listdir(interDir)
                 for i,f in enumerate(files):
-                    data = np.load(os.path.join(interDir,f))
-                    curgrid = data['grid']
-                    grid_dims = data['grid_dims']
-                    embedDims = data['embedDims']
-                    if i==0:
-                        grid = curgrid
-                    else:
-                        grid += curgrid
+                    print('Reconstructing file {} of {}: {}'.format(i+1,len(files),f))
+                    try:
+                        data = np.load(os.path.join(interDir,f))
+                        curgrid = data['grid']
+                        grid_dims = data['grid_dims']
+                        embedDims = data['embedDims']
+                        if i==0:
+                            grid = curgrid
+                        else:
+                            grid += curgrid
+                        nadded += 1
+                    except Exception,e:
+                        print e
                 #ofile = os.path.join(output_directory,'interstitium.nii')
                 sm = False
                 if sm:
@@ -281,10 +291,32 @@ class InjectAgent(object):
                     print('Median filtering: {}'.format(medwinsize))
                     #import pdb
                     #pdb.set_trace()
-                    for j in xrange(curgrid.shape[0]):
+                    for j in xrange(grid.shape[0]):
                         #print j
                         grid[j] = scipy.ndimage.filters.median_filter(grid[j],size=medwinsize)
-                intObj.save_grid(output_directory,grid=grid)
+                        
+                pixdim = [data['dx'],data['dy'],data['dz'],data['dt']]
+                
+                from pymira import mesh
+                timePoints = self.output_times
+                odir = output_directory + 'interstitial_concentration_recon\\'
+                if not os.path.isdir(odir):
+                    os.mkdir(odir)
+                boundingBox = data['embedDims'].flatten()
+                timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=10)
+
+                for ti,tp in enumerate(timePoints): 
+                    cur = grid[ti,:,:,:]
+                    if True:
+                       medwinsize = 5
+                       print('Median filtering: {}'.format(medwinsize))
+                       cur = scipy.ndimage.filters.median_filter(cur,size=medwinsize)
+                    m = mesh.Mesh(data=cur,boundingBox=boundingBox)
+                    ofile = os.path.join(odir,'interstitial_conc_t{}.am'.format(tp))
+                    print('Writing {}'.format(ofile))
+                    m.write(ofile)
+                #intObj.save_grid(output_directory,grid=grid,pixdim=pixdim,format='amira')
+            print('Interstitial concentration grid written to {}'.format(output_directory))
             
     def save_graph(self,output_directory=None,remove_zeros=False):
         
@@ -295,28 +327,63 @@ class InjectAgent(object):
         edges = self.graph.edges_from_node_list(self.nodeList)
             
         # Reconstruct individual inlet results
-        print('Loading results...')
         eDir = output_directory+'edge_calcs\\'
         files = os.listdir(eDir)
         nfiles = len(files)
+        print('Loading concentration calc results ({} files)...'.format(len(files)))
+        concImported = False
         for fi,f in enumerate(files):
             print('Reading file {} of {}: {}'.format(fi+1,nfiles,f))
             with open(eDir+f,'rb') as fo:
                 curEdges,ind = pickle.load(fo)
+                
+            if fi==0:
+                nt = curEdges[0].concentration.shape[1]
+                ntSrc = edges[0].concentration.shape[1]
+                if nt!=ntSrc:
+                    print('Fixing concentration shape...')
+                    for e in edges:
+                        e.concentration = np.zeros([e.npoints,nt])
 
             for curEdge in curEdges:
+                concImported = True
                 srcEdge = [e for e in edges if e.index==curEdge.index]
-                srcEdge[0].concentration += curEdge.concentration   
+                if all([i==j for i,j in zip(srcEdge[0].concentration.shape, curEdge.concentration.shape)]):
+                    srcEdge[0].concentration += curEdge.concentration
+                else:
+                    print 'Shapes incompatible! {} {}'.format(srcEdge[0].concentration.shape,curEdge.concentration.shape)
 
         # Calculate AUC
-        print('Calculating AUC...')
-        self.auc(edges)
-        # Add concentration(t=1s) as a scalar field
-        timePoints = self.output_times
-        for tp in timePoints:
-            self.add_concentration(edges,self.time,conc_time=tp)
-        print('Calculating distance...')
-        self.add_distance(edges)
+        #print('Calculating AUC...')
+        #self.auc(edges)
+        print('Adding concentration-time data to graph')
+        if False: #old version - adds multiple scalar fileds to a signel graph file
+            # Add concentration(t=1s) as a scalar field
+            timePoints = self.output_times
+            for tp in timePoints:
+                self.add_concentration(edges,self.time,conc_time=tp)
+            print('Calculating distance...')
+            self.add_distance(edges)
+        else:
+        #if True: #new version - creates multiple graph files (one per timepoint). Import into Amira with load timeseries
+            # Add concentration(t=1s) as a scalar field
+            timePoints = self.output_times
+            odir = output_directory + 'concentration_recon\\'
+            if not os.path.isdir(odir):
+                os.mkdir(odir)
+            timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=10)
+            for ti,tp in enumerate(timePoints):
+                mx = 0.
+                for edge in edges:
+                    curConc = edge.concentration[:,ti]
+                    curMax = np.max(curConc)
+                    if curMax>mx:
+                        mx = curMax
+                    edge.add_scalar('Concentration',curConc)
+                new_graph = self.graph.node_list_to_graph(self.nodeList)
+                ofile = os.path.join(odir,'concentration_t{}.am'.format(tp))
+                print('Writing {}, max conc {}'.format(ofile,curMax))
+                new_graph.write(ofile)
         
         # Not working yet!
         if remove_zeros:
@@ -334,19 +401,20 @@ class InjectAgent(object):
             #print('Deleting {} NODES'.format(ndelcount))
             #self.nodeList = [n for nInd,n in enumerate(self.nodeList) if node_to_delete[nInd]==1]
         
-        print('Creating new graph...')
-        new_graph = self.graph.node_list_to_graph(self.nodeList)
-        if output_directory is not None:
-            ofile = os.path.join(output_directory,'')+'ct_output.am'
-            print('Writing graph to file ({})...'.format(ofile))
-            new_graph.write(ofile)
-            print('Writing complete')
-            
-            #ofile = os.path.join(output_directory,'')+'ct.p'            
-            #print('Saving concentration data ({})...'.format(ofile))
-            #conc = self.get_concentration(edges)
-            #with open(ofile, 'wb') as handle:
-            #    pickle.dump(ofile, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        if False:
+            print('Creating new graph...')
+            new_graph = self.graph.node_list_to_graph(self.nodeList)
+            if output_directory is not None:
+                ofile = os.path.join(output_directory,'')+'ct_output.am'
+                print('Writing graph to file ({})...'.format(ofile))
+                new_graph.write(ofile)
+                print('Writing complete')
+                
+                #ofile = os.path.join(output_directory,'')+'ct.p'            
+                #print('Saving concentration data ({})...'.format(ofile))
+                #conc = self.get_concentration(edges)
+                #with open(ofile, 'wb') as handle:
+                #    pickle.dump(ofile, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
     def inject(self, graph, output_directory=None, resume=False, parallel=True):
 
@@ -660,8 +728,10 @@ def main():
     parallel = True
  
     if recon:
+        print 'Reconstructing...'
         ia.reconstruct_results(graph,output_directory=dir_)
     else:
+        print 'Simulating...'
         try:
             ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel)
         except KeyboardInterrupt:
@@ -669,5 +739,7 @@ def main():
             ia.save_graph(output_directory=dir_)
         
 if __name__ == "__main__":
-    main()
+    import cProfile
+    cProfile.run('main()')
+    #main()
     #pass

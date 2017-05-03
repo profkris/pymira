@@ -1437,7 +1437,7 @@ class Edge(object):
         else:
             return False
             
-    def add_scalar(self,name,values):
+    def add_scalar(self,name,values,set_if_exists=True):
         
         # TODO: add support for repeated scalars
         
@@ -1445,7 +1445,10 @@ class Edge(object):
             print('Error: Scalar field has incorrect number of points')
             return
         if name in self.scalarNames:
-            print('Error: Scalar field {} already exists!'.format(name))
+            if set_if_exists:
+                self.set_scalar(name,values)
+            else:
+                print('Error: Scalar field {} already exists!'.format(name))
             return
             
         if len(self.scalars)==0:

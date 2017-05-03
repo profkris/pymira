@@ -441,13 +441,26 @@ class AmiraMesh(object):
             
             # Definition section
             for d in self.definitions:
-                f.write('define {} {}\n'.format(d['name'],d['size'][0]))
+                dSize = d['size'][0]
+                if type(dSize) is list:
+                    dSize = ' '.join([str(ds) for ds in dSize])
+                f.write('define {} {}\n'.format(d['name'],dSize))
             f.write('\n')
             
             # Parameter section
             f.write('Parameters {\n')
-            for p in self.parameters:
-                f.write('   {} \"{}\"\n'.format(p['parameter'],p['value']))
+            nparam = len(self.parameters)
+            for pi,p in enumerate(self.parameters):
+                if type(p['value']) is str or len(p['value'])==1:
+                    curLine = '   {} \"{}\"'.format(p['parameter'],p['value'])
+                else:
+                    pStr = ' '.join([str(b) for b in p['value']])
+                    curLine = '   {} {}'.format(p['parameter'],pStr)
+                if pi<nparam-1:
+                    curLine += ',\n'
+                else:
+                    curLine += '\n'
+                f.write(curLine)
             f.write('}\n')
             f.write('\n')
             
@@ -473,8 +486,13 @@ class AmiraMesh(object):
                         data[j,:].tofile(f, sep=" ", format="%s")
                         f.write('\n')
                 else:
-                    import pdb
-                    pdb.set_trace()
+                    for j in range(data.shape[2]):
+                        for k in range(data.shape[1]):
+                            for l in range(data.shape[0]):
+                                data[l,k,j].tofile(f, sep=" ", format="%s")
+                                f.write('\n')
+                    #import pdb
+                    #pdb.set_trace()
                 f.write('\n')
         
 #    def add_field(self,fieldDict):
