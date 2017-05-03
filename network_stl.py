@@ -18,8 +18,9 @@ import math
 
 def graph_to_stl(graph):
 
-    #coords = graph.get_data('VertexCoordinates')
-    #edgeConn = graph.get_data('EdgeConnectivity')
+    coords = graph.get_data('VertexCoordinates')
+    edgeConn = graph.get_data('EdgeConnectivity')
+    nconn = edgeConn.shape[0]
     #edgeCoords = graph.get_data('EdgePointCoordinates')
     nodeList = graph.node_list()
     edges = graph.edges_from_node_list(nodeList)
@@ -27,8 +28,12 @@ def graph_to_stl(graph):
     thickness = 1.
     
     #nedge = edgeConn.shape[0]
+    #verts = np.empty(0)
+    verts = None
+    faces = []
     
     tubes = []
+    connectionDefined = np.zeros(nconn,dtype='int')
     for edge in edges:
         pts = edge.coordinates
         radius = edge.get_scalar('Radii')
@@ -39,30 +44,102 @@ def graph_to_stl(graph):
         strtRev = strtNode.edge_indices_rev[strtBranchInd]
         endBranchInd = [i for i,e in enumerate(endNode.edges) if e.index==edge.index][0]
         endRev = endNode.edge_indices_rev[endBranchInd]
+        print strtRev,endRev,pts
         
+        #print strtNode.nconn
         if strtNode.nconn==1:
-            strt_ba = 0.
+            strt_face_angle = 0.
         elif strtNode.nconn==2:
-            strt_ba = np.arccos(np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2)))
-            deg = np.rad2deg(rad)
-        else:
+            other_conn = strtNode.connecting_node[strtNode.connecting_node!=endNode.index]
+            length1 = np.linalg.norm(coords[other_conn]-coords[strtNode.index])
+            vec1 = (coords[other_conn]-coords[strtNode.index])/length1
+            length2 = np.linalg.norm(coords[strtNode.index]-coords[endNode.index])
+            vec2 = (coords[strtNode.index]-coords[endNode.index])/length2
+            strt_face_angle = np.arccos(np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2)))
+            strt_face_angle = np.rad2deg(strt_face_angle)
+            print other_conn,strtNode.index,endNode.index,coords[other_conn],coords[strtNode.index],coords[endNode.index]
             import pdb
             pdb.set_trace()
+        else:
+            strt_face_angle = 0.
+        #if strt_face_angle!=90.:
+        #    pass
+            
+        #print endNode.nconn
+        if endNode.nconn==1:
+            end_face_angle = 0.
+        elif endNode.nconn==2:
+            other_conn = endNode.connecting_node[endNode.connecting_node!=strtNode.index]
+            length1 = np.linalg.norm(coords[endNode.index]-coords[other_conn])
+            vec1 = (coords[endNode.index]-coords[other_conn])/length1
+            length2 = np.linalg.norm(coords[endNode.index]-coords[strtNode.index])
+            vec2 = (coords[endNode.index]-coords[strtNode.index])/length2
+            end_face_angle = np.arccos(np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2)))
+            end_face_angle = np.rad2deg(end_face_angle)
+            import pdb
+            pdb.set_trace()
+        else:
+            end_face_angle = 0.
+            
+        import pdb
+        pdb.set_trace()
+        fa = np.zeros(pts.shape[0])
+        fa[0] = strt_face_angle
+        fa[pts.shape[0]-1] = end_face_angle
+        grad = np.zeros([pts.shape[0],3])
+        #grad[0,:] = 
         
         for i in range(pts.shape[0]-1):
             length = np.linalg.norm(pts[i]-pts[i+1])
             vec = (pts[i+1]-pts[i])/length
             center = np.mean(np.vstack((pts[i],pts[i+1])), axis=0)
-            import pdb
-            pdb.set_trace()
+            #print strt_face_angle,end_face_angle
+            
+            if i<pts.shape[0]-2:
+                length2 = np.linalg.norm(pts[i+1]-pts[i+2])
+                vec2 = (pts[i+2]-pts[i+1])/length2
+                fa[i+1] = np.arccos(np.dot(vec,vec2)/(np.linalg.norm(vec)*np.linalg.norm(vec2)))
+                fa[i+1] = -np.rad2deg(fa[i+1]) / 2.
+            if i==0:
+                grad[i] = vec
+            elif i<pts.shape[0]-2::
+                grad[i] = pts[i+1]-pts[i]
             #verts,faces = make_tube(radius[i:i+1]*2.,[thickness,thickness],lengthorientation=vec,center=center,outer_only=True)
             
             #print('Points:{}{}, center:{}, orient:{}'.format(pts[i],pts[i+1],center,vec))
-            tubes.append(tube_mesh(np.mean(radius[i:i+1]*2),thickness,length,orientation=vec,center=center,outer_only=True))
+            curRad = np.mean(radius[i:i+1]*2)
+            print fa[i],fa[i+1]
+            #newMesh = tube_mesh(curRad,thickness,length,orientation=vec,center=center,outer_only=True,start_face_angle=-fa[i],end_face_angle=fa[i+1])
+            nlength = 2
+            alpha = 360.
+            nalpha = 16
+            oVerts,oFaces = make_cylinder(curRad,length,nlength,alpha,nalpha,center,vec,start_face_angle=-fa[i],end_face_angle=fa[i+1])
 
-    netMesh = mesh.Mesh(np.concatenate([t.data for t in tubes]))
-    plot_mesh(netMesh) 
-    return netMesh
+            if verts is None:
+                verts = oVerts.astype('float')
+                faces = oFaces
+            else:
+                #import pdb
+                #pdb.set_trace()
+                verts = np.append(verts,oVerts.astype('float'),axis=0)
+                nf = np.max(faces)
+                faces = np.append(faces,oFaces+nf+1,axis=0)
+            #verts.append(oVerts)
+            #faces.append(oFaces)
+
+    faces = np.asarray(faces)
+    verts = np.asarray(verts)
+            
+    newMesh = mesh.Mesh(np.zeros(faces.shape[0], dtype=mesh.Mesh.dtype))
+    for i, f in enumerate(faces):
+        for j in range(3):
+            newMesh.vectors[i][j] = verts[f[j],:]                    
+    
+    #tubes.append(newMesh)
+
+    #netMesh = mesh.Mesh(np.concatenate([t.data for t in newMesh]))
+    plot_mesh(newMesh) 
+    return newMesh
     
 def unit_vector(vector):
     """ Returns the unit vector of the vector.  """
@@ -108,7 +185,7 @@ def vector_rotation(v1, v2):
     return R
     
 def rotate_points(points,R):
-    return np.dot(points,np.transpose(U))
+    return np.dot(points,np.transpose(R))
     
 def align_vector_rotation(A,B):
     
@@ -192,7 +269,9 @@ def rot_matrix(angle, direction, point=None):
         M[:3, 3] = point - np.dot(R, point)
     return M
 
-def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation):
+def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation,start_face_angle=0.,end_face_angle=0.):
+    
+    origin, xaxis, yaxis, zaxis = [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]
 
     #Create the length array
     if type(length) is not list:
@@ -221,6 +300,7 @@ def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation):
 
         #Tile/repeat indices so all unique pairs are present
         px = np.repeat(I, nalpha)
+        posInd = px
         py = np.tile(X, nlength)
         pz = np.tile(Y, nlength)
     elif len(radius)==nlength:
@@ -232,6 +312,7 @@ def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation):
     
             #Tile/repeat indices so all unique pairs are present
         px = np.repeat(I, nalpha)
+        posInd = px
         py = X
         pz = Y
     else:
@@ -250,30 +331,57 @@ def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation):
             faces.append([i,0,nalpha+i])
             faces.append([nalpha+i,nalpha,0])
     faces = np.asarray(faces)
-    
-    #import pdb
-    #pdb.set_trace()
 
     #Orient tube to new vector
-    origin, xaxis, yaxis, zaxis = [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]
     U = align_vector_rotation(xaxis,orientation)
     points_p = np.dot(U,np.transpose(points)).T
     #points_p = points
-    #print U
         
     #Shift to center
     shift = np.array(center) - np.mean(points_p, axis=0)
     points_p += shift
     
+    U = U.astype('float')
+    Up = np.linalg.inv(U)
+    
+    if start_face_angle!=0.:
+        R = rot_matrix(np.deg2rad(start_face_angle),zaxis)
+        pStartInds = [i for i,p in enumerate(px) if p==I[0]]
+        pStart = points_p[pStartInds]
+        rotPoint = np.mean(pStart,axis=0)
+        pStart -= rotPoint
+        #pStartR = rotate_points(pStart,Up[:3,:3])
+        pStartR = rotate_points(pStart,R[:3,:3]) 
+        #pStartR = rotate_points(pStartR,U[:3,:3]) 
+        pStartR += rotPoint
+        
+        #pStart -= rotPoint
+        #pStartR = rotate_points(pStart,R[:3,:3]) + rotPoint
+        points_p[pStartInds] = pStartR
+        
+    if end_face_angle!=0.:
+        #import pdb
+        #pdb.set_trace()
+        R = rot_matrix(np.deg2rad(end_face_angle),zaxis)  
+        pEndInds = [i for i,p in enumerate(px) if p==I[-1]]
+        pEnd = points_p[pEndInds]
+        rotPoint = np.mean(pEnd,axis=0)
+        pEnd -= rotPoint
+        #pEndR = rotate_points(pEnd,Up[:3,:3])
+        pEndR = rotate_points(pEnd,R[:3,:3]) 
+        #pEndR = rotate_points(pEndR,U[:3,:3]) 
+        pEndR += rotPoint
+        points_p[pEndInds] = pEndR
+    
     return points_p,faces
       
-def tube_mesh(radius, thickness, length,orientation=[1,0,0],center=[0,0,0],outer_only=False):
+def tube_mesh(radius, thickness, length,orientation=[1,0,0],center=[0,0,0],outer_only=False,start_face_angle=0.,end_face_angle=0.):
     
     nlength = 2
     alpha = 360.
     nalpha = 16
     
-    oVerts,oFaces = make_cylinder(radius,length,nlength,alpha,nalpha,center,orientation)
+    oVerts,oFaces = make_cylinder(radius,length,nlength,alpha,nalpha,center,orientation,start_face_angle=start_face_angle,end_face_angle=end_face_angle)
     if not outer_only:
         iVerts,iFaces = make_cylinder(radius+thickness,length,nlength,alpha,nalpha,center,orientation)
     
@@ -314,8 +422,10 @@ def plot_mesh(meshes):
     # Show the plot to the screen
     pyplot.show() 
 
-gfile = 'C:\\Users\\simon\\Dropbox\\Mesentery\\Flow2AmiraPressure.am'
+#gfile = 'C:\\Users\\simon\\Dropbox\\Mesentery\\Flow2AmiraPressure.am'
 #gfile = 'C:\\Anaconda2\\Lib\\site-packages\\pymira\\test_graph.am'
+pyplot.close('all')
+gfile = 'C:\\Anaconda2\\Lib\\site-packages\\pymira\\test_join.am'
 from pymira import spatialgraph
 graph = spatialgraph.SpatialGraph()
 graph.read(gfile)
