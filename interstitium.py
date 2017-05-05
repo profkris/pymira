@@ -171,6 +171,7 @@ class Interstitium(object):
         for j in xrange(nt-1):
             c_i[:,j+1] = np.dot(A,c_i[:,j]) + M*(c_v[j]-c_i[:,j]) #(np.dot(B,R[:,j]))
             c_v_out[j+1] += np.sum(M*(c_i[0,j]-c_v[j]))
+        c_v_out = np.clip(c_v_out,0.,1e100)
             
         #c_v_out = (1.-ef) * c_v
         #c_v_out = c_v

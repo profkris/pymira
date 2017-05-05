@@ -707,7 +707,7 @@ def _worker_function(args):
         intDir = os.path.join(odir,'interstitium_calcs')
         if not os.path.exists(intDir):
             os.makedir(intDir)
-        ofile = os.path.join(intDir ,'interstitium_calcs\\interstitium_inlet{}.npz'.format(inletNodeIndex))
+        ofile = os.path.join(intDir ,'interstitium_inlet{}.npz'.format(inletNodeIndex))
         print('Grid min/max: {} {}'.format(np.min(intr.grid),np.max(intr.grid)))
         np.savez(ofile,grid=grid,grid_dims=intr.grid_dims,embedDims=intr.embedDims,dx=intr.dx,dy=intr.dy,dz=intr.dz,dt=intr.dt)
         #with open(ofile,'wb') as fo:
