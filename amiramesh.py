@@ -451,7 +451,7 @@ class AmiraMesh(object):
             f.write('Parameters {\n')
             nparam = len(self.parameters)
             for pi,p in enumerate(self.parameters):
-                if type(p['value']) is str or len(p['value'])==1:
+                if type(p['value']) not in [list,np.ndarray]:# or len(p['value'])==1:
                     curLine = '   {} \"{}\"'.format(p['parameter'],p['value'])
                 else:
                     pStr = ' '.join([str(b) for b in p['value']])

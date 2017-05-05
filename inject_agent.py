@@ -243,47 +243,53 @@ class InjectAgent(object):
         for i,edge in enumerate(edges):
             conc[i,:] = edge.concentration
             
-    def reconstruct_results(self, graph, output_directory=None,leaky_vessels=True):
+    def reconstruct_results(self, graph, output_directory=None,leaky_vessels=True,name=None):
 
-        self.graph = graph   
+        self.graph = graph
+        
+        if name is not None:
+            output_directory = os.path.join(output_directory,name)
 
         import dill as pickle
-        nodeFile = output_directory+'nodeList.dill'
-        if not os.path.isfile(nodeFile):
-            print 'Generating node list...'
-            self.nodeList = self.graph.node_list()
-        else:
-            with open(nodeFile ,'rb') as fo:
-                self.nodeList = pickle.load(fo)
-
-        #import pdb
-        #pdb.set_trace()                
-        self.save_graph(output_directory=output_directory)
-        #pdb.set_trace()
-        return
+        
+        recon_vascular = True
+        if recon_vascular:
+            nodeFile = os.path.join(output_directory,'nodeList.dill')
+            if not os.path.isfile(nodeFile):
+                print 'Generating node list...'
+                self.nodeList = self.graph.node_list()
+            else:
+                with open(nodeFile ,'rb') as fo:
+                    self.nodeList = pickle.load(fo)
+              
+            self.save_graph(output_directory=output_directory)
                
         if leaky_vessels:
             print('Reconstructing interstitial results...')
             import scipy
             intObj = interstitium.Interstitium()
             interDir = os.path.join(output_directory,'interstitium_calcs')
+            interDir = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\impulseinterstitium_calcs'
             nadded = 0
+            init = False
             if os.path.isdir(interDir):
                 files = os.listdir(interDir)
                 for i,f in enumerate(files):
                     print('Reconstructing file {} of {}: {}'.format(i+1,len(files),f))
                     try:
-                        data = np.load(os.path.join(interDir,f))
+                        curFile = os.path.join(interDir,f)
+                        data = np.load(curFile)
                         curgrid = data['grid']
                         grid_dims = data['grid_dims']
                         embedDims = data['embedDims']
-                        if i==0:
+                        if not init:
                             grid = curgrid
                         else:
                             grid += curgrid
                         nadded += 1
+                        init = True
                     except Exception,e:
-                        print e
+                        print('Error loading {}: {}'.format(curFile,e))
                 #ofile = os.path.join(output_directory,'interstitium.nii')
                 sm = False
                 if sm:
@@ -299,27 +305,31 @@ class InjectAgent(object):
                 
                 from pymira import mesh
                 timePoints = self.output_times
-                odir = output_directory + 'interstitial_concentration_recon\\'
+                odir = os.path.join(output_directory, 'interstitial_concentration_recon')
                 if not os.path.isdir(odir):
                     os.mkdir(odir)
                 boundingBox = data['embedDims'].flatten()
-                timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=10)
+                #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=500)
+                tp_early = np.linspace(0,10,num=20)
+                tp_late = np.linspace(11,100,num=10)
+                timePoints = np.append(tp_early,tp_late)
 
                 for ti,tp in enumerate(timePoints): 
                     cur = grid[ti,:,:,:]
                     if True:
                        medwinsize = 5
-                       print('Median filtering: {}'.format(medwinsize))
+                       #print('Median filtering: {}'.format(medwinsize))
                        cur = scipy.ndimage.filters.median_filter(cur,size=medwinsize)
                     m = mesh.Mesh(data=cur,boundingBox=boundingBox)
-                    ofile = os.path.join(odir,'interstitial_conc_t{}.am'.format(tp))
-                    print('Writing {}'.format(ofile))
+                    ofile = os.path.join(odir,'interstitial_conc_t{}.am'.format(ti))
+                    print('Writing (max conc {}) {}'.format(np.max(cur),ofile))
+                    m.add_parameter('Time',np.asscalar(tp))
                     m.write(ofile)
                 #intObj.save_grid(output_directory,grid=grid,pixdim=pixdim,format='amira')
             print('Interstitial concentration grid written to {}'.format(output_directory))
             
     def save_graph(self,output_directory=None,remove_zeros=False):
-        
+         
         if self.graph is None or self.nodeList is None:
             return
           
@@ -327,23 +337,26 @@ class InjectAgent(object):
         edges = self.graph.edges_from_node_list(self.nodeList)
             
         # Reconstruct individual inlet results
-        eDir = output_directory+'edge_calcs\\'
+        eDir = os.path.join(output_directory,'edge_calcs')
+        eDir = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\impulseedge_calcs'
         files = os.listdir(eDir)
         nfiles = len(files)
         print('Loading concentration calc results ({} files)...'.format(len(files)))
         concImported = False
+        init = False
         for fi,f in enumerate(files):
             print('Reading file {} of {}: {}'.format(fi+1,nfiles,f))
-            with open(eDir+f,'rb') as fo:
+            with open(os.path.join(eDir,f),'rb') as fo:
                 curEdges,ind = pickle.load(fo)
                 
-            if fi==0:
+            if not init:
                 nt = curEdges[0].concentration.shape[1]
                 ntSrc = edges[0].concentration.shape[1]
                 if nt!=ntSrc:
                     print('Fixing concentration shape...')
                     for e in edges:
                         e.concentration = np.zeros([e.npoints,nt])
+                init = True
 
             for curEdge in curEdges:
                 concImported = True
@@ -368,21 +381,25 @@ class InjectAgent(object):
         #if True: #new version - creates multiple graph files (one per timepoint). Import into Amira with load timeseries
             # Add concentration(t=1s) as a scalar field
             timePoints = self.output_times
-            odir = output_directory + 'concentration_recon\\'
+            odir = os.path.join(output_directory,'concentration_recon')
             if not os.path.isdir(odir):
                 os.mkdir(odir)
-            timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=10)
+            #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=500)
+            tp_early = np.linspace(0,10,num=20)
+            tp_late = np.linspace(11,100,num=10)
+            timePoints = np.append(tp_early,tp_late)
             for ti,tp in enumerate(timePoints):
                 mx = 0.
                 for edge in edges:
-                    curConc = edge.concentration[:,ti]
+                    curConc = np.clip(edge.concentration[:,ti],0.,1e100)
                     curMax = np.max(curConc)
                     if curMax>mx:
                         mx = curMax
                     edge.add_scalar('Concentration',curConc)
                 new_graph = self.graph.node_list_to_graph(self.nodeList)
-                ofile = os.path.join(odir,'concentration_t{}.am'.format(tp))
-                print('Writing {}, max conc {}'.format(ofile,curMax))
+                ofile = os.path.join(odir,'concentration_t{}.am'.format(ti))
+                print('Writing {}, max conc {}'.format(ofile,mx))
+                new_graph.add_parameter('Time',np.asscalar(tp))
                 new_graph.write(ofile)
         
         # Not working yet!
@@ -405,7 +422,7 @@ class InjectAgent(object):
             print('Creating new graph...')
             new_graph = self.graph.node_list_to_graph(self.nodeList)
             if output_directory is not None:
-                ofile = os.path.join(output_directory,'')+'ct_output.am'
+                ofile = os.path.join(output_directory,'ct_output.am')
                 print('Writing graph to file ({})...'.format(ofile))
                 new_graph.write(ofile)
                 print('Writing complete')
@@ -734,17 +751,18 @@ def main():
     
     ia = InjectAgent()
     
-    recon = False
+    recon = True
     resume = False
     parallel = True
+    name = 'impulse'
  
     if recon:
         print 'Reconstructing...'
-        ia.reconstruct_results(graph,output_directory=dir_)
+        ia.reconstruct_results(graph,output_directory=dir_,name=name)
     else:
         print 'Simulating...'
         try:
-            ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name='impulse')
+            ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name)
         except KeyboardInterrupt:
             print('Ctrl-C interrupt! Saving graph')
             ia.save_graph(output_directory=dir_)
