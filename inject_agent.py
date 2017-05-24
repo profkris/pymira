@@ -725,7 +725,7 @@ def _worker_function(args):
         if not os.path.exists(intDir):
             os.makedir(intDir)
         ofile = os.path.join(intDir ,'interstitium_inlet{}.npz'.format(inletNodeIndex))
-        print('Grid min/max: {} {}'.format(np.min(intr.grid),np.max(intr.grid)))
+        #print('Grid min/max: {} {}'.format(np.min(intr.grid),np.max(intr.grid)))
         np.savez(ofile,grid=grid,grid_dims=intr.grid_dims,embedDims=intr.embedDims,dx=intr.dx,dy=intr.dy,dz=intr.dz,dt=intr.dt)
         #with open(ofile,'wb') as fo:
         #    pickle.dump((grid,inletNodeIndex),fo)
@@ -739,10 +739,10 @@ def _worker_function(args):
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
-    f = os.path.join(dir_,'spatialGraph_RIN.am')
-    #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-    #f = dir_ + 'Flow2AmiraPressure.am'
+    #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    #f = os.path.join(dir_,'spatialGraph_RIN.am')
+    dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+    f = dir_ + 'Flow2AmiraPressure.am'
 
     graph = spatialgraph.SpatialGraph()
     print('Reading graph...')
@@ -751,7 +751,7 @@ def main():
     
     ia = InjectAgent()
     
-    recon = True
+    recon = False
     resume = False
     parallel = True
     name = 'impulse'
