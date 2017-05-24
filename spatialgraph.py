@@ -1183,6 +1183,14 @@ class Editor(object):
         
         new_graph = graph.node_list_to_graph(new_nodeList)
         return new_graph
+        
+   def largest_graph(self, graph):
+       g = graph.identify_graphs()
+       import pdb
+       pdb.set_trace()
+       new_graph = graph.node_list_to_graph(graph.nodeList)
+       #new_graph.write(dir_+'graphs.am')
+       return new_graph
 
 class Node(object):
     
