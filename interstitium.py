@@ -37,7 +37,7 @@ class Interstitium(object):
         self.dz = None
         self.dt = None
                         
-        self.ktrans = 0.2 #/min
+        self.ktrans = 0.0001 #/min
         self.ef = 0.2 #  not used
         self.D = 1e-7 * 1e8 # 500. #um2/s
         self.D = 7e-11 * 1e12 #m2/s Gd-DTPA (https://books.google.es/books?id=6fZGf8ave3wC&pg=PA343&lpg=PA343&dq=diffusion+coefficient+of+gd-dtpa&source=bl&ots=Ceg432CWar&sig=4PuxViFn9lL7pwOAkFVGwtHRe4M&hl=en&sa=X&ved=0ahUKEwjs1O-Z-NPTAhVJShQKHa6PBKQQ6AEIODAD#v=onepage&q=diffusion%20coefficient%20of%20gd-dtpa&f=false)
@@ -131,6 +131,49 @@ class Interstitium(object):
         
         return np.asarray(coords_p,dtype='float')
         
+    def circle_coordinates(self,radius,strt,fin,n):
+        
+        length = np.linalg.norm(strt-fin)
+        orientation = (strt-fin)/length
+        I = 0
+        #x = np.linspace(0,length,num=n)
+        #y = np.linspace(strt[1],fin[1],num=n)
+        #z = np.linspace(strt[2],fin[2],num=n)
+        
+        A = np.linspace(0, 360., num=n, endpoint=False)/180*np.pi
+        #import pdb
+        #pdb.set_trace()
+        coords = []
+        #for r in radius:
+        if True:
+            r = radius
+            if r>0:
+                X = np.asarray(r) * np.cos(A)
+                Y = np.asarray(r) * np.sin(A)
+                #Tile/repeat indices so all unique pairs are present
+                px = np.repeat(0.,n)
+                py = np.tile(X, n)
+                pz = np.tile(Y, n)
+                coords = np.vstack(( px, py, pz )).T
+            else:
+                px = np.repeat(0.,n)
+                py = np.repeat(0.,n)
+                pz = np.repeat(0.,n)
+                #coords = [0.,0.,0.]
+                coords = np.vstack(( px, py, pz )).T
+        
+        #origin, xaxis, yaxis, zaxis = [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]
+        U = self.align_vector_rotation([1,0,0],orientation)
+        coords_p = np.dot(U,np.transpose(coords)).T
+        coords_p = np.asarray(coords_p)
+        
+        #Shift to center
+        center = np.mean([strt],axis=0)
+        shift = np.array(center) - np.mean(coords_p, axis=0)
+        coords_p += shift
+        
+        return np.asarray(coords_p,dtype='float')
+        
     def find_nearest(self,array,value):
         idx = (np.abs(array-value)).argmin()
         return idx #array[idx]
@@ -171,7 +214,7 @@ class Interstitium(object):
         for j in xrange(nt-1):
             c_i[:,j+1] = np.dot(A,c_i[:,j]) + M*(c_v[j]-c_i[:,j]) #(np.dot(B,R[:,j]))
             c_v_out[j+1] += np.sum(M*(c_i[0,j]-c_v[j]))
-        c_v_out = np.clip(c_v_out,0.,1e100)
+        c_v_out = c_v #np.clip(c_v_out,0.,1e100)
             
         #c_v_out = (1.-ef) * c_v
         #c_v_out = c_v
@@ -185,7 +228,7 @@ class Interstitium(object):
         if D is None:
             D = self.D
         
-        self.nr = 100
+        self.nr = 20
         self.max_r = 1000. #um #dr*nr
         self.dr = self.max_r / float(self.nr)
 
@@ -266,7 +309,7 @@ class Interstitium(object):
  
         if store_results:
             if set_grid_dims:       
-                self.set_grid_dimensions(time,nodes,ktrans=self.ktrans,D=self.D)
+                self.set_grid_dimensions(nodes,time,ktrans=self.ktrans,D=self.D)
                 
             self.grid = np.zeros(self.grid_dims)
             self.count = np.zeros(self.grid_dims)
@@ -290,7 +333,7 @@ class Interstitium(object):
         if progress: # progress bar
             pbar = tqdm(total=nnode)
             
-        # Initialise arrya for modified vascular component (following leakage into interstitium)
+        # Initialise array for modified vascular component (following leakage into interstitium)
         conc_out = conc * 0.
         
         # Loop through each node in current vessel segment
@@ -299,6 +342,7 @@ class Interstitium(object):
                 pbar.update(1)
             
             if ni<nnode-1 and index[ni]==index[ni+1]: # for cylinder only...
+            #if True:
 
                 c_v = conc[ni,:]
                 c_i,c_v_out = self.radial_diffusion(curNode,c_v,D[ni],ktrans[ni],ef[ni],self.dt,self.dr,self.nr,self.nt,time)
@@ -311,6 +355,7 @@ class Interstitium(object):
                     for ri,radius in enumerate(r):
                         #sph = self.sphere_coordinates(radius,curNode,10)
                         sph = self.cylinder_coordinates(radius,curNode,nodes[ni+1],self.feNSample)
+                        #sph = self.circle_coordinates(radius,curNode,nodes[ni+1],self.feNSample)
                         xs = [x[0] for x in sph]
                         ys = [x[1] for x in sph]
                         zs = [x[2] for x in sph]
