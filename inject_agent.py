@@ -343,7 +343,7 @@ class InjectAgent(object):
         edges = self.graph.edges_from_node_list(self.nodeList)
             
         # Reconstruct individual inlet results
-        eDir = os.path.join(output_directory,'edge_calcs')
+        eDir = os.path.join(output_directory,'vascular_calcs')
         #eDir = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\impulseedge_calcs'
         files = os.listdir(eDir)
         nfiles = len(files)
@@ -439,7 +439,7 @@ class InjectAgent(object):
                 #with open(ofile, 'wb') as handle:
                 #    pickle.dump(ofile, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
-    def inject(self, graph, output_directory=None, resume=False, parallel=True, name=None, largest_inflow=False):
+    def inject(self, graph, output_directory=None, resume=False, parallel=True, name=None, largest_inflow=False, leaky_vessels=True):
 
         self.graph = graph   
 
@@ -451,15 +451,15 @@ class InjectAgent(object):
                 os.mkdir(output_directory)
         
         if resume:
-            eDir = os.path.join(output_directory,'edge_calcs')
+            eDir = os.path.join(output_directory,'vascular_calcs')
             files = os.listdir(eDir)
             nfiles = len(files)
             inletVisited = []
-            prefix = 'edges_inlet'
+            prefix = 'inlet'
             suffix = '.dill'
             for fi,f in enumerate(files):
                 try:
-                    ind = int((f.replace('edges_inlet','')).replace('.dill',''))
+                    ind = int((f.replace('inlet','')).replace('.dill',''))
                     inletVisited.append(ind)
                 except Exception,e:
                     print('Could not load {}'.format(f))
@@ -536,8 +536,15 @@ class InjectAgent(object):
         #intr.set_grid_dimensions(graph.get_data('EdgePointCoordinates'),self.time)
         
         #argList = [[nodeFile,n.index,ca1,timeFile,output_directory,nedge,intr.grid_dims,intr.embedDims] for n in inletNodes]
-        concFunc = parker
-        argList = [[nodeFile,n.index,concFunc,timeFile,output_directory,nedge,None,None] for n in inletNodes]
+        if name=='parker':
+            concFunc = parker
+        elif name=='impulse':
+            concFunc = impulse
+        elif name=='ca1':
+            concFunc = ca1
+        else:
+            concFunc = impulse
+        argList = [[nodeFile,n.index,concFunc,timeFile,output_directory,nedge,None,None,leaky_vessels] for n in inletNodes]
 
         if parallel:
             p.map(_worker_function,argList)
@@ -565,7 +572,7 @@ def _worker_function(args):
     Q_limit = 1e-9
     c_limit = 1e-9
     
-    nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7]
+    nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims,leaky_vessels = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8]
     
     with open(nodeListFile ,'rb') as fo:
         nodeList = pickle.load(fo)
@@ -583,7 +590,7 @@ def _worker_function(args):
     edgesOut = []
     curNode = inletNode
     
-    leaky_vessels = True
+    #leaky_vessels = True
     ignore_delay = False
     if leaky_vessels:
         intr = interstitium.Interstitium()
@@ -717,7 +724,7 @@ def _worker_function(args):
             #break
             
     import os
-    eDir = os.path.join(odir,'edge_calcs')
+    eDir = os.path.join(odir,'vascular_calcs')
     if not os.path.exists(eDir):
         os.makedirs(eDir)
     ofile = os.path.join(eDir,'edges_inlet{}.dill'.format(inletNodeIndex))
@@ -731,7 +738,7 @@ def _worker_function(args):
         if not os.path.exists(intDir):
             os.makedirs(intDir)
         ofile = os.path.join(intDir ,'interstitium_inlet{}.npz'.format(inletNodeIndex))
-        print('Grid min/max: {} {}'.format(np.min(grid),np.max(grid)))
+
         np.savez(ofile,grid=grid,grid_dims=intr.grid_dims,embedDims=intr.embedDims,dx=intr.dx,dy=intr.dy,dz=intr.dz,dt=intr.dt)
         #with open(ofile,'wb') as fo:
         #    pickle.dump((grid,inletNodeIndex),fo)
@@ -745,10 +752,10 @@ def _worker_function(args):
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
-    #f = os.path.join(dir_,'spatialGraph_RIN.am')
-    dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-    f = dir_ + 'Flow2AmiraPressure.am'
+    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    f = os.path.join(dir_,'spatialGraph_RIN.am')
+    #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+    #f = dir_ + 'Flow2AmiraPressure.am'
 
     graph = spatialgraph.SpatialGraph()
     print('Reading graph...')
@@ -757,11 +764,12 @@ def main():
     
     ia = InjectAgent()
     
-    recon = False    
+    recon = False
     resume = False
     parallel = True
     largest_inflow = False
-    name = 'no reflux'
+    leaky_vessels = True
+    name = 'ca1'
  
     if recon:
         recon_vascular = True
@@ -771,7 +779,7 @@ def main():
     else:
         print 'Simulating...'
         try:
-            ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,largest_inflow=largest_inflow)
+            ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,largest_inflow=largest_inflow,leaky_vessels=True)
             print('Simulation complete')
         except KeyboardInterrupt:
             print('Ctrl-C interrupt! Saving graph')
