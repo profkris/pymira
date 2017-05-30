@@ -228,7 +228,7 @@ class Interstitium(object):
         if D is None:
             D = self.D
         
-        self.nr = 20
+        self.nr = 10
         self.max_r = 1000. #um #dr*nr
         self.dr = self.max_r / float(self.nr)
 
@@ -250,7 +250,9 @@ class Interstitium(object):
         k = self.dt
         h = self.dr
         
-        if verbose:
+        test = k<=np.square(h)/(2.*D)
+        
+        if verbose or not test:
             print('Max TIME: {} s, {} min'.format(self.max_time,self.max_time/60.))
             print('dt: {} s'.format(self.dt))
             print('nt: {} s'.format(self.nt))
@@ -262,12 +264,12 @@ class Interstitium(object):
             print('Embedding dims: {} um'.format(self.embedDims))
             print('k<=h2/2D   k (dt) = {}, h (dr) = {}, h2/2D = {}'.format(k,h,np.square(h)/(2.*D)))        
         
-        assert k<=np.square(h)/(2.*D)
+        assert test
         
         # Regrid
         ntg = self.nt
         ng = [np.int(np.ceil((self.embedDims[i][1]-self.embedDims[i][0])/self.pixSize[i])) for i in range(3)]
-        print('Embedding matrix: {}'.format(ng))
+        #print('Embedding matrix: {}'.format(ng))
         flatten_z = False
         if flatten_z:
             ng[2] = 1

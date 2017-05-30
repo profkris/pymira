@@ -78,7 +78,7 @@ def impulse(t,delay):
 class InjectAgent(object):
     
     def __init__(self):
-        self.dt = 0.2 # 60. #for CA1
+        self.dt = 60. # 60. #for CA1
         self.nt = 1500
         self.max_time = self.dt*self.nt
         # For CA1---
@@ -444,11 +444,16 @@ class InjectAgent(object):
         self.graph = graph   
 
         import dill as pickle
+        import logging
+
         
         if name is not None:
             output_directory = os.path.join(output_directory,name)
             if not os.path.isdir(output_directory):
                 os.mkdir(output_directory)
+                
+        logFile = os.path.join(output_directory,'inject.log')
+        runFile = os.path.join(output_directory,'running.log')
         
         if resume:
             eDir = os.path.join(output_directory,'vascular_calcs')
@@ -462,9 +467,13 @@ class InjectAgent(object):
                     ind = int((f.replace('inlet','')).replace('.dill',''))
                     inletVisited.append(ind)
                 except Exception,e:
-                    print('Could not load {}'.format(f))
+                    print('Could not load {}: {}'.format(f,e))
         else:
             inletVisited = []
+            #logging.basicConfig(filename=logFile, filemode='w', level=logging.DEBUG) # Initialise log file
+            target = open(logFile, 'w') # truncate log file
+            target.close()
+        logging.basicConfig(filename=logFile,level=logging.DEBUG,format='%(asctime)s %(levelname)s: %(message)s')
         
         nodeFile = os.path.join(output_directory,'nodeList.dill')
         #if True:
@@ -507,6 +516,13 @@ class InjectAgent(object):
         
         if largest_inflow:
             inletNodes = [inletNodes[np.argmax([n.inletQ for n in inletNodes])]]
+        nInlets = len(inletNodes)
+            
+        import socket
+        strtInfo = 'SIMULATION STARTED: nInlets {}, name {}, parallel {}, resume {}, largest_inflow {}, leaky_vessels {}, output_directory {}, host {}'.format(nInlets,name,parallel,resume,largest_inflow,leaky_vessels,output_directory,socket.gethostname())
+        logging.info(strtInfo)
+        print('Logging to {}'.format(logFile))
+        print strtInfo
                 
         edgeFile = os.path.join(output_directory,'edgeList.dill')
         if True:
@@ -544,7 +560,9 @@ class InjectAgent(object):
             concFunc = ca1
         else:
             concFunc = impulse
-        argList = [[nodeFile,n.index,concFunc,timeFile,output_directory,nedge,None,None,leaky_vessels] for n in inletNodes]
+        
+        log = None
+        argList = [[nodeFile,n.index,concFunc,timeFile,output_directory,nedge,None,None,leaky_vessels,log] for n in inletNodes]
 
         if parallel:
             p.map(_worker_function,argList)
@@ -556,199 +574,299 @@ class InjectAgent(object):
         
 def _worker_function(args):
     
-    import pymira.front as frontPKG
-    import numpy as np
-    import dill as pickle
-
-    from pymira import interstitium
-
-    def scale_and_shift(conc,time,Q=1.,delay=0.):
-        dt = time[1]-time[0]
-        d = delay / dt
-        import scipy
-        cnew = Q*scipy.ndimage.interpolation.shift(conc,d)
-        return cnew.clip(min=0.)
+    inletIndex = None
+    runFile = None
     
-    Q_limit = 1e-9
-    c_limit = 1e-9
+    def read_runfile(runFile):
+        try:
+            with open(runFile,'r') as fo:
+                data = fo.read()
+            data = data.split('\n')
+            for i,d in enumerate(data):
+                data[i] = d.split(', ')
+            data = [d for d in data if len(d)==3]
+            return data
+        except:
+            return None
     
-    nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims,leaky_vessels = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8]
+    def add_runfile_entry(runFile,index,size,step,dur):
+        try:
+            data = read_runfile(runFile)
+            if data is not None:
+                inds = [int(d[0]) for d in data]
+                if index in inds: # replace line
+                    pos = inds.index(index)
+                    data[pos] = [index,size,step,dur]
+                else:
+                    data.append([index,size,step,dur])
+            else:
+                data = [[index,step,dur]]
+            with open(runFile,'w') as fo:
+                for d in data:
+                    fo.write('{}, {}, {}, {}\n'.format(d[0],d[1],d[2],d[3]))
+        except:
+            pass
+                
+    def remove_runfile_entry(runFile,index):
+        data = read_runfile(runFile)
+        if data is not None:
+            inds = [int(d[0]) for d in data]
+            if index in inds: # remove line
+                pos = inds.index(index)
+                del data[pos]
+        with open(runFile,'w') as fo:
+            for d in data:
+                fo.write('{}, {}, {}, {}\n'.format(d[0],d[1],d[2],d[3]))
     
-    with open(nodeListFile ,'rb') as fo:
-        nodeList = pickle.load(fo)
-    with open(timeFile ,'rb') as fo:
-        time = pickle.load(fo)
+    try:
     
-    nnode = len(nodeList)
+        import pymira.front as frontPKG
+        import numpy as np
+        import dill as pickle
+        import sys, traceback
     
-    inletNode = [n for n in nodeList if n.index==inletNodeIndex][0]
-    print('Inlet index: {}'.format(inletNode.index))
+        from pymira import interstitium
     
-    vedges = []
-    visited = np.zeros(nnode,dtype='bool') # []
-    visited_edges = np.zeros(nedge,dtype='bool')
-    edgesOut = []
-    curNode = inletNode
-    
-    #leaky_vessels = True
-    ignore_delay = False
-    if leaky_vessels:
-        intr = interstitium.Interstitium()
-        nodeCoords = np.asarray([n.coords for n in nodeList])
-        intr.set_grid_dimensions(nodeCoords,time,grid_dims=grid_dims,embed_dims=embed_dims)
-        grid = np.zeros(intr.grid_dims,dtype='float')
-    
-    #print('Inlet node info: delay: {} Q:{}'.format(inletNode.inletDelay,inletNode.inletQ))
-    front = frontPKG.Front([inletNode],delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance,conc=None)
-    
-    # START WALK...
-    endloop = False
-    count = 0
-    nStepMax = 1e3
-
-    while endloop is False:
-        count += 1
-        if count>=nStepMax:
-            endloop = True
+        def scale_and_shift(conc,time,Q=1.,delay=0.):
+            dt = time[1]-time[0]
+            d = delay / dt
+            import scipy
+            cnew = Q*scipy.ndimage.interpolation.shift(conc,d)
+            return cnew.clip(min=0.)
         
-        if len(front.Q)>0:
-            mnQ = np.min(front.Q[0:front.front_size])
-            mxQ = np.max(front.Q[0:front.front_size])
-            mxC = np.max(front.conc[0:front.front_size])
-            print('Inlet: {}., iteration: {}, front size: {},maxQ: {}, c_v(max): {}, c_i(max) {}'.format(inletNodeIndex,count,front.front_size,mnQ,mxC,np.max(intr.grid)))
+        Q_limit = 1e-12
+        c_limit = 1e-9
+        Q_limit_count = 0
+        
+        nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims,leaky_vessels,log = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8],args[9]
+        
+        import logging
+        import os
+        logging.basicConfig(filename=os.path.join(odir,'inject.log'),level=logging.DEBUG,format='%(asctime)s %(levelname)s: %(message)s')
+        
+        runFile = os.path.join(odir,'runFile.txt')
+        add_runfile_entry(runFile,inletNodeIndex,0,0,0.)
+        
+        with open(nodeListFile ,'rb') as fo:
+            nodeList = pickle.load(fo)
+        with open(timeFile ,'rb') as fo:
+            time = pickle.load(fo)
+        
+        nnode = len(nodeList)
+        
+        inletNode = [n for n in nodeList if n.index==inletNodeIndex][0]
+        inletIndex = inletNode.index
+        #print('Inlet index: {}'.format(inletIndex))
+        dt = time[1] - time[0]
+        nt = len(time)
+        max_time = time[-1]
+        info = 'STARTING inlet {} simulation: concFunc {}, inlet_Q {}, dt {}, nt {}, max_time {}, Q_limit {}, c_limit {}'.format(inletIndex,concFunc,inletNode.inletQ,dt,nt,max_time,Q_limit,c_limit)
+        
+        vedges = []
+        visited = np.zeros(nnode,dtype='bool') # []
+        visited_edges = np.zeros(nedge,dtype='bool')
+        edgesOut = []
+        curNode = inletNode
+        
+        #leaky_vessels = True
+        ignore_delay = False
+        if leaky_vessels:
+            intr = interstitium.Interstitium()
+            nodeCoords = np.asarray([n.coords for n in nodeList])
+            intr.set_grid_dimensions(nodeCoords,time,grid_dims=grid_dims,embed_dims=embed_dims)
+            grid = np.zeros(intr.grid_dims,dtype='float')
+            info += ', Ktrans {}, D {}, dr {}, nr {}, embed dims {}, grid_dims {}'.format(intr.ktrans,intr.D,intr.dr,intr.nr,intr.embedDims,intr.grid_dims)
+            
+        #import socket
+        #info += ', host {}'.format(socket.gethostname())
+        
+        logging.info(info)
+        print info
+        
+        #print('Inlet node info: delay: {} Q:{}'.format(inletNode.inletDelay,inletNode.inletQ))
+        front = frontPKG.Front([inletNode],delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance,conc=None)
+        
+        # START WALK...
+        endloop = False
+        count = 0
+        nStepMax = 1e3
+        
+        # Stats
+        max_n_front = 0
+        import time as timeMod
+        t0 = timeMod.time()
+        
+        exitStr = 'undefined'
+    
+        while endloop is False:
+            count += 1
+            if count>=nStepMax:
+                endloop = True
 
-        if front.front_size>0 and endloop is False:              
-            (current_nodes,delay,Q,distance,concIn) = front.get_current_front()
-
-            for n,curNode in enumerate(current_nodes):
-                #print('Q: {}'.format(curNode.Q))
-                #print('dP: {}'.format(curNode.delta_pressure))
-                
-                if not visited[curNode.index]:
-                    visited[curNode.index] = True
-                
-                res = [(nodeList[nodeIndex],curNode.edges[i],curNode.Q[i]) for i,nodeIndex in enumerate(curNode.connecting_node) if curNode.Q[i]>0.]
+            dur = timeMod.time() - t0                
+            add_runfile_entry(runFile,inletNodeIndex,front.front_size,count,dur)
+            
+            if len(front.Q)>0:
+                mnQ = np.min(front.Q[0:front.front_size])
+                mxQ = np.max(front.Q[0:front.front_size])
+                mxC = np.max(front.conc[0:front.front_size])
+                #print('Inlet: {}., iteration: {}, front size: {},maxQ: {}, c_v(max): {}, c_i(max) {}'.format(inletNodeIndex,count,front.front_size,mnQ,mxC,np.max(intr.grid)))
+    
+            if front.front_size>0 and endloop is False:
+                if front.front_size>max_n_front:
+                    max_n_front = front.front_size
+                (current_nodes,delay,Q,distance,concIn) = front.get_current_front()
+    
+                for n,curNode in enumerate(current_nodes):
+                    #print('Q: {}'.format(curNode.Q))
+                    #print('dP: {}'.format(curNode.delta_pressure))
                     
-                if len(res)>0:
+                    if not visited[curNode.index]:
+                        visited[curNode.index] = True
                     
-                    # Select qualifying branches
-                    next_nodes = [r[0] for r in res if r[2]!=0.]
-                    via_edges = [r[1] for r in res if r[2]!=0.]
-                    edge_Q = [r[2] for r in res if r[2]!=0.]
-                    
-                    delay_from = []
-                    Q_from = []
-                    distance_from = []
-                    conc_from = [] # np.empty(0,dtype='float')
-                    for ve,via_edge in enumerate(via_edges):                        
-                        if via_edge not in vedges:
-                            vedges.append(via_edge)
-                        if not visited_edges[via_edge.index]:
-                            visited_edges[via_edge.index] = True
-                            edgesOut.append(via_edge)
-                            via_edge.distance = distance[n]
+                    res = [(nodeList[nodeIndex],curNode.edges[i],curNode.Q[i]) for i,nodeIndex in enumerate(curNode.connecting_node) if curNode.Q[i]>0.]
+                    #Q_limit_count += len([i for i,nodeIndex in enumerate(curNode.connecting_node) if curNode.Q[i]>0.]
                         
-                        if leaky_vessels:
-                            try:
-                                if concIn[0] is None:
-                                    conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n])
-                                else:
-                                    if len(concIn)==1:
-                                        nxtConc = concIn[0]
+                    if len(res)>0:
+                        
+                        # Select qualifying branches
+                        next_nodes = [r[0] for r in res if r[2]!=0.]
+                        via_edges = [r[1] for r in res if r[2]!=0.]
+                        edge_Q = [r[2] for r in res if r[2]!=0.]
+                        
+                        delay_from = []
+                        Q_from = []
+                        distance_from = []
+                        conc_from = [] # np.empty(0,dtype='float')
+                        for ve,via_edge in enumerate(via_edges):                        
+                            if via_edge not in vedges:
+                                vedges.append(via_edge)
+                            if not visited_edges[via_edge.index]:
+                                visited_edges[via_edge.index] = True
+                                edgesOut.append(via_edge)
+                                via_edge.distance = distance[n]
+                            
+                            if leaky_vessels:
+                                try:
+                                    if concIn[0] is None:
+                                        conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n])
                                     else:
-                                        nxtConc = concIn[n]
-                                    if not ignore_delay:
-                                        conc = scale_and_shift(nxtConc,time,Q=Q[n]*edge_Q[ve],delay=delay[n])
-                                    else:
-                                        conc = nxtConc * Q[n]*edge_Q[ve]
+                                        if len(concIn)==1:
+                                            nxtConc = concIn[0]
+                                        else:
+                                            nxtConc = concIn[n]
+                                        if not ignore_delay:
+                                            conc = scale_and_shift(nxtConc,time,Q=Q[n]*edge_Q[ve],delay=delay[n])
+                                        else:
+                                            conc = nxtConc * Q[n]*edge_Q[ve]
+                                        
+                                    edgeInd = np.zeros(via_edge.npoints,dtype='int')
+                                    c_v = np.repeat([conc],via_edge.npoints,axis=0)
+                                    #import pdb
+                                    #pdb.set_trace()
+                                    c_v_out = intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,set_grid_dims=False,progress=False,store_results=True)
+                                    grid += intr.grid
+                                    #c_v_out = np.repeat([c_v_out],via_edge.npoints,axis=0)
+                                    via_edge.concentration = c_v_out
+                                except:
+                                    raise
                                     
-                                edgeInd = np.zeros(via_edge.npoints,dtype='int')
-                                c_v = np.repeat([conc],via_edge.npoints,axis=0)
-                                #import pdb
-                                #pdb.set_trace()
-                                c_v_out = intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,set_grid_dims=False,progress=False,store_results=True)
-                                grid += intr.grid
-                                #c_v_out = np.repeat([c_v_out],via_edge.npoints,axis=0)
-                                via_edge.concentration = c_v_out
-                            except Exception,err:
-                                print('Error, interstitium calc {}'.format(err))
+                            else:
+                                try:
+                                    conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n])
+                                    via_edge.concentration = np.repeat([conc],via_edge.npoints,axis=0)
+                                except:
+                                    raise  
+                                                    
+                            delay_from.append(np.sum(via_edge.delay)+delay[n])
+                            Q_from.append(Q[n]*edge_Q[ve])
+                            distance_from.append(np.sum(via_edge.length)+distance[n])
+                            if len(conc_from)==0:
+                                conc_from = via_edge.concentration[-1,:]
+                            elif len(conc_from.shape)==1 and conc_from.shape[0]!=0:
+                                conc_from = conc_from[np.newaxis]
+                                conc_from = np.append(conc_from,via_edge.concentration[-1,:][np.newaxis],axis=0)
+                            else:
+                                conc_from = np.append(conc_from,via_edge.concentration[-1,:][np.newaxis],axis=0)
+                            
+                        # Eliminate nodes that have a Q lower than limit
+                        inds = [i for i,q in enumerate(Q_from) if q>Q_limit]# and np.max(conc_from[i])>c_limit]
+                        Q_limit_count += len([q for q in Q_from if q<=Q_limit])
+                        #import pdb
+                        #pdb.set_trace()
+                        if len(inds)>0:
+                            if len(conc_from.shape)==1:
+                                nxtConc = [conc_from]
+                            elif len(conc_from.shape)==2:
+                                nxtConc = conc_from[inds,:]
+                            front.step_front([next_nodes[i] for i in inds],
+                                             delay=[delay_from[i] for i in inds],
+                                             Q=[Q_from[i] for i in inds],
+                                             distance=[distance_from[i] for i in inds],
+                                             conc=nxtConc)
                         else:
-                            try:
-                                conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n])
-                                via_edge.concentration = np.repeat([conc],via_edge.npoints,axis=0)
-                            except Exception,err:
-                                print('Error, conc calc {}'.format(err))
-                                                
-                        delay_from.append(np.sum(via_edge.delay)+delay[n])
-                        Q_from.append(Q[n]*edge_Q[ve])
-                        distance_from.append(np.sum(via_edge.length)+distance[n])
-                        if len(conc_from)==0:
-                            conc_from = via_edge.concentration[-1,:]
-                        elif len(conc_from.shape)==1 and conc_from.shape[0]!=0:
-                            conc_from = conc_from[np.newaxis]
-                            conc_from = np.append(conc_from,via_edge.concentration[-1,:][np.newaxis],axis=0)
-                        else:
-                            conc_from = np.append(conc_from,via_edge.concentration[-1,:][np.newaxis],axis=0)
-                        
-                    # Eliminate nodes that have a Q lower than limit
-                    inds = [i for i,q in enumerate(Q_from) if q>Q_limit]# and np.max(conc_from[i])>c_limit]
-                    #import pdb
-                    #pdb.set_trace()
-                    if len(inds)>0:
-                        if len(conc_from.shape)==1:
-                            nxtConc = [conc_from]
-                        elif len(conc_from.shape)==2:
-                            nxtConc = conc_from[inds,:]
-                        front.step_front([next_nodes[i] for i in inds],
-                                         delay=[delay_from[i] for i in inds],
-                                         Q=[Q_from[i] for i in inds],
-                                         distance=[distance_from[i] for i in inds],
-                                         conc=nxtConc)
+                            pass
                     else:
                         pass
-                else:
-                    pass
-            maxConc = [np.max(e.concentration) for e in vedges]
-            sind = np.where(maxConc<=0.)
-            if sind[0].shape[0]>0:
-                print('Shapes incompatable!')
-                #import pdb
-                #pdb.set_trace()
-            front.complete_step()
-        elif count>=nStepMax:
-            endloop = True
-            print('Exit step {}, inlet {} - front size greater than maximum!'.format(inletNodeIndex,front.nstep))
-        else:
-            endloop = True
-            print('Exit step {}, inlet {} - front size 0'.format(inletNodeIndex,front.nstep))
-            #break
+                maxConc = [np.max(e.concentration) for e in vedges]
+                sind = np.where(maxConc<=0.)
+                if sind[0].shape[0]>0:
+                    print('Shapes incompatable!')
+                    #import pdb
+                    #pdb.set_trace()
+                front.complete_step()
+            elif count>=nStepMax:
+                endloop = True
+                exitStr = 'step limit'
+                #print('Exit step {}, inlet {}, max size {} - front size greater than maximum!'.format(inletNodeIndex,front.nstep,max_n_front))
+            else:
+                endloop = True
+                exitStr = 'front complete'
+                #print('Exit step {}, inlet {}, max size {} - front size 0'.format(inletNodeIndex,front.nstep,max_n_front))
+                #logging.info('Inltet {} COMPLETE: max size {}, elapsed time {}'.format(inletIndex,max_n_step))
+                
+                #break
+                
+        elTime = timeMod.time() - t0
+        exitInfoStr = 'COMPLETED inlet {} ({}): nstep {}, max size {}, end size {}, inlet Q {}, Q_limit {}, Q_limit_count {}, elapsed time {}'.format(inletIndex,exitStr,front.nstep,max_n_front,front.front_size,inletNode.inletQ,Q_limit,Q_limit_count,elTime)
+        logging.info(exitInfoStr)
+        print exitInfoStr
+                
+        import os
+        eDir = os.path.join(odir,'vascular_calcs')
+        if not os.path.exists(eDir):
+            os.makedirs(eDir)
+        ofile = os.path.join(eDir,'edges_inlet{}.dill'.format(inletNodeIndex))
+        #import pdb
+        #pdb.set_trace()
+        with open(ofile,'wb') as fo:
+            pickle.dump((edgesOut,inletNodeIndex),fo)
             
-    import os
-    eDir = os.path.join(odir,'vascular_calcs')
-    if not os.path.exists(eDir):
-        os.makedirs(eDir)
-    ofile = os.path.join(eDir,'edges_inlet{}.dill'.format(inletNodeIndex))
-    #import pdb
-    #pdb.set_trace()
-    with open(ofile,'wb') as fo:
-        pickle.dump((edgesOut,inletNodeIndex),fo)
+        if leaky_vessels:
+            intDir = os.path.join(odir,'interstitium_calcs')
+            if not os.path.exists(intDir):
+                os.makedirs(intDir)
+            ofile = os.path.join(intDir ,'interstitium_inlet{}.npz'.format(inletNodeIndex))
+    
+            np.savez(ofile,grid=grid,grid_dims=intr.grid_dims,embedDims=intr.embedDims,dx=intr.dx,dy=intr.dy,dz=intr.dz,dt=intr.dt)
+            #with open(ofile,'wb') as fo:
+            #    pickle.dump((grid,inletNodeIndex),fo)
+            #grid = intr.smooth_grid(11,grid=grid)
+            #intr.save_grid(ofile,grid=grid)
+            #cou
+        #edges = self.graph.edges_from_node_list(self.nodeList)
+        #vedges = [e for e in edges if e.index in visited_edges]
+        #maxConc = [np.max(e.concentration) for e in vedges]
+        #return edges
+            
+    except:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        errFmt = traceback.format_exception(exc_type, exc_value,exc_traceback)
+        logging.error('Interstitium calc ({}): {}'.format(inletIndex,errFmt))
+        print 'ERROR: {}'.format(errFmt)
         
-    if leaky_vessels:
-        intDir = os.path.join(odir,'interstitium_calcs')
-        if not os.path.exists(intDir):
-            os.makedirs(intDir)
-        ofile = os.path.join(intDir ,'interstitium_inlet{}.npz'.format(inletNodeIndex))
-
-        np.savez(ofile,grid=grid,grid_dims=intr.grid_dims,embedDims=intr.embedDims,dx=intr.dx,dy=intr.dy,dz=intr.dz,dt=intr.dt)
-        #with open(ofile,'wb') as fo:
-        #    pickle.dump((grid,inletNodeIndex),fo)
-        #grid = intr.smooth_grid(11,grid=grid)
-        #intr.save_grid(ofile,grid=grid)
-        
-    #edges = self.graph.edges_from_node_list(self.nodeList)
-    #vedges = [e for e in edges if e.index in visited_edges]
-    #maxConc = [np.max(e.concentration) for e in vedges]
-    #return edges
+    if runFile is not None:
+        remove_runfile_entry(runFile,inletNodeIndex)
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
