@@ -315,10 +315,10 @@ class InjectAgent(object):
                 if not os.path.isdir(odir):
                     os.mkdir(odir)
                 #boundingBox = data['embedDims'].flatten()
-                #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=500)
-                tp_early = np.linspace(0,10,num=20)
-                tp_late = np.linspace(11,100,num=10)
-                timePoints = np.append(tp_early,tp_late)
+                timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
+                #tp_early = np.linspace(0,10,num=20)
+                #tp_late = np.linspace(11,100,num=10)
+                #timePoints = np.append(tp_early,tp_late)
 
                 for ti,tp in enumerate(timePoints): 
                     cur = grid[ti,:,:,:]
@@ -386,14 +386,15 @@ class InjectAgent(object):
         else:
         #if True: #new version - creates multiple graph files (one per timepoint). Import into Amira with load timeseries
             # Add concentration(t=1s) as a scalar field
-            timePoints = self.output_times
-            odir = os.path.join(output_directory,'concentration_recon')
+            #timePoints = self.output_times
+            timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
+            odir = os.path.join(output_directory,'vascular_recon')
             if not os.path.isdir(odir):
                 os.mkdir(odir)
             #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=500)
-            tp_early = np.linspace(0,10,num=20)
-            tp_late = np.linspace(11,100,num=10)
-            timePoints = np.append(tp_early,tp_late)
+            #tp_early = np.linspace(0,10,num=20)
+            #tp_late = np.linspace(11,100,num=10)
+            #timePoints = np.append(tp_early,tp_late)
             for ti,tp in enumerate(timePoints):
                 mx = 0.
                 for edge in edges:
@@ -895,7 +896,7 @@ def main():
     
     ia = InjectAgent()
     
-    recon = False
+    recon = True
     resume = False
     parallel = False
     largest_inflow = False
@@ -911,7 +912,11 @@ def main():
     else:
         print 'Simulating...'
         try:
+<<<<<<< HEAD
             ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,concFunc=concFunc,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)
+=======
+            ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)
+>>>>>>> e6a2a9e11efb9c27d46d08905a2df25a2a2dc5b9
             print('Simulation complete')
         except KeyboardInterrupt:
             print('Ctrl-C interrupt! Saving graph')
