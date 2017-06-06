@@ -912,11 +912,8 @@ def main():
     else:
         print 'Simulating...'
         try:
-<<<<<<< HEAD
             ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,concFunc=concFunc,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)
-=======
-            ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)
->>>>>>> e6a2a9e11efb9c27d46d08905a2df25a2a2dc5b9
+            #ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)
             print('Simulation complete')
         except KeyboardInterrupt:
             print('Ctrl-C interrupt! Saving graph')
