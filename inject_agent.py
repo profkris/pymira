@@ -243,7 +243,7 @@ class InjectAgent(object):
         for i,edge in enumerate(edges):
             conc[i,:] = edge.concentration
             
-    def reconstruct_results(self, graph, output_directory=None,recon_interstitium=True,name=None, recon_vascular=True):
+    def reconstruct_results(self, graph, output_directory=None,recon_interstitium=True,name=None, recon_vascular=True, log=False):
 
         self.graph = graph
         
@@ -262,7 +262,7 @@ class InjectAgent(object):
                     with open(nodeFile ,'rb') as fo:
                         self.nodeList = pickle.load(fo)
                   
-                self.save_graph(output_directory=output_directory)
+                self.save_graph(output_directory=output_directory,logConc=log)
             except Exception,e:
                 print e,nodeFile
                 import pdb
@@ -309,7 +309,7 @@ class InjectAgent(object):
                         
                 #pixdim = [data['dx'],data['dy'],data['dz'],data['dt']]
                 
-                from pymira import amiramesh as mesh
+                from pymira import mesh
                 timePoints = self.output_times
                 odir = os.path.join(output_directory, 'interstitial_concentration_recon')
                 if not os.path.isdir(odir):
@@ -322,10 +322,18 @@ class InjectAgent(object):
 
                 for ti,tp in enumerate(timePoints): 
                     cur = grid[ti,:,:,:]
-                    if True:
+                    if True: # Smoothing
                        medwinsize = 5
                        #print('Median filtering: {}'.format(medwinsize))
                        cur = scipy.ndimage.filters.median_filter(cur,size=medwinsize)
+                    if log:
+                        #from numpy import seterr,isneginf
+                        #seterr(divide='ignore')
+                        le0 = cur<=0
+                        gt0 = cur>0
+                        cur[gt0] = np.log(cur[gt0])
+                        #seterr(divide='warn')
+                        cur[le0] = -1e30
                     m = mesh.Mesh(data=cur,boundingBox=boundingBox)
                     ofile = os.path.join(odir,'interstitial_conc_t{}.am'.format(ti))
                     print('Writing (max conc {}) {}'.format(np.max(cur),ofile))
@@ -334,7 +342,7 @@ class InjectAgent(object):
                 #intObj.save_grid(output_directory,grid=grid,pixdim=pixdim,format='amira')
             print('Interstitial concentration grid written to {}'.format(output_directory))
             
-    def save_graph(self,output_directory=None,remove_zeros=False):
+    def save_graph(self,output_directory=None,remove_zeros=False,logConc=False):
          
         if self.graph is None or self.nodeList is None:
             return
@@ -368,7 +376,19 @@ class InjectAgent(object):
                 concImported = True
                 srcEdge = [e for e in edges if e.index==curEdge.index]
                 if all([i==j for i,j in zip(srcEdge[0].concentration.shape, curEdge.concentration.shape)]):
-                    srcEdge[0].concentration += curEdge.concentration
+                    if logConc:
+                        #from numpy import seterr,isneginf
+                        cur = curEdge.concentration
+                        le0 = cur<=0
+                        gt0 = cur>0
+                        cur[gt0] = np.log(cur[gt0])
+                        #seterr(divide='warn')
+                        cur[le0] = -1e30
+                        #seterr(divide='ignore')
+                        cur[isneginf(curConc)] = 0
+                    else:
+                        cur = curEdge.concentration
+                    srcEdge[0].concentration += cur
                 else:
                     print 'Shapes incompatible! {} {}'.format(srcEdge[0].concentration.shape,curEdge.concentration.shape)
 
@@ -497,13 +517,6 @@ class InjectAgent(object):
             for inletNode in inletNodes:
                 inletNode.inletQ = inletNode.flow[0] / total_inflow
                 inletNode.inletDelay = 0.
-                
-            # Limit to only inlet with highest Q
-            highestQinlet = False
-            if highestQinlet:
-                inletQ = [n.outFlow for n in inletNodes]
-                mxQind = np.argmax(inletQ)
-                inletNodes = [inletNodes[mxQind]]
             
             print('Pickling node list...')
             with open(nodeFile,'wb') as fo:
@@ -518,6 +531,12 @@ class InjectAgent(object):
         if largest_inflow:
             inletNodes = [inletNodes[np.argmax([n.inletQ for n in inletNodes])]]
         nInlets = len(inletNodes)
+        
+        # Sort from highest to lowest Q
+        inletQ = np.asarray([n.inletQ for n in inletNodes])
+        inds = inletQ.argsort()
+        inds[:] = inds[::-1] # Reverse sort
+        inletNodes = [inletNodes[ind] for ind in inds]
             
         import socket
         strtInfo = 'SIMULATION STARTED: nInlets {}, name {}, parallel {}, resume {}, largest_inflow {}, leaky_vessels {}, output_directory {}, host {}'.format(nInlets,name,parallel,resume,largest_inflow,leaky_vessels,output_directory,socket.gethostname())
@@ -547,7 +566,7 @@ class InjectAgent(object):
         import pathos.multiprocessing as multiprocessing
         #import multiprocessing
         ncpu = multiprocessing.cpu_count()
-        p = multiprocessing.ProcessingPool(ncpu-2)
+        p = multiprocessing.ProcessingPool(ncpu/2)
         
         #intr = interstitium.Interstitium()
         #intr.set_grid_dimensions(graph.get_data('EdgePointCoordinates'),self.time)
@@ -704,7 +723,7 @@ def _worker_function(args):
         print info
         
         #print('Inlet node info: delay: {} Q:{}'.format(inletNode.inletDelay,inletNode.inletQ))
-        front = frontPKG.Front([inletNode],delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance,conc=None,verbose=True)
+        front = frontPKG.Front([inletNode],delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance,conc=None,verbose=False)
         
         # START WALK...
         endloop = False
@@ -843,11 +862,14 @@ def _worker_function(args):
                 front.complete_step()
                 
                 save_every_step = True
-                if save_every_step:
+                ss = 5
+                if save_every_step and count % ss == ss-1:
+                    print 'Writing vascular (inlet {}, step {}): {}'.format(inletNodeIndex,count,vascFile)
                     with open(vascFile,'wb') as fo:
                         pickle.dump((edgesOut,inletNodeIndex),fo)
-                        if leaky_vessels:   
-                            np.savez(intFile,grid=grid,grid_dims=intr.grid_dims,embedDims=intr.embedDims,dx=intr.dx,dy=intr.dy,dz=intr.dz,dt=intr.dt)
+                    if leaky_vessels:
+                        print 'Writing interstitial (inlet {}, step {}): {}'.format(inletNodeIndex,count,intFile)                        
+                        np.savez(intFile,grid=grid,grid_dims=intr.grid_dims,embedDims=intr.embedDims,dx=intr.dx,dy=intr.dy,dz=intr.dz,dt=intr.dt)
                     
             elif count>=nStepMax:
                 endloop = True
@@ -897,8 +919,9 @@ def main():
     ia = InjectAgent()
     
     recon = True
+    logRecon = True
     resume = False
-    parallel = False
+    parallel = True
     largest_inflow = False
     leaky_vessels = True
     name = 'ca1'
@@ -908,7 +931,7 @@ def main():
         recon_vascular = True
         recon_interstitium = True
         print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
-        ia.reconstruct_results(graph,output_directory=dir_,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular)
+        ia.reconstruct_results(graph,output_directory=dir_,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
     else:
         print 'Simulating...'
         try:
