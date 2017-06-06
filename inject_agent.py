@@ -685,6 +685,11 @@ def _worker_function(args):
         #leaky_vessels = True
         ignore_delay = False
         if leaky_vessels:
+            intDir = os.path.join(odir,'interstitium_calcs')
+            if not os.path.exists(intDir):
+                os.makedirs(intDir)
+            intFile = os.path.join(intDir ,'interstitium_inlet{}.npz'.format(inletNodeIndex))            
+            
             intr = interstitium.Interstitium()
             nodeCoords = np.asarray([n.coords for n in nodeList])
             intr.set_grid_dimensions(nodeCoords,time,grid_dims=grid_dims,embed_dims=embed_dims)
@@ -840,6 +845,8 @@ def _worker_function(args):
                 if save_every_step:
                     with open(vascFile,'wb') as fo:
                         pickle.dump((edgesOut,inletNodeIndex),fo)
+                        if leaky_vessels:   
+                            np.savez(intFile,grid=grid,grid_dims=intr.grid_dims,embedDims=intr.embedDims,dx=intr.dx,dy=intr.dy,dz=intr.dz,dt=intr.dt)
                     
             elif count>=nStepMax:
                 endloop = True
@@ -861,22 +868,8 @@ def _worker_function(args):
         with open(vascFile,'wb') as fo:
             pickle.dump((edgesOut,inletNodeIndex),fo)
             
-        if leaky_vessels:
-            intDir = os.path.join(odir,'interstitium_calcs')
-            if not os.path.exists(intDir):
-                os.makedirs(intDir)
-            ofile = os.path.join(intDir ,'interstitium_inlet{}.npz'.format(inletNodeIndex))
-    
-            np.savez(ofile,grid=grid,grid_dims=intr.grid_dims,embedDims=intr.embedDims,dx=intr.dx,dy=intr.dy,dz=intr.dz,dt=intr.dt)
-            #with open(ofile,'wb') as fo:
-            #    pickle.dump((grid,inletNodeIndex),fo)
-            #grid = intr.smooth_grid(11,grid=grid)
-            #intr.save_grid(ofile,grid=grid)
-            #cou
-        #edges = self.graph.edges_from_node_list(self.nodeList)
-        #vedges = [e for e in edges if e.index in visited_edges]
-        #maxConc = [np.max(e.concentration) for e in vedges]
-        #return edges
+        if leaky_vessels:   
+            np.savez(intFile,grid=grid,grid_dims=intr.grid_dims,embedDims=intr.embedDims,dx=intr.dx,dy=intr.dy,dz=intr.dz,dt=intr.dt)
             
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -902,7 +895,7 @@ def main():
     
     ia = InjectAgent()
     
-    recon = True
+    recon = False
     resume = False
     parallel = False
     largest_inflow = False

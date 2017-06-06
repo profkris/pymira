@@ -9,6 +9,8 @@ Used in injectagent.py
 
 """
 
+import numpy as np
+
 class Front(object):
     
     def __init__(self,nodes,delay=None,Q=None,distance=None,conc=None,nt=1000,verbose=False):
@@ -119,7 +121,11 @@ class Front(object):
         self.front_size = len(self.current_nodes)
         
         if self.verbose:
-            print('FRONT: Completed step {}. Front size = {}. Capacity = {}'.format(self.nstep,self.front_size,self.capacity)) 
+            unique = np.unique(self.current_nodes)
+            nunique = unique.shape[0]
+            maxconc = np.max(self.conc)
+            maxQ = np.max(self.Q)
+            print('FRONT: Completed step {}. Front size = {}, no. unique {}, max Q {}, max conc {}. Capacity = {}'.format(self.nstep,self.front_size,nunique,maxQ,maxconc,self.capacity)) 
         
         self.next_nodes = [None] * self.capacity
         self.next_delays = [None] * self.capacity
