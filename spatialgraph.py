@@ -533,7 +533,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         connecting_node[ns0:ns0+ns1] = edgeConn[s1[0],0]
         return connecting_node
         
-    def identify_graphs(self):
+    def identify_graphs(self,progBar=False):
         
         nodeCoords = self.get_data('VertexCoordinates')
         conn = self.get_data('EdgeConnectivity')
@@ -549,11 +549,13 @@ class SpatialGraph(amiramesh.AmiraMesh):
         count = -1
         graphIndex = np.zeros(nnodes,dtype='int') - 1
         
-        #pbar = tqdm(total=nnodes) # progress bar
+        if progBar:
+            pbar = tqdm(total=nnodes) # progress bar
         
         for nodeIndex,node in enumerate(nodeCoords):
             #print nodeIndex
-            #pbar.update(1)
+            if progBar:
+                pbar.update(1)
             
             #if graphIndex[nodeIndex] == -1:
             if True:
@@ -593,8 +595,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     count = next_count_value(graphIndex)
                     if graphIndex[nodeIndex] == -1:
                         graphIndex[nodeIndex] = count
-                    
-        #pbar.close()
+        
+        if progBar:            
+            pbar.close()
 
         # Make graph indices contiguous        
         unq = np.unique(graphIndex)
@@ -1184,13 +1187,14 @@ class Editor(object):
         new_graph = graph.node_list_to_graph(new_nodeList)
         return new_graph
         
-   def largest_graph(self, graph):
-       g = graph.identify_graphs()
-       import pdb
-       pdb.set_trace()
-       new_graph = graph.node_list_to_graph(graph.nodeList)
-       #new_graph.write(dir_+'graphs.am')
-       return new_graph
+    def largest_graph(self, graph):
+        graphNodeIndex, graph_size = graph.identify_graphs(progBar=True)
+        largest_graph_index = np.argmax(graph_size)
+        node_indices = np.arange(graph.nnode)
+        nodes_to_delete = node_indices[graphNodeIndex!=largest_graph_index]
+        graph = self.delete_nodes(graph,nodes_to_delete)
+        
+        return graph
 
 class Node(object):
     
