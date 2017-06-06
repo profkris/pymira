@@ -39,7 +39,7 @@ class Interstitium(object):
                         
         self.ktrans = 0.0001 #/min
         self.ef = 0.2 #  not used
-        self.D = 1e-7 * 1e8 # 500. #um2/s
+        #self.D = 1e-7 * 1e8 # 500. #um2/s
         self.D = 7e-11 * 1e12 #m2/s Gd-DTPA (https://books.google.es/books?id=6fZGf8ave3wC&pg=PA343&lpg=PA343&dq=diffusion+coefficient+of+gd-dtpa&source=bl&ots=Ceg432CWar&sig=4PuxViFn9lL7pwOAkFVGwtHRe4M&hl=en&sa=X&ved=0ahUKEwjs1O-Z-NPTAhVJShQKHa6PBKQQ6AEIODAD#v=onepage&q=diffusion%20coefficient%20of%20gd-dtpa&f=false)
         
         self.feNSample = 3
@@ -214,7 +214,7 @@ class Interstitium(object):
         for j in xrange(nt-1):
             c_i[:,j+1] = np.dot(A,c_i[:,j]) + M*(c_v[j]-c_i[:,j]) #(np.dot(B,R[:,j]))
             c_v_out[j+1] += np.sum(M*(c_i[0,j]-c_v[j]))
-        c_v_out = c_v #np.clip(c_v_out,0.,1e100)
+        c_v_out = np.clip(c_v_out,0.,1e100)
             
         #c_v_out = (1.-ef) * c_v
         #c_v_out = c_v

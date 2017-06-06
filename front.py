@@ -11,9 +11,11 @@ Used in injectagent.py
 
 class Front(object):
     
-    def __init__(self,nodes,delay=None,Q=None,distance=None,conc=None,nt=1000):
+    def __init__(self,nodes,delay=None,Q=None,distance=None,conc=None,nt=1000,verbose=False):
         
-        self.nt = nt        
+        self.nt = nt       
+        
+        self.verbose = verbose
         
         if type(nodes) is not list:
             nodes = [nodes]
@@ -60,14 +62,17 @@ class Front(object):
     def _increase_capacity(self,min_size=None,reset=False):
         # Increase allocated memory
         while True:
-            self.capacity *= 10.
+            self.capacity = int(self.capacity*10)
             if min_size is None or self.capacity>min_size:
                 break
 
         if not reset:            
-            ext_size = self.capacity-self.front_size
+            ext_size = int(self.capacity-self.front_size)
         else:
-            ext_size = self.capacity
+            ext_size = int(self.capacity)
+            
+        if self.verbose:
+            print('FRONT: Increasing capacity from {} to {}'.format(self.capacity,self.capacity+ext_size))
             
         self.next_nodes.extend([None]*ext_size)
         self.next_delays.extend([None]*ext_size)
@@ -82,7 +87,8 @@ class Front(object):
     def step_front(self,nodes,delay=None,Q=None,distance=None,conc=None):
         # Add to current front
         n_to_add = len(nodes)
-        if n_to_add>self.capacity:
+        
+        if n_to_add+self.next_front_size>self.capacity:
             self._increase_capacity(min_size=self.front_size+n_to_add)
             
         self.next_nodes[self.next_front_size:self.next_front_size+n_to_add] = nodes
@@ -93,7 +99,11 @@ class Front(object):
             self.next_concs[self.next_front_size+i] = conc[i]
         self.next_front_size += n_to_add
         
+        #if self.verbose:
+        #    print('FRONT: Adding {} elements to front. Front size = {}'.format(n_to_add,self.next_front_size))
+        
     def complete_step(self):
+        
         # Complete front and initialise next step
         self.previous_nodes = self.current_nodes
         self.previous_delay = self.delay
@@ -107,6 +117,9 @@ class Front(object):
         self.distance = self.next_distances[0:self.next_front_size]
         self.conc = self.next_concs[0:self.next_front_size]
         self.front_size = len(self.current_nodes)
+        
+        if self.verbose:
+            print('FRONT: Completed step {}. Front size = {}. Capacity = {}'.format(self.nstep,self.front_size,self.capacity)) 
         
         self.next_nodes = [None] * self.capacity
         self.next_delays = [None] * self.capacity

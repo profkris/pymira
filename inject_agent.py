@@ -309,7 +309,7 @@ class InjectAgent(object):
                         
                 #pixdim = [data['dx'],data['dy'],data['dz'],data['dt']]
                 
-                from pymira import mesh
+                from pymira import amiramesh as mesh
                 timePoints = self.output_times
                 odir = os.path.join(output_directory, 'interstitial_concentration_recon')
                 if not os.path.isdir(odir):
@@ -439,7 +439,7 @@ class InjectAgent(object):
                 #with open(ofile, 'wb') as handle:
                 #    pickle.dump(ofile, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
-    def inject(self, graph, output_directory=None, resume=False, parallel=True, name=None, largest_inflow=False, leaky_vessels=True):
+    def inject(self, graph, output_directory=None, resume=False, parallel=True, name=None, concFunc=None, largest_inflow=False, leaky_vessels=True):
 
         self.graph = graph   
 
@@ -546,19 +546,21 @@ class InjectAgent(object):
         import pathos.multiprocessing as multiprocessing
         #import multiprocessing
         ncpu = multiprocessing.cpu_count()
-        p = multiprocessing.ProcessingPool(ncpu)
+        p = multiprocessing.ProcessingPool(ncpu-2)
         
         #intr = interstitium.Interstitium()
         #intr.set_grid_dimensions(graph.get_data('EdgePointCoordinates'),self.time)
         
         #argList = [[nodeFile,n.index,ca1,timeFile,output_directory,nedge,intr.grid_dims,intr.embedDims] for n in inletNodes]
-        if name=='parker':
-            concFunc = parker
-        elif name=='impulse':
-            concFunc = impulse
-        elif name=='ca1':
-            concFunc = ca1
-        else:
+#        if conc_func_name=='parker':
+#            concFunc = parker
+#        elif conc_func_name=='impulse':
+#            concFunc = impulse
+#        elif conc_func_name=='ca1':
+#            concFunc = ca1
+#        else:
+#            concFunc = impulse
+        if concFunc is None:
             concFunc = impulse
         
         log = None
@@ -584,10 +586,14 @@ def _worker_function(args):
             data = data.split('\n')
             for i,d in enumerate(data):
                 data[i] = d.split(', ')
-            data = [d for d in data if len(d)==3]
+            data = [d for d in data if len(d)==4]
             return data
         except:
             return None
+            
+    def initialise_runfile(runFile):
+        with open(runFile,'w') as fo:
+            pass
     
     def add_runfile_entry(runFile,index,size,step,dur):
         try:
@@ -634,17 +640,25 @@ def _worker_function(args):
             cnew = Q*scipy.ndimage.interpolation.shift(conc,d)
             return cnew.clip(min=0.)
         
-        Q_limit = 1e-12
-        c_limit = 1e-9
+        Q_limit = 1e-9
+        c_limit = 0.
         Q_limit_count = 0
+        c_limit_count = 0
         
         nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims,leaky_vessels,log = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8],args[9]
+        
+        import os
+        eDir = os.path.join(odir,'vascular_calcs')
+        if not os.path.exists(eDir):
+            os.makedirs(eDir)
+        vascFile = os.path.join(eDir,'edges_inlet{}.dill'.format(inletNodeIndex))
         
         import logging
         import os
         logging.basicConfig(filename=os.path.join(odir,'inject.log'),level=logging.DEBUG,format='%(asctime)s %(levelname)s: %(message)s')
         
         runFile = os.path.join(odir,'runFile.txt')
+        initialise_runfile(runFile)
         add_runfile_entry(runFile,inletNodeIndex,0,0,0.)
         
         with open(nodeListFile ,'rb') as fo:
@@ -684,12 +698,12 @@ def _worker_function(args):
         print info
         
         #print('Inlet node info: delay: {} Q:{}'.format(inletNode.inletDelay,inletNode.inletQ))
-        front = frontPKG.Front([inletNode],delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance,conc=None)
+        front = frontPKG.Front([inletNode],delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance,conc=None,verbose=True)
         
         # START WALK...
         endloop = False
         count = 0
-        nStepMax = 1e3
+        nStepMax = 200 #1e3
         
         # Stats
         max_n_front = 0
@@ -792,6 +806,7 @@ def _worker_function(args):
                         # Eliminate nodes that have a Q lower than limit
                         inds = [i for i,q in enumerate(Q_from) if q>Q_limit]# and np.max(conc_from[i])>c_limit]
                         Q_limit_count += len([q for q in Q_from if q<=Q_limit])
+                        #c_limit_count += len([c for c in conc_from if np.max(c)<=c_limit])
                         #import pdb
                         #pdb.set_trace()
                         if len(inds)>0:
@@ -799,11 +814,16 @@ def _worker_function(args):
                                 nxtConc = [conc_from]
                             elif len(conc_from.shape)==2:
                                 nxtConc = conc_from[inds,:]
-                            front.step_front([next_nodes[i] for i in inds],
+                            try:
+                                front.step_front([next_nodes[i] for i in inds],
                                              delay=[delay_from[i] for i in inds],
                                              Q=[Q_from[i] for i in inds],
                                              distance=[distance_from[i] for i in inds],
                                              conc=nxtConc)
+                            except Exception,err:
+                                print err
+                                import pdb
+                                pdb.set_trace()
                         else:
                             pass
                     else:
@@ -815,6 +835,12 @@ def _worker_function(args):
                     #import pdb
                     #pdb.set_trace()
                 front.complete_step()
+                
+                save_every_step = True
+                if save_every_step:
+                    with open(vascFile,'wb') as fo:
+                        pickle.dump((edgesOut,inletNodeIndex),fo)
+                    
             elif count>=nStepMax:
                 endloop = True
                 exitStr = 'step limit'
@@ -828,18 +854,11 @@ def _worker_function(args):
                 #break
                 
         elTime = timeMod.time() - t0
-        exitInfoStr = 'COMPLETED inlet {} ({}): nstep {}, max size {}, end size {}, inlet Q {}, Q_limit {}, Q_limit_count {}, elapsed time {}'.format(inletIndex,exitStr,front.nstep,max_n_front,front.front_size,inletNode.inletQ,Q_limit,Q_limit_count,elTime)
+        exitInfoStr = 'COMPLETED inlet {} ({}): nstep {}, max size {}, end size {}, inlet Q {}, Q_limit {}, Q_limit_count {}, c_limit_count {}, elapsed time {}'.format(inletIndex,exitStr,front.nstep,max_n_front,front.front_size,inletNode.inletQ,Q_limit,Q_limit_count,c_limit_count,elTime)
         logging.info(exitInfoStr)
         print exitInfoStr
-                
-        import os
-        eDir = os.path.join(odir,'vascular_calcs')
-        if not os.path.exists(eDir):
-            os.makedirs(eDir)
-        ofile = os.path.join(eDir,'edges_inlet{}.dill'.format(inletNodeIndex))
-        #import pdb
-        #pdb.set_trace()
-        with open(ofile,'wb') as fo:
+
+        with open(vascFile,'wb') as fo:
             pickle.dump((edgesOut,inletNodeIndex),fo)
             
         if leaky_vessels:
@@ -862,8 +881,9 @@ def _worker_function(args):
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         errFmt = traceback.format_exception(exc_type, exc_value,exc_traceback)
-        logging.error('Interstitium calc ({}): {}'.format(inletIndex,errFmt))
         print 'ERROR: {}'.format(errFmt)
+        logging.error('Interstitium calc ({}): {}'.format(inletIndex,errFmt))
+        
         
     if runFile is not None:
         remove_runfile_entry(runFile,inletNodeIndex)
@@ -882,12 +902,13 @@ def main():
     
     ia = InjectAgent()
     
-    recon = False
+    recon = True
     resume = False
-    parallel = True
+    parallel = False
     largest_inflow = False
     leaky_vessels = True
     name = 'ca1'
+    concFunc = ca1
  
     if recon:
         recon_vascular = True
@@ -897,7 +918,7 @@ def main():
     else:
         print 'Simulating...'
         try:
-            ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,largest_inflow=largest_inflow,leaky_vessels=True)
+            ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,concFunc=concFunc,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)
             print('Simulation complete')
         except KeyboardInterrupt:
             print('Ctrl-C interrupt! Saving graph')
