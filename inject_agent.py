@@ -92,7 +92,7 @@ class InjectAgent(object):
         # To convert from (nL/min) to (um^3/s) use conversion below
         self.fluxConversion = 1e6/60.
         
-        self.Q_limit = 1e-9
+        #self.Q_limit = 1e-9
         
         self.nodeList = None
         self.graph = None
@@ -379,13 +379,16 @@ class InjectAgent(object):
                     if logConc:
                         #from numpy import seterr,isneginf
                         cur = curEdge.concentration
+#                        if np.max(cur)>0:
+#                            import pdb
+#                            pdb.set_trace()
                         le0 = cur<=0
                         gt0 = cur>0
                         cur[gt0] = np.log(cur[gt0])
                         #seterr(divide='warn')
                         cur[le0] = -1e30
                         #seterr(divide='ignore')
-                        cur[isneginf(curConc)] = 0
+                        #cur[isneginf(curConc)] = 0
                     else:
                         cur = curEdge.concentration
                     srcEdge[0].concentration += cur
@@ -416,9 +419,13 @@ class InjectAgent(object):
             #tp_late = np.linspace(11,100,num=10)
             #timePoints = np.append(tp_early,tp_late)
             for ti,tp in enumerate(timePoints):
-                mx = 0.
+                mx = -1e30
                 for edge in edges:
-                    curConc = np.clip(edge.concentration[:,ti],0.,1e100)
+                    curConc = edge.concentration[:,ti]
+                    if not logConc:
+                        curConc = np.clip(curConc,0.,1e100)
+                    else:
+                        pass
                     curMax = np.max(curConc)
                     if curMax>mx:
                         mx = curMax
@@ -661,7 +668,7 @@ def _worker_function(args):
             return cnew.clip(min=0.)
         
         Q_limit = 1e-9
-        c_limit = 0.
+        c_limit = 1e-50
         Q_limit_count = 0
         c_limit_count = 0
         
@@ -829,9 +836,9 @@ def _worker_function(args):
                                 conc_from = np.append(conc_from,via_edge.concentration[-1,:][np.newaxis],axis=0)
                             
                         # Eliminate nodes that have a Q lower than limit
-                        inds = [i for i,q in enumerate(Q_from) if q>Q_limit]# and np.max(conc_from[i])>c_limit]
+                        inds = [i for i,q in enumerate(Q_from) if q>Q_limit and np.max(conc_from[i])>c_limit]
                         Q_limit_count += len([q for q in Q_from if q<=Q_limit])
-                        #c_limit_count += len([c for c in conc_from if np.max(c)<=c_limit])
+                        c_limit_count += len([c for c in conc_from if np.max(c)<=c_limit])
                         #import pdb
                         #pdb.set_trace()
                         if len(inds)>0:
