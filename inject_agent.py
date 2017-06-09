@@ -309,16 +309,19 @@ class InjectAgent(object):
                         
                 #pixdim = [data['dx'],data['dy'],data['dz'],data['dt']]
                 
+
                 from pymira import mesh
-                timePoints = self.output_times
                 odir = os.path.join(output_directory, 'interstitial_concentration_recon')
                 if not os.path.isdir(odir):
                     os.mkdir(odir)
+                #timePoints = self.output_times
                 #boundingBox = data['embedDims'].flatten()
-                timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
-                #tp_early = np.linspace(0,10,num=20)
-                #tp_late = np.linspace(11,100,num=10)
-                #timePoints = np.append(tp_early,tp_late)
+                #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
+                #tp_early = np.linspace(0,60*10,num=20)
+                #tp_late = np.linspace(60*10,np.max(self.output_times),num=10)
+                tp_early = np.arange(0,1200,60) #np.linspace(0,60*10,num=20)
+                tp_late = np.linspace(1200,np.max(self.output_times),num=20)
+                timePoints = np.append(tp_early,tp_late)
 
                 for ti,tp in enumerate(timePoints): 
                     cur = grid[ti,:,:,:]
@@ -356,8 +359,9 @@ class InjectAgent(object):
         files = os.listdir(eDir)
         nfiles = len(files)
         print('Loading concentration calc results ({} files)...'.format(len(files)))
-        concImported = False
+        #concImported = False
         init = False
+        
         for fi,f in enumerate(files):
             print('Reading file {} of {}: {}'.format(fi+1,nfiles,f))
             with open(os.path.join(eDir,f),'rb') as fo:
@@ -373,27 +377,22 @@ class InjectAgent(object):
                 init = True
 
             for curEdge in curEdges:
-                concImported = True
+                #concImported = True
                 srcEdge = [e for e in edges if e.index==curEdge.index]
                 if all([i==j for i,j in zip(srcEdge[0].concentration.shape, curEdge.concentration.shape)]):
-                    if logConc:
-                        #from numpy import seterr,isneginf
-                        cur = curEdge.concentration
-#                        if np.max(cur)>0:
-#                            import pdb
-#                            pdb.set_trace()
-                        le0 = cur<=0
-                        gt0 = cur>0
-                        cur[gt0] = np.log(cur[gt0])
-                        #seterr(divide='warn')
-                        cur[le0] = -1e30
-                        #seterr(divide='ignore')
-                        #cur[isneginf(curConc)] = 0
-                    else:
-                        cur = curEdge.concentration
+                    cur = curEdge.concentration
                     srcEdge[0].concentration += cur
                 else:
                     print 'Shapes incompatible! {} {}'.format(srcEdge[0].concentration.shape,curEdge.concentration.shape)
+                    
+        if logConc:
+            logMin = -1e30
+            for curEdge in edges:
+                cur = curEdge.concentration
+                gt0 = cur>0.
+                lt0 = cur<=0.
+                curEdge.concentration[lt0] = logMin
+                curEdge.concentration[gt0] = np.log(cur[gt0])
 
         # Calculate AUC
         #print('Calculating AUC...')
@@ -409,15 +408,15 @@ class InjectAgent(object):
         else:
         #if True: #new version - creates multiple graph files (one per timepoint). Import into Amira with load timeseries
             # Add concentration(t=1s) as a scalar field
-            #timePoints = self.output_times
-            timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
             odir = os.path.join(output_directory,'vascular_recon')
             if not os.path.isdir(odir):
                 os.mkdir(odir)
+            #timePoints = self.output_times
+            #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
             #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=500)
-            #tp_early = np.linspace(0,10,num=20)
-            #tp_late = np.linspace(11,100,num=10)
-            #timePoints = np.append(tp_early,tp_late)
+            tp_early = np.arange(0,1200,60) #np.linspace(0,60*10,num=20)
+            tp_late = np.linspace(1200,np.max(self.output_times),num=20)
+            timePoints = np.append(tp_early,tp_late)
             for ti,tp in enumerate(timePoints):
                 mx = -1e30
                 for edge in edges:
@@ -492,7 +491,7 @@ class InjectAgent(object):
             suffix = '.dill'
             for fi,f in enumerate(files):
                 try:
-                    ind = int((f.replace('inlet','')).replace('.dill',''))
+                    ind = int((f.replace('edges_inlet','')).replace('.dill',''))
                     inletVisited.append(ind)
                 except Exception,e:
                     print('Could not load {}: {}'.format(f,e))
@@ -668,7 +667,7 @@ def _worker_function(args):
             return cnew.clip(min=0.)
         
         Q_limit = 1e-9
-        c_limit = 1e-50
+        c_limit = 1e-100
         Q_limit_count = 0
         c_limit_count = 0
         
@@ -927,7 +926,7 @@ def main():
     
     recon = True
     logRecon = True
-    resume = False
+    resume = True
     parallel = True
     largest_inflow = False
     leaky_vessels = True
@@ -936,7 +935,7 @@ def main():
  
     if recon:
         recon_vascular = True
-        recon_interstitium = True
+        recon_interstitium = False
         print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
         ia.reconstruct_results(graph,output_directory=dir_,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
     else:

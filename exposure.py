@@ -11,17 +11,18 @@ Estimate exposure to a drug (uses injection simulaiton results from injectagent.
 import numpy as np
 from pymira import spatialgraph, inject_agent
 import pickle
+import os
 
 def main():
     
-    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\ca1'
     
-    if False:
+    if True:
         #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
         
         #f = os.path.join(dir_,'spatialGraph_RIN.am')
         #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-        f = dir_ + 'ct_output.am'
+        f = os.path.join(dir_,'ct_output.am')
         
         editor = spatialgraph.Editor()
     
@@ -92,11 +93,11 @@ def main():
         #out_time = [time[-1]] #np.asarray(time[-1])
         
         import dill
-        filename = dir_+'globalsave.pkl'
+        filename = os.path.join(dir_,'globalsave.pkl')
         dill.dump_session(filename)
     else:
         import dill
-        filename = dir_+'globalsave.pkl'
+        filename = os.path.join(dir_,'globalsave.pkl')
         dill.load_session(filename)
         import pdb
         pdb.set_trace()
@@ -174,7 +175,7 @@ def main():
             new_graph = editor.delete_edges(new_graph,remEdgeInds)
 
         print 't={}, thr={}: {} {}%'.format(t,thr,count,count*100./float(len(edges)))
-        new_graph.write(dir_+'exposure\exposure{}.am'.format(t))
+        new_graph.write(os.path.join(dir_,'exposure\exposure{}.am'.format(t)))
             
     #new_graph = graph.node_list_to_graph(nodeList)
     #new_graph.write(dir_+'ct_output_with_exposure.am')
