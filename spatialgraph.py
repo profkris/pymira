@@ -453,12 +453,12 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         edges = self.edges_from_node_list(nodeList)
 
-        edgeConn = np.asarray([[x.start_node_index,x.end_node_index] for x in edges])
-        edgeCoords = np.concatenate([x.coordinates for x in edges])
-        nedgepoint = np.array([x.npoints for x in edges])
+        edgeConn = np.asarray([[x.start_node_index,x.end_node_index] for x in edges if x is not None])
+        edgeCoords = np.concatenate([x.coordinates for x in edges if x is not None])
+        nedgepoint = np.array([x.npoints for x in edges if x is not None])
         
         scalarNames = edges[0].scalarNames
-        scalarData = [x.scalars for x in edges]        
+        scalarData = [x.scalars for x in edges if x is not None]        
         scalars = []
         nscalar = len(scalarNames)
         for i in range(nscalar): 
