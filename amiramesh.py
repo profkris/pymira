@@ -81,6 +81,17 @@ class AmiraMesh(object):
         # Data type
         if 'ascii' in self.fileType.lower():
             curData = [s.strip().split(' ') for s in curData.splitlines() if s]
+            comment_line = []
+            for k,cnt in enumerate(curData):
+                #cnt = cnt.split('#')[0]
+                if '#' in cnt:
+                    comment_line.append(k)
+                else:
+                    cnt = [x for x in cnt if x!='']
+                    curData[k] = cnt
+            if len(comment_line)>0:
+                curData = [x for k,x in enumerate(curData) if k not in comment_line]
+                
             if curField['type']=='float':
                 dtype = np.dtype('f')
             elif curField['type']=='double':
@@ -91,14 +102,14 @@ class AmiraMesh(object):
                 dtype = np.dtype('i')
             else: # Default to float
                 dtype = np.dtype('f')
-            curData = np.array(curData,dtype=dtype)
             try:
+                curData = np.asarray(curData,dtype=dtype)
                 curData = np.reshape(curData,curField['shape'])
                 curField['data'] = curData
             except Exception,e:
-                print e
-                #import pdb
-                #pdb.set_trace()
+                print 'Error, {}.Line: {} '.format(e,curData)
+                import pdb
+                pdb.set_trace()
 
         elif 'binary' in self.fileType.lower():
             import pdb
@@ -108,11 +119,11 @@ class AmiraMesh(object):
             if curField['encoding']=='raw':
                 if curField['type'] != 'byte':
                     raise Exception('Unsupported data type')
-                curData = curData.strip('\n')
+                curData = curData.strip('\n\r')
             else:
                 enc = curField['encoding']
                 num_bytes = int(curField['encoding_length'])
-                curData = curData.strip('\n')
+                curData = curData.strip('\n\r')
                 assert len(curData)==num_bytes
     
                 assert curField['type'] == 'byte'
@@ -195,9 +206,10 @@ class AmiraMesh(object):
             while True:
                 if inHeader:
                     curLine = f.readline()
+                    #print curLine
                     i += 1
                     bytesRead += sys.getsizeof(curLine)
-                    curLine = curLine.strip('\n')
+                    curLine = curLine.strip('\n\r')
                 
                     if curLine=='' or curLine==' ':
                         pass

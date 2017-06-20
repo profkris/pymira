@@ -10,6 +10,7 @@ Required for converting Paul Sweeney's files
 """
 
 import pymira.spatialgraph as sp
+import os
 
 def merge_graphs(graph1,graph2):
 
@@ -25,14 +26,15 @@ def merge_graphs(graph1,graph2):
 
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'  
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
-dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-fp = dir_+'Press2Amira.txt'
-ff = dir_+'Flow2Amira.txt'
-fs = dir_+'Stress2Amira.txt'
-fv = dir_+'Velocity2Amira.txt'
+#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
+dir_ = r'C:\Users\simon\Dropbox\Ben Vessel Networks\C1M3'
+fp = os.path.join(dir_,'Press2Amira.txt')
+ff = os.path.join(dir_,'Flow2Amira.txt')
+fs = os.path.join(dir_,'Stress2Amira.txt')
+fv = os.path.join(dir_,'Velocity2Amira.txt')
 mFiles = [fp,ff,fs]#,fv]
 
-fo = dir_+'spatialGraph.am'
+fo = os.path.join(dir_,'spatialGraph.am')
 
 graph = sp.SpatialGraph()
 print('Reading source graph: {}'.format(mFiles[0]))

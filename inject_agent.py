@@ -385,7 +385,7 @@ class InjectAgent(object):
                         #seterr(divide='warn')
                         cur[le0] = -1e30
                         #seterr(divide='ignore')
-                        cur[isneginf(curConc)] = 0
+                        #cur[isneginf(curConc)] = 0
                     else:
                         cur = curEdge.concentration
                     srcEdge[0].concentration += cur
@@ -416,7 +416,7 @@ class InjectAgent(object):
             #tp_late = np.linspace(11,100,num=10)
             #timePoints = np.append(tp_early,tp_late)
             for ti,tp in enumerate(timePoints):
-                mx = 0.
+                mx = -1e30
                 for edge in edges:
                     curConc = np.clip(edge.concentration[:,ti],0.,1e100)
                     curMax = np.max(curConc)
