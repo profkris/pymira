@@ -383,7 +383,22 @@ class InjectAgent(object):
                 #concImported = True
                 srcEdge = [e for e in edges if e.index==curEdge.index]
                 if all([i==j for i,j in zip(srcEdge[0].concentration.shape, curEdge.concentration.shape)]):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                     cur = curEdge.concentration
+
                     srcEdge[0].concentration += cur
                 else:
                     print 'Shapes incompatible! {} {}'.format(srcEdge[0].concentration.shape,curEdge.concentration.shape)

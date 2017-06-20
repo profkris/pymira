@@ -102,7 +102,7 @@ def graph_to_stl(graph):
                 fa[i+1] = -np.rad2deg(fa[i+1]) / 2.
             if i==0:
                 grad[i] = vec
-            elif i<pts.shape[0]-2::
+            elif i<pts.shape[0]-2:
                 grad[i] = pts[i+1]-pts[i]
             #verts,faces = make_tube(radius[i:i+1]*2.,[thickness,thickness],lengthorientation=vec,center=center,outer_only=True)
             
@@ -425,7 +425,7 @@ def plot_mesh(meshes):
 #gfile = 'C:\\Users\\simon\\Dropbox\\Mesentery\\Flow2AmiraPressure.am'
 #gfile = 'C:\\Anaconda2\\Lib\\site-packages\\pymira\\test_graph.am'
 pyplot.close('all')
-gfile = 'C:\\Anaconda2\\Lib\\site-packages\\pymira\\test_join.am'
+gfile = r'C:\Anaconda2\Lib\site-packages\pymira\test_join.am'
 from pymira import spatialgraph
 graph = spatialgraph.SpatialGraph()
 graph.read(gfile)
