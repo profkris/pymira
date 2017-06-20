@@ -78,7 +78,7 @@ def impulse(t,delay):
 class InjectAgent(object):
     
     def __init__(self):
-        self.dt = 60. # 60. #for CA1
+        self.dt = 60. #0.1 # 60. #for CA1
         self.nt = 1500
         self.max_time = self.dt*self.nt
         # For CA1---
@@ -317,11 +317,12 @@ class InjectAgent(object):
                 #timePoints = self.output_times
                 #boundingBox = data['embedDims'].flatten()
                 #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
+                timePoints = np.linspace(0.,60.,num=150)
                 #tp_early = np.linspace(0,60*10,num=20)
                 #tp_late = np.linspace(60*10,np.max(self.output_times),num=10)
-                tp_early = np.arange(0,1200,60) #np.linspace(0,60*10,num=20)
-                tp_late = np.linspace(1200,np.max(self.output_times),num=20)
-                timePoints = np.append(tp_early,tp_late)
+                #tp_early = np.arange(0,1200,60) #np.linspace(0,60*10,num=20)
+                #tp_late = np.linspace(1200,np.max(self.output_times),num=20)
+                #timePoints = np.append(tp_early,tp_late)
 
                 for ti,tp in enumerate(timePoints): 
                     cur = grid[ti,:,:,:]
@@ -362,6 +363,8 @@ class InjectAgent(object):
         #concImported = False
         init = False
         
+        #files = ['edges_inlet530.dill']
+        
         for fi,f in enumerate(files):
             print('Reading file {} of {}: {}'.format(fi+1,nfiles,f))
             with open(os.path.join(eDir,f),'rb') as fo:
@@ -398,7 +401,7 @@ class InjectAgent(object):
         #print('Calculating AUC...')
         #self.auc(edges)
         print('Adding concentration-time data to graph')
-        if False: #old version - adds multiple scalar fileds to a signel graph file
+        if False: #old version - adds multiple scalar fileds to a single graph file
             # Add concentration(t=1s) as a scalar field
             timePoints = self.output_times
             for tp in timePoints:
@@ -414,9 +417,10 @@ class InjectAgent(object):
             #timePoints = self.output_times
             #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
             #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=500)
-            tp_early = np.arange(0,1200,60) #np.linspace(0,60*10,num=20)
-            tp_late = np.linspace(1200,np.max(self.output_times),num=20)
-            timePoints = np.append(tp_early,tp_late)
+            #tp_early = np.arange(0,1200,60) #np.linspace(0,60*10,num=20)
+            #tp_late = np.linspace(1200,np.max(self.output_times),num=20)
+            #timePoints = np.append(tp_early,tp_late)
+            timePoints = np.linspace(0.,60.,num=150)
             for ti,tp in enumerate(timePoints):
                 mx = -1e30
                 for edge in edges:
@@ -493,6 +497,7 @@ class InjectAgent(object):
                 try:
                     ind = int((f.replace('edges_inlet','')).replace('.dill',''))
                     inletVisited.append(ind)
+                    print('Inlet previously visited: {}'.format(ind))
                 except Exception,e:
                     print('Could not load {}: {}'.format(f,e))
         else:
@@ -867,7 +872,7 @@ def _worker_function(args):
                     #pdb.set_trace()
                 front.complete_step()
                 
-                save_every_step = True
+                save_every_step = False
                 ss = 5
                 if save_every_step and count % ss == ss-1:
                     print 'Writing vascular (inlet {}, step {}): {}'.format(inletNodeIndex,count,vascFile)
@@ -912,7 +917,8 @@ def _worker_function(args):
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     f = os.path.join(dir_,'spatialGraph_RIN.am')
     #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
     #f = dir_ + 'Flow2AmiraPressure.am'
@@ -924,18 +930,18 @@ def main():
     
     ia = InjectAgent()
     
-    recon = True
+    recon = False
     logRecon = True
     resume = True
     parallel = True
     largest_inflow = False
     leaky_vessels = True
-    name = 'ca1'
+    name = 'ca1_kt0p00001'
     concFunc = ca1
  
     if recon:
         recon_vascular = True
-        recon_interstitium = False
+        recon_interstitium = True
         print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
         ia.reconstruct_results(graph,output_directory=dir_,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
     else:
