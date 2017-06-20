@@ -37,7 +37,8 @@ def load_timeseries_graph(dir_):
     srtInds = time.argsort()
     time = time[srtInds]
     graph = graph[srtInds]
-    
+
+
     return graph,time
     
 def concentration_from_timeseries(graphs,log=True):
@@ -68,7 +69,17 @@ def main():
     
     dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\ca1_kt0p0001'
     
+
+
+
+    
     if True:
+        #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
+        
+        #f = os.path.join(dir_,'spatialGraph_RIN.am')
+        #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
+        f = os.path.join(dir_,'ct_output.am')
+
         
         editor = spatialgraph.Editor()
     
@@ -131,12 +142,18 @@ def main():
         #out_time = [time[-1]] #np.asarray(time[-1])
         #out_time = [time[-1]]
         
-        #import dill
-        #filename = dir_+'globalsave.pkl'
-        #dill.dump_session(filename)
+
+
+
+
+
+
+
+
+
     else:
         import dill
-        filename = dir_+'globalsave.pkl'
+        filename = os.path.join(dir_,'globalsave.pkl')
         dill.load_session(filename)
         import pdb
         pdb.set_trace()
