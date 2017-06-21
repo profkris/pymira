@@ -32,6 +32,8 @@ print('Graph loaded')
 
 editor = spatialgraph.Editor()
 new_graph = editor.remove_intermediate_nodes(amdata,path=dir_)
+import pdb
+pdb.set_trace()
 #new_graph.sanity_check(deep=True)
 new_graph.write(ofile)
 #new_graph.write_node_list()
