@@ -20,6 +20,10 @@ amdata = spatialgraph.SpatialGraph()
 
 dir_ = r'C:\Users\simon\Dropbox\Ben Vessel Networks\C1M3'
 fo = os.path.join(dir_,'spatialGraph.am')
+
+#dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T'
+#fo = os.path.join(dir_,'fix_graph_30_LRG_NET.am')
+
 ofile = os.path.join(dir_ , 'spatialGraph_RIN.am')
 
 #dir_ = 'C:\\Users\\simon\\Dropbox\\VDA_1_lectin\\Control\LS#1\\'
