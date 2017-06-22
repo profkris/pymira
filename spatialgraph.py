@@ -1189,13 +1189,6 @@ class Editor(object):
         
     def largest_graph(self, graph):
 
-
-
-
-
-
-
-
         graphNodeIndex, graph_size = graph.identify_graphs(progBar=True)
         largest_graph_index = np.argmax(graph_size)
         node_indices = np.arange(graph.nnode)

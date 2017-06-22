@@ -10,10 +10,17 @@ import os
 import dill as pickle
 import numpy as np
 
+#path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T'
 path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T'
-f = os.path.join(path,'fix_graph_30_LRG_NET.am')
+f = os.path.join(path,'spatialGraph_flag_RIN_scaled.am')
+#f = os.path.join(path,'spatialGraph_RIN.am')
 graph = spatialgraph.SpatialGraph()
 graph.read(f)
+
+#path_post = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T - Post-VDA\1'
+#fpost = os.path.join(path,'spatialGraph_RIN.am')
+#graphPost = spatialgraph.SpatialGraph()
+#graphPost.read(f)
 
 flag = graph.get_field(name='flag')['data']
 
