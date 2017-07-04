@@ -53,7 +53,7 @@ for node in nodeList:
         node.add_scalar('red bond',0)
 
 # Load flowdata
-path2= r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
+path2 = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
 graph2 = spatialgraph.SpatialGraph()
 graph2.read(os.path.join(path2,'spatialGraph_RIN.am'))
 

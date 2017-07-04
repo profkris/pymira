@@ -900,6 +900,20 @@ class Editor(object):
             
         graph = self.delete_nodes(graph,zero_conn)
         return graph
+        
+    def remove_selfconnected_edges(self,graph):
+        nodeCoords = graph.get_data('VertexCoordinates')
+        nodeInds = np.arange(0,nodeCoords.shape[0]-1)
+        edgeConn = graph.get_data('EdgeConnectivity')
+        
+        nedge = len(edgeConn)
+        selfconn = [i for i,x in enumerate(edgeConn) if x[0]==x[1]]
+        if len(selfconn)==0:
+            return graph
+            
+        print 'Removing {} self-connected edges...'.format(len(selfconn))
+        self.delete_edges(graph,selfconn,remove_disconnected_nodes=False)
+        return graph
     
     def remove_intermediate_nodes(self,graph,file=None,nodeList=None,path=None):
         
