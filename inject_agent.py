@@ -65,6 +65,17 @@ def ca1(t,delay):
     
     return cmax_mol*np.exp(-(t-delay)/t_half)
     
+def gd(t,delay):
+    
+    import numpy as np
+    
+    a1 = 2.55 # mM
+    m1 = 4.8 / 60. #/s
+    a2 = 1.2 # mM
+    m2 = 0.06 / 60. #/s
+    
+    return a1*np.exp(-(t-delay)*m1) + a2*np.exp(-(t-delay)*m2)
+    
 def impulse(t,delay):
     
     import numpy as np
@@ -276,6 +287,8 @@ class InjectAgent(object):
             #interDir = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\impulseinterstitium_calcs'
             nadded = 0
             init = False
+            if not os.path.exists(interDir):
+                os.mkdir(interDir)
             if os.path.isdir(interDir):
                 files = os.listdir(interDir)
                 for i,f in enumerate(files):
@@ -317,12 +330,16 @@ class InjectAgent(object):
                 #timePoints = self.output_times
                 #boundingBox = data['embedDims'].flatten()
                 #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
-                timePoints = np.linspace(0.,60.,num=150)
-                #tp_early = np.linspace(0,60*10,num=20)
-                #tp_late = np.linspace(60*10,np.max(self.output_times),num=10)
+                #timePoints = np.linspace(0.,60.,num=150)
+                tp_early = np.linspace(0,60,num=100)
+                tp_late = np.linspace(60,np.max(self.output_times),num=20)
                 #tp_early = np.arange(0,1200,60) #np.linspace(0,60*10,num=20)
                 #tp_late = np.linspace(1200,np.max(self.output_times),num=20)
-                #timePoints = np.append(tp_early,tp_late)
+                timePoints = np.append(tp_early,tp_late)
+                print 'Interstitial timepoints: {}'.format(timePoints)
+                
+                import pdb
+                pdb.set_trace()
 
                 for ti,tp in enumerate(timePoints): 
                     cur = grid[ti,:,:,:]
@@ -344,7 +361,7 @@ class InjectAgent(object):
                     m.add_parameter('Time',np.asscalar(tp))
                     m.write(ofile)
                 #intObj.save_grid(output_directory,grid=grid,pixdim=pixdim,format='amira')
-            print('Interstitial concentration grid written to {}'.format(output_directory))
+                print('Interstitial concentration grid written to {}'.format(output_directory))
             
     def save_graph(self,output_directory=None,remove_zeros=False,logConc=False):
          
@@ -383,22 +400,7 @@ class InjectAgent(object):
                 #concImported = True
                 srcEdge = [e for e in edges if e.index==curEdge.index]
                 if all([i==j for i,j in zip(srcEdge[0].concentration.shape, curEdge.concentration.shape)]):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                     cur = curEdge.concentration
-
                     srcEdge[0].concentration += cur
                 else:
                     print 'Shapes incompatible! {} {}'.format(srcEdge[0].concentration.shape,curEdge.concentration.shape)
@@ -435,7 +437,12 @@ class InjectAgent(object):
             #tp_early = np.arange(0,1200,60) #np.linspace(0,60*10,num=20)
             #tp_late = np.linspace(1200,np.max(self.output_times),num=20)
             #timePoints = np.append(tp_early,tp_late)
-            timePoints = np.linspace(0.,60.,num=150)
+            #timePoints = np.linspace(0.,60.,num=150)
+            tp_early = np.linspace(0,60,num=100)
+            tp_late = np.linspace(60,np.max(self.output_times),num=20)
+            timePoints = np.append(tp_early,tp_late)
+            
+            print 'Vascular timepoints: {}'.format(timePoints)
             for ti,tp in enumerate(timePoints):
                 mx = -1e30
                 for edge in edges:
@@ -933,7 +940,10 @@ def _worker_function(args):
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
+    #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
+    #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\ca1'
     f = os.path.join(dir_,'spatialGraph_RIN.am')
     #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
     #f = dir_ + 'Flow2AmiraPressure.am'
@@ -950,12 +960,12 @@ def main():
     resume = True
     parallel = True
     largest_inflow = False
-    leaky_vessels = True
-    name = 'ca1_kt0p00001'
+    leaky_vessels = False
+    name = 'ca1_no_leakage'
     concFunc = ca1
  
     if recon:
-        recon_vascular = True
+        recon_vascular = False
         recon_interstitium = True
         print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
         ia.reconstruct_results(graph,output_directory=dir_,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
