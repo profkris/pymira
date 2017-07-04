@@ -27,6 +27,11 @@ f = path+'SW3_vessel_seg_skel.SptGraph_with_radius.am'
 ps = 11.02
 ofile = 'SW3_spatialGraph_scaled.am'
 
+path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T'
+f = os.path.join(path,'spatialGraph_flag_RIN.am')
+ps = 11.49
+ofile = os.path.join(path,'spatialGraph_flag_RIN_scaled.am')
+
 from pymira import spatialgraph, statistics
 graph = spatialgraph.SpatialGraph()
 print('Reading graph... {}'.format(f))
@@ -34,7 +39,7 @@ graph.read(f)
 print('Graph read')
 if ps is not None:
     graph.rescale_coordinates(ps,ps,ps)
-    graph.rescale_radius(ps)
+    #graph.rescale_radius(ps)
     graph.write(ofile)
 stats = statistics.Statistics(graph)
 stats.do_stats(output_directory=path)

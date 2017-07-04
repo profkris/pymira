@@ -899,6 +899,7 @@ class Editor(object):
             return graph
             
         graph = self.delete_nodes(graph,zero_conn)
+        print '{} isolated nodes removed'.format(len(zero_conn))
         return graph
         
     def remove_selfconnected_edges(self,graph):
@@ -1210,7 +1211,16 @@ class Editor(object):
         graph = self.delete_nodes(graph,nodes_to_delete)
         
         return graph
+        
+    def remove_graphs_smaller_than(self, graph, lim):
 
+        graphNodeIndex, graph_size = graph.identify_graphs(progBar=True)
+        import pdb
+        pdb.set_trace()
+        largest_graph_index = np.argmax(graph_size)
+        node_indices = np.arange(graph.nnode)
+        nodes_to_delete = node_indices[graphNodeIndex!=largest_graph_index]
+        graph = self.delete_nodes(graph,nodes_to_delete)    
 
 class Node(object):
     
