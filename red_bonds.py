@@ -135,6 +135,7 @@ for node in nodeList2:
     else:
         node.add_scalar('red bond',0)
 
-import pdb
-pdb.set_trace()
-graph.write(os.path.join(path,'red_bonds.am'))
+#import pdb
+#pdb.set_trace()
+graph3 = graph2.node_list_to_graph(nodeList2)
+graph3.write(os.path.join(path,'red_bonds.am'))

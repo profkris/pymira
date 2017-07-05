@@ -89,8 +89,8 @@ def impulse(t,delay):
 class InjectAgent(object):
     
     def __init__(self):
-        self.dt = 60. #0.1 # 60. #for CA1
-        self.nt = 1500
+        self.dt = 1. #60. #0.1 # 60. #for CA1
+        self.nt = 1200
         self.max_time = self.dt*self.nt
         # For CA1---
 #        self.nt = 2000
@@ -329,17 +329,17 @@ class InjectAgent(object):
                     os.mkdir(odir)
                 #timePoints = self.output_times
                 #boundingBox = data['embedDims'].flatten()
-                #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
+                timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
                 #timePoints = np.linspace(0.,60.,num=150)
-                tp_early = np.linspace(0,60,num=100)
-                tp_late = np.linspace(60,np.max(self.output_times),num=20)
+                #tp_early = np.linspace(0,60,num=100)
+                #tp_late = np.linspace(60,np.max(self.output_times),num=20)
                 #tp_early = np.arange(0,1200,60) #np.linspace(0,60*10,num=20)
                 #tp_late = np.linspace(1200,np.max(self.output_times),num=20)
-                timePoints = np.append(tp_early,tp_late)
+                #timePoints = np.append(tp_early,tp_late)
                 print 'Interstitial timepoints: {}'.format(timePoints)
                 
-                import pdb
-                pdb.set_trace()
+                #import pdb
+                #pdb.set_trace()
 
                 for ti,tp in enumerate(timePoints): 
                     cur = grid[ti,:,:,:]
@@ -431,16 +431,16 @@ class InjectAgent(object):
             odir = os.path.join(output_directory,'vascular_recon')
             if not os.path.isdir(odir):
                 os.mkdir(odir)
-            #timePoints = self.output_times
+            timePoints = self.output_times
             #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
             #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=500)
             #tp_early = np.arange(0,1200,60) #np.linspace(0,60*10,num=20)
             #tp_late = np.linspace(1200,np.max(self.output_times),num=20)
             #timePoints = np.append(tp_early,tp_late)
             #timePoints = np.linspace(0.,60.,num=150)
-            tp_early = np.linspace(0,60,num=100)
-            tp_late = np.linspace(60,np.max(self.output_times),num=20)
-            timePoints = np.append(tp_early,tp_late)
+            #tp_early = np.linspace(0,60,num=100)
+            #tp_late = np.linspace(60,np.max(self.output_times),num=20)
+            #timePoints = np.append(tp_early,tp_late)
             
             print 'Vascular timepoints: {}'.format(timePoints)
             for ti,tp in enumerate(timePoints):
@@ -510,18 +510,21 @@ class InjectAgent(object):
         
         if resume:
             eDir = os.path.join(output_directory,'vascular_calcs')
-            files = os.listdir(eDir)
-            nfiles = len(files)
-            inletVisited = []
-            prefix = 'inlet'
-            suffix = '.dill'
-            for fi,f in enumerate(files):
-                try:
-                    ind = int((f.replace('edges_inlet','')).replace('.dill',''))
-                    inletVisited.append(ind)
-                    print('Inlet previously visited: {}'.format(ind))
-                except Exception,e:
-                    print('Could not load {}: {}'.format(f,e))
+            if os.path.isdir(eDir):
+                files = os.listdir(eDir)
+                nfiles = len(files)
+                inletVisited = []
+                prefix = 'inlet'
+                suffix = '.dill'
+                for fi,f in enumerate(files):
+                    try:
+                        ind = int((f.replace('edges_inlet','')).replace('.dill',''))
+                        inletVisited.append(ind)
+                        print('Inlet previously visited: {}'.format(ind))
+                    except Exception,e:
+                        print('Could not load {}: {}'.format(f,e))
+            else:
+                inletVisited = []
         else:
             inletVisited = []
             #logging.basicConfig(filename=logFile, filemode='w', level=logging.DEBUG) # Initialise log file
@@ -939,9 +942,9 @@ def _worker_function(args):
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
+    dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
-    dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
+    #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\ca1'
     f = os.path.join(dir_,'spatialGraph_RIN.am')
@@ -955,14 +958,14 @@ def main():
     
     ia = InjectAgent()
     
-    recon = False
+    recon = True
     logRecon = True
     resume = True
-    parallel = True
+    parallel = False
     largest_inflow = False
-    leaky_vessels = False
-    name = 'ca1_no_leakage'
-    concFunc = ca1
+    leaky_vessels = True
+    name = 'gd'
+    concFunc = gd
  
     if recon:
         recon_vascular = False
