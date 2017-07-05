@@ -85,25 +85,54 @@ def impulse(t,delay):
     conc[t>=delay] = 1.
     conc[t>(delay+length)] = 0.
     return conc
+    
+class ParameterSet(object):
+    
+    def __init__(self,dt=1.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=7e-11*1e12,feNSample=3):
+        self.name = ''
+        self.conc_function = None
+        
+        # Time
+        self.dt = dt #s
+        self.nt = nt
+        self.max_time = self.dt*self.nt
+        self.time = np.arange(0,self.max_time,self.dt)
+        self.output_times = np.arange(0,self.max_time,self.dt)
+        
+        # Interstitium
+        self.pixSize = pixSize #um
+        self.dx = None
+        self.dy = None
+        self.dz = None
+        self.dt = None
+                        
+        self.ktrans = ktrans #/min
+        self.D = D #m2/s Gd-DTPA (https://books.google.es/books?id=6fZGf8ave3wC&pg=PA343&lpg=PA343&dq=diffusion+coefficient+of+gd-dtpa&source=bl&ots=Ceg432CWar&sig=4PuxViFn9lL7pwOAkFVGwtHRe4M&hl=en&sa=X&ved=0ahUKEwjs1O-Z-NPTAhVJShQKHa6PBKQQ6AEIODAD#v=onepage&q=diffusion%20coefficient%20of%20gd-dtpa&f=false)
+        
+        self.feNSample = feNSample
 
 class InjectAgent(object):
     
-    def __init__(self):
-        self.dt = 1. #60. #0.1 # 60. #for CA1
-        self.nt = 1200
-        self.max_time = self.dt*self.nt
+    def __init__(self,paramSet=None):
+        if paramSet is None:
+            paramSet = ParameterSet()
+            
+        self.paramSet = paramSet
+            
+        self.dt = paramSet.dt #60. #0.1 # 60. #for CA1
+        self.nt = paramSet.nt
+        self.max_time = paramSet.max_time
         # For CA1---
 #        self.nt = 2000
 #        self.max_time = 90.*60.
 #        self.dt = self.max_time  / float(self.nt)
 #        self.nt = int(self.max_time / self.dt)
         #-----
-        self.time = np.arange(0,self.max_time,self.dt)
-        self.output_times = np.arange(0,self.max_time,self.dt)
+        self.time = paramSet.time
+        self.output_times = paramSet.output_times
+        
         # To convert from (nL/min) to (um^3/s) use conversion below
         self.fluxConversion = 1e6/60.
-        
-        #self.Q_limit = 1e-9
         
         self.nodeList = None
         self.graph = None
@@ -498,7 +527,6 @@ class InjectAgent(object):
 
         import dill as pickle
         import logging
-
         
         if name is not None:
             output_directory = os.path.join(output_directory,name)
