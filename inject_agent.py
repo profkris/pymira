@@ -107,6 +107,7 @@ class ParameterSet(object):
         self.dt = None
                         
         self.ktrans = ktrans #/min
+        self.ef = 0.2 # Not used
         self.D = D #m2/s Gd-DTPA (https://books.google.es/books?id=6fZGf8ave3wC&pg=PA343&lpg=PA343&dq=diffusion+coefficient+of+gd-dtpa&source=bl&ots=Ceg432CWar&sig=4PuxViFn9lL7pwOAkFVGwtHRe4M&hl=en&sa=X&ved=0ahUKEwjs1O-Z-NPTAhVJShQKHa6PBKQQ6AEIODAD#v=onepage&q=diffusion%20coefficient%20of%20gd-dtpa&f=false)
         
         self.feNSample = feNSample
@@ -356,14 +357,15 @@ class InjectAgent(object):
                 odir = os.path.join(output_directory, 'interstitial_concentration_recon')
                 if not os.path.isdir(odir):
                     os.mkdir(odir)
-                #timePoints = self.output_times
+                timePoints = self.output_times
                 #boundingBox = data['embedDims'].flatten()
-                timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
+                #timePoints = np.linspace(np.min(self.output_times),np.max(self.output_times),num=30)
                 #timePoints = np.linspace(0.,60.,num=150)
                 #tp_early = np.linspace(0,60,num=100)
                 #tp_late = np.linspace(60,np.max(self.output_times),num=20)
-                #tp_early = np.arange(0,1200,60) #np.linspace(0,60*10,num=20)
-                #tp_late = np.linspace(1200,np.max(self.output_times),num=20)
+                #tp_early = np.arange(0,60,1) #np.linspace(0,60*10,num=20)
+                #tp_late = np.linspace(60,np.max(self.output_times),num=20)
+                #tp_late = np.arange(60,np.max(self.output_times),20)
                 #timePoints = np.append(tp_early,tp_late)
                 print 'Interstitial timepoints: {}'.format(timePoints)
                 
@@ -447,15 +449,15 @@ class InjectAgent(object):
         #print('Calculating AUC...')
         #self.auc(edges)
         print('Adding concentration-time data to graph')
-        if False: #old version - adds multiple scalar fileds to a single graph file
-            # Add concentration(t=1s) as a scalar field
-            timePoints = self.output_times
-            for tp in timePoints:
-                self.add_concentration(edges,self.time,conc_time=tp)
-            print('Calculating distance...')
-            self.add_distance(edges)
-        else:
-        #if True: #new version - creates multiple graph files (one per timepoint). Import into Amira with load timeseries
+#        if False: #old version - adds multiple scalar fileds to a single graph file
+#            # Add concentration(t=1s) as a scalar field
+#            timePoints = self.output_times
+#            for tp in timePoints:
+#                self.add_concentration(edges,self.time,conc_time=tp)
+#            print('Calculating distance...')
+#            self.add_distance(edges)
+#        else:
+        if True: #new version - creates multiple graph files (one per timepoint). Import into Amira with load timeseries
             # Add concentration(t=1s) as a scalar field
             odir = os.path.join(output_directory,'vascular_recon')
             if not os.path.isdir(odir):
@@ -469,6 +471,10 @@ class InjectAgent(object):
             #timePoints = np.linspace(0.,60.,num=150)
             #tp_early = np.linspace(0,60,num=100)
             #tp_late = np.linspace(60,np.max(self.output_times),num=20)
+            #timePoints = np.append(tp_early,tp_late)
+            #tp_early = np.arange(0,60,1) #np.linspace(0,60*10,num=20)
+            #tp_late = np.linspace(60,np.max(self.output_times),num=20)
+            #tp_late = np.arange(60,np.max(self.output_times),20)
             #timePoints = np.append(tp_early,tp_late)
             
             print 'Vascular timepoints: {}'.format(timePoints)
@@ -676,6 +682,7 @@ def _worker_function(args):
             return None
             
     def initialise_runfile(runFile):
+        #if not os.path.isfile()
         with open(runFile,'w') as fo:
             pass
     
@@ -970,7 +977,9 @@ def _worker_function(args):
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
+    #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
+    dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1'
+    #dir_ = r'D:'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
@@ -984,12 +993,10 @@ def main():
     graph.read(f)
     print('Graph read')
     
-    ia = InjectAgent()
-    
-    recon = True
+    recon = False
     logRecon = True
     resume = True
-    parallel = False
+    parallel = True
     largest_inflow = False
     leaky_vessels = True
     name = 'gd'
@@ -998,10 +1005,13 @@ def main():
     if recon:
         recon_vascular = False
         recon_interstitium = True
+        ia = InjectAgent()
         print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
         ia.reconstruct_results(graph,output_directory=dir_,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
     else:
         print 'Simulating...'
+        paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=7e-11*1e12,feNSample=3)
+        ia = InjectAgent(paramSet=paramset)
         try:
             ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,concFunc=concFunc,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)
             #ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)

@@ -12,9 +12,11 @@ import numpy as np
 import scipy.signal
 
 #path = r'D:\160113_paul_simulation_results\LS147T\1\ca1\vascular_recon_log'
-path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\gd\vascular_recon'
+#path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\gd\vascular_recon'
 #nlpath = r'D:\160113_paul_simulation_results\LS147T\1\ca1'
-nlpath = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\gd'
+#nlpath = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\gd'
+path = r'D:'
+nlpath = r'D:\gd'
 
 files = []
 for f in os.listdir(path):

@@ -28,21 +28,24 @@ import matplotlib.pyplot as plt
 
 class Interstitium(object):
     
-    def __init__(self):
+    def __init__(self,paramSet=None):
+        if paramSet is None:
+            from pymira import inject_agent
+            paramSet = inject_agent.ParameterSet()
         self.grid = None
         self.count = None
-        self.pixSize = [150.,150.,150.] #um
+        self.pixSize = paramSet.pixSize #um
         self.dx = None
         self.dy = None
         self.dz = None
         self.dt = None
                         
-        self.ktrans = 0.00001 #/min
-        self.ef = 0.2 #  not used
+        self.ktrans = paramSet.ktrans #0.00001 #/min
+        self.ef = paramSet.ef #  not used
         #self.D = 1e-7 * 1e8 # 500. #um2/s
-        self.D = 7e-11 * 1e12 #m2/s Gd-DTPA (https://books.google.es/books?id=6fZGf8ave3wC&pg=PA343&lpg=PA343&dq=diffusion+coefficient+of+gd-dtpa&source=bl&ots=Ceg432CWar&sig=4PuxViFn9lL7pwOAkFVGwtHRe4M&hl=en&sa=X&ved=0ahUKEwjs1O-Z-NPTAhVJShQKHa6PBKQQ6AEIODAD#v=onepage&q=diffusion%20coefficient%20of%20gd-dtpa&f=false)
+        self.D = paramSet.D #m2/s Gd-DTPA (https://books.google.es/books?id=6fZGf8ave3wC&pg=PA343&lpg=PA343&dq=diffusion+coefficient+of+gd-dtpa&source=bl&ots=Ceg432CWar&sig=4PuxViFn9lL7pwOAkFVGwtHRe4M&hl=en&sa=X&ved=0ahUKEwjs1O-Z-NPTAhVJShQKHa6PBKQQ6AEIODAD#v=onepage&q=diffusion%20coefficient%20of%20gd-dtpa&f=false)
         
-        self.feNSample = 3
+        self.feNSample = paramSet.feNSample
         
     def align_vector_rotation(self,A,B):
         
