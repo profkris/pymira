@@ -24,17 +24,19 @@ def merge_graphs(graph1,graph2):
         print('Adding {} {}...'.format(marker,fName))
         graph1.fields.append(f)
 
-#dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'  
+dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'  
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
 #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-dir_ = r'C:\Users\simon\Dropbox\Ben Vessel Networks\C1M3'
-fp = os.path.join(dir_,'Press2Amira.txt')
+#dir_ = r'C:\Users\simon\Dropbox\170606_Ben Vessel Networks\C1M3\2%'
+fn = os.path.join(dir_,'Net2Amira.txt')
+#fp = os.path.join(dir_,'Press2Amira.txt')
 ff = os.path.join(dir_,'Flow2Amira.txt')
-fs = os.path.join(dir_,'Stress2Amira.txt')
-fv = os.path.join(dir_,'Velocity2Amira.txt')
-mFiles = [fp,ff,fs]#,fv]
+#fs = os.path.join(dir_,'Stress2Amira.txt')
+#fv = os.path.join(dir_,'Velocity2Amira.txt')
+#mFiles = [fp,ff,fs]#,fv]
+mFiles = [fn,ff]#,fv]
 
-fo = os.path.join(dir_,'spatialGraph.am')
+fo = os.path.join(dir_,'spatialGraph_flag.am')
 
 graph = sp.SpatialGraph()
 print('Reading source graph: {}'.format(mFiles[0]))

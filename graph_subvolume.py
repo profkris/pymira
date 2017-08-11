@@ -10,7 +10,7 @@ import os
 from scipy.spatial import ConvexHull
 import numpy as np
 
-path = r'C:\Users\simon\Dropbox\Ben Vessel Networks\C1M3'
+path = r'C:\Users\simon\Dropbox\170606_Ben Vessel Networks\C1M3\2%'
 
 graph = spatialgraph.SpatialGraph()
 graph.read(os.path.join(path,'C1M3_flow_sims_no_selfconn.am'))
@@ -37,7 +37,10 @@ nodecoords = graph.get_data('VertexCoordinates')
 #    return hull.find_simplex(p)>=0
 
 subvol = [400.,400.,500.] # um
-centre = [800,800,500]
+#centre = [800,800,500]
+#centre = [500,500,500]
+centre = [1500,1000,1500]
+#centre = [1400,1100,1000]
 
 verts = [[ centre[0]-subvol[0]/2.,centre[0]+subvol[0]/2.],
          [ centre[1]-subvol[1]/2.,centre[1]+subvol[1]/2.],

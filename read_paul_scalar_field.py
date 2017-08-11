@@ -11,13 +11,15 @@ import numpy as np
 #path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\Pressure mmHg'
 #path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T - Post-VDA\1\Pressure mmHg'
 #path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\Perfusion ml_min_100g'
-path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T - Post-VDA\1\Perfusion ml_min_100g'
+#path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T - Post-VDA\1\Perfusion ml_min_100g'
+path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1\Perfusion'
 files = [os.path.join(path,f) for f in os.listdir(path) if f.endswith('.txt')]
 files.sort(key=lambda f: int(filter(str.isdigit, f)))
 
 nslice = len(files)
 
-pixSize = [148.8, 150.2, 150.0]
+#pixSize = [148.8, 150.2, 150.0]
+pixSize = [140.0, 140.0, 140.0]
 
 for i,f in enumerate(files):
     with open(f,'r') as fo:
@@ -33,6 +35,10 @@ for i,f in enumerate(files):
         bbox = [0.,pixSize[0]*nslice, 0.,pixSize[1]*nrow, 0.,pixSize[2]*ncol]
         bboxStr = '{} {} {} {} {} {}'.format(0.,pixSize[0]*nslice,0.,pixSize[1]*nrow,0.,pixSize[2]*ncol)
     
+    print nrow,len(cur)
+    if nrow!=len(cur):
+        import pdb
+        pdb.set_trace()
     assert len(cur)==nrow
     
     for j in xrange(0,nrow,1):
