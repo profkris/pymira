@@ -18,8 +18,14 @@ matplotlib.rcParams.update({'font.size': 22})
 #path = r'D:\160113_paul_simulation_results\LS147T\1'
 #path = r'D:\gd\interstitial_concentration_recon'
 #path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\parker\interstitial_concentration_recon'
+
 #path = r'D:\gd_kt001\interstitial_concentration_recon'
 path = r'C:\Users\simon\Dropbox\Mesentery\gd\interstitial_concentration_recon'
+
+#path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1\gd\interstitial_concentration_recon'
+#path = r'D:\gd_kt001\interstitial_concentration_recon'
+#path = r'Z:\DMED_SWalker_CabiPaid\Data\gd\interstitial_concentration_recon'
+
 files = []
 for f in os.listdir(path):
     if f.endswith('.am'):
@@ -33,6 +39,7 @@ meshes = []
 time = []
 for f in files:
     m = mesh.Mesh()
+    print 'Reading {}'.format(f)
     m.read(os.path.join(path,f))
     meshes.append(m)
     time.append(m.get_parameter_value('Time'))
@@ -47,6 +54,7 @@ data = meshes[-1].get_field('Lattice')['data']
 
 nth_largest = True
 fromAmira = False
+
 
 if nth_largest is True:
     mxInds = list(np.unravel_index(data.argmax(), data.shape))
@@ -65,6 +73,20 @@ else:
     sample = [int(dims[0]/2.),int(dims[1]/2.),int(dims[2]/2.)] # Centre
     #sample = [4,24,39] # Hot spot
     #sample = [24,39,4]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def process_sample(data,meshes,time,sample,logs=True,smooth=False,width=9):
     
@@ -139,7 +161,17 @@ def fit_sample(time,cur,sample):
     pyplot.plot(time/60., cur, "ro", time/60., fitfunc(p1, time), "r-") 
     #print('Sample: {}'.format(s))
     print('Fit params: {}'.format(p1))
+    
+def heterogen_analysis(conc,gfile):
+    gfile = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1\gd\vascular_recon\concentration_t0.am'
+    graph = spatialgraph.SpatialGraph()
+    graph.read(gfile)
+    #coords = graph.get_data('VertexCoordinates')
+    hull = ConvexHull(coords)
         
 #x,y = plot_lattice_conc(data,meshes,time,sample,smooth=True)
-x,y = process_sample(data,meshes,time,sample,logs=True,smooth=False,width=9)
-fit_sample(x,y/10.,sample)
+#x,y = process_sample(data,meshes,time,sample,logs=True,smooth=False,width=9)
+#fit_sample(x,y/10.,sample)
+import pdb
+pdb.set_trace()
+

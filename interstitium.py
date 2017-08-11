@@ -38,15 +38,24 @@ class Interstitium(object):
         self.dx = None
         self.dy = None
         self.dz = None
-        self.dt = None
-        self.nr = paramSet.nr # 10
-        self.max_r = paramSet.max_r #1000. #um #dr*nr
-        self.dr = paramSet.dr #self.max_r / float(self.nr)
+
+
+
+
+
+
+        self.dt = paramSet.dt
+        self.nt = paramSet.nt        
+        self.dr = paramSet.dr
+        self.nr = paramSet.nr
+        self.max_r = self.dr * self.nr
+
                         
-        self.ktrans = paramSet.ktrans #0.00001 #/min
+        #self.ktrans = paramSet.ktrans #0.00001 #/min
         self.ef = paramSet.ef #  not used
         #self.D = 1e-7 * 1e8 # 500. #um2/s
         self.D = paramSet.D #m2/s Gd-DTPA (https://books.google.es/books?id=6fZGf8ave3wC&pg=PA343&lpg=PA343&dq=diffusion+coefficient+of+gd-dtpa&source=bl&ots=Ceg432CWar&sig=4PuxViFn9lL7pwOAkFVGwtHRe4M&hl=en&sa=X&ved=0ahUKEwjs1O-Z-NPTAhVJShQKHa6PBKQQ6AEIODAD#v=onepage&q=diffusion%20coefficient%20of%20gd-dtpa&f=false)
+        self.P = paramSet.P #m/s
         
         self.feNSample = paramSet.feNSample
         
@@ -184,7 +193,7 @@ class Interstitium(object):
         idx = (np.abs(array-value)).argmin()
         return idx #array[idx]
         
-    def radial_diffusion(self,coords,c_v,D,ktrans,ef,k,h,nr,nt,time):
+    def radial_diffusion(self,coords,c_v,D,P,flow,surface_area,k,h,nr,nt,time):
         
         lam = D*k/np.square(h) # + np.power(dr,-2) + np.power(dr,-2))
         #print('Lambda: {}'.format(lam))
@@ -215,24 +224,51 @@ class Interstitium(object):
         #sb_vi_av = 333.e-4 #/um
         #ubi = 10.e-4 #um/s
         #ktrans = sb_vi_av * ubi
-        M = (c_i.shape[0]/float(self.feNSample)) * ktrans #* (vessel_surfArea / interstitial_volume)
+        
+        if flow>0.:
+            flow_m = flow * 1e-3 # m3/s
+            k = P * surface_area / flow_m 
+        else:
+            k = 0.
+
+        M = (c_i.shape[0]/float(self.feNSample)) * k #ktrans #* (vessel_surfArea / interstitial_volume)
         
         for j in xrange(nt-1):
             c_i[:,j+1] = np.dot(A,c_i[:,j]) + M*(c_v[j]-c_i[:,j]) #(np.dot(B,R[:,j]))
             c_v_out[j+1] += np.sum(M*(c_i[0,j]-c_v[j]))
-        c_v_out = np.clip(c_v_out,0.,1e100)
+         
+        if not(np.all(np.isfinite(c_i))):
+            c_i[:] = 0.
+            #print 'Infinite Ci!'
+        if not(np.all(np.isfinite(c_v_out))):
+            c_v_out[:] = 0.
+            #print 'Infinite Cv!'
+            
+        #c_i = np.nan_to_num(c_i)
+        #c_v_out = np.nan_to_num(c_v_out)
+        #c_v_out = np.clip(c_v_out,0.,1e100)
+        #c_i = np.clip(c_i,0.,1e100)
             
         #c_v_out = (1.-ef) * c_v
         #c_v_out = c_v
+            
+        #print 'k = {}, min/max Ci: {}, {}, min/max Cv: {}, {}'.format(k,np.min(c_i),np.max(c_i),np.min(c_v_out),np.max(c_v_out))
         
         return c_i,c_v_out
         
-    def set_grid_dimensions(self,nodes,time,ktrans=None,D=None,verbose=False,embed_dims=None,grid_dims=None):
+    def set_grid_dimensions(self,nodes,time,D=None,verbose=False,embed_dims=None,grid_dims=None):
         
-        if ktrans is None:
-            ktrans = self.ktrans
+        #if ktrans is None:
+        #    ktrans = self.ktrans
         if D is None:
             D = self.D
+
+
+        
+        #self.nr = 10
+        #self.max_r = 1000. #um #dr*nr
+        #self.dr = self.max_r / float(self.nr)
+
 
         if embed_dims is None:
             pad = self.max_r / 5.
@@ -245,9 +281,9 @@ class Interstitium(object):
         else:
             self.embedDims = embed_dims
 
-        self.dt = time[1] - time[0]
-        self.max_time = time[-1]
-        self.nt = len(time)
+        #self.dt = time[1] - time[0]
+        #self.max_time = time[-1]
+        #self.nt = len(time)
         
         k = self.dt
         h = self.dr
@@ -262,14 +298,21 @@ class Interstitium(object):
             print('dr: {} um'.format(self.dr))
             print('nr: {} um'.format(self.nr))
             print('D: {} um2/s'.format(D))
-            print('Ktrans: {} /s'.format(ktrans))
+            #print('Ktrans: {} /s'.format(ktrans))
             print('Embedding dims: {} um'.format(self.embedDims))
             print('k<=h2/2D   k (dt) = {}, h (dr) = {}, h2/2D = {}'.format(k,h,np.square(h)/(2.*D)))        
         
         assert test
         
         # Regrid
-        ntg = self.nt
+        if self.nt>200:
+            ntg = 200
+            st = self.nt*self.dt/ntg
+            #self.grid_time_inds = np.arange(0,ntg,st,dtype='int')
+            self.grid_time_inds = np.linspace(0,self.nt,num=ntg,dtype='int')
+        else:
+            ntg = self.nt
+            self.grid_time_inds = np.arange(0,self.nt,self.dt,dtype='int')
         ng = [np.int(np.ceil((self.embedDims[i][1]-self.embedDims[i][0])/self.pixSize[i])) for i in range(3)]
         #print('Embedding matrix: {}'.format(ng))
         flatten_z = False
@@ -289,7 +332,7 @@ class Interstitium(object):
         #tgInd = np.linspace(0,nt-1,num=ntg,dtype='int')
 
         if grid_dims is None:
-            self.ntg = self.nt
+            self.ntg = ntg #self.nt
             self.ng = [np.int(np.ceil((self.embedDims[i][1]-self.embedDims[i][0])/self.pixSize[i])) for i in range(3)]
             self.grid_dims = [self.ntg,self.ng[0],self.ng[1],self.ng[2]]
         else:
@@ -302,7 +345,7 @@ class Interstitium(object):
         dz = (self.embedDims[2][1]-self.embedDims[2][0]) / float(self.ng[2])
         self.dx,self.dy,self.dz = dx,dy,dz
         
-    def interstitial_diffusion(self,nodes,index,conc,time,plot_conc=False,set_grid_dims=True,progress=True,flatten_z=False,med_reg=False,store_results=True):
+    def interstitial_diffusion(self,nodes,index,conc,time,plot_conc=False,set_grid_dims=True,progress=True,flatten_z=False,med_reg=False,store_results=True,vessel_length=None,vessel_radius=None,flow=None):
         
         """ Simulates vascular exchange and diffusion through interstitium
         """        
@@ -313,15 +356,18 @@ class Interstitium(object):
  
         if store_results:
             if set_grid_dims:       
-                self.set_grid_dimensions(nodes,time,ktrans=self.ktrans,D=self.D)
+                self.set_grid_dimensions(nodes,time,D=self.D)
                 
             self.grid = np.zeros(self.grid_dims)
             self.count = np.zeros(self.grid_dims)
         
         # Create lists of model parameters corresponding to number of nodes in current vessel segment
-        ktrans = [self.ktrans/60.]*nnode #/min
-        ef = [self.ef]*nnode #/min
+        #ktrans = [self.ktrans/60.]*nnode #/min
+        #ef = [self.ef]*nnode #/min
         D = [self.D]*nnode # um2/s
+        P = [self.P]*nnode
+        
+        surface_area = vessel_length * np.square(vessel_radius) * np.pi # m2
         
         # Set radial array for finite element calc
         r = np.linspace(0,self.max_r,num=self.nr)
@@ -349,12 +395,12 @@ class Interstitium(object):
             #if True:
 
                 c_v = conc[ni,:]
-                c_i,c_v_out = self.radial_diffusion(curNode,c_v,D[ni],ktrans[ni],ef[ni],self.dt,self.dr,self.nr,self.nt,time)
+                c_i,c_v_out = self.radial_diffusion(curNode,c_v,D[ni],P[ni],flow[ni],surface_area[ni],self.dt,self.dr,self.nr,self.nt,time)
                 conc_out[ni,:] = c_v_out
                 
                 if store_results: # To bypass finite element bit (speeds up calculation and reduces memory)
                     # Regrid
-                    c_i = c_i[:,tgInd] 
+                    c_i = c_i[:,tgInd]
     
                     for ri,radius in enumerate(r):
                         #sph = self.sphere_coordinates(radius,curNode,10)
@@ -374,10 +420,10 @@ class Interstitium(object):
                                                self.find_nearest(zg,zs[i]) )
     
                                 if flatten_z:
-                                    self.grid[:,xsc,ysc] += c_i[ri,:]
+                                    self.grid[:,xsc,ysc] += c_i[ri,:] #self.grid_time_inds]
                                     self.count[:,xsc,ysc] += 1
                                 else:
-                                    self.grid[:,xsc,ysc,zsc] += c_i[ri,:]
+                                    self.grid[:,xsc,ysc,zsc] += c_i[ri,:] #self.grid_time_inds]
                                     self.count[:,xsc,ysc,zsc] += 1
                                     
             if ni==nnode-1 and index[ni]==index[ni-1]:

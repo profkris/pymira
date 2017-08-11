@@ -79,17 +79,21 @@ def gd(t,delay):
 def impulse(t,delay,length=1.):
     
     import numpy as np
-    #length = 1. #s
-    #pos = delay
+
+
     conc = np.zeros(t.shape[0])
     conc[t>=delay] = 1.
     conc[t>(delay+length)] = 0.
     return conc
     
 class ParameterSet(object):
-    
-    def __init__(self,dt=1.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=7e-11*1e12,feNSample=3,
-                      nr=10,max_r=1000.):
+  
+
+
+
+
+    def __init__(self, dt=1.,nt=1200,pixSize=[150.,150.,150.],D=7e-11*1e12,P=1e-2,feNSample=3,nr=10,dr=100.):
+
         self.name = ''
         self.conc_function = None
         
@@ -105,15 +109,27 @@ class ParameterSet(object):
         self.dx = None
         self.dy = None
         self.dz = None
-        self.dt = None
+
+
+
+
+
+
+
+
+        self.dr = dr
         self.nr = nr
-        self.max_r = max_r #um #dr*nr
-        self.dr = self.max_r / float(self.nr)                        
-        self.ktrans = ktrans #/min
+                        
+        self.ktrans = None #/min
+
         self.ef = 0.2 # Not used
         self.D = D #m2/s Gd-DTPA (https://books.google.es/books?id=6fZGf8ave3wC&pg=PA343&lpg=PA343&dq=diffusion+coefficient+of+gd-dtpa&source=bl&ots=Ceg432CWar&sig=4PuxViFn9lL7pwOAkFVGwtHRe4M&hl=en&sa=X&ved=0ahUKEwjs1O-Z-NPTAhVJShQKHa6PBKQQ6AEIODAD#v=onepage&q=diffusion%20coefficient%20of%20gd-dtpa&f=false)
+        self.P = P #m/s
         
         self.feNSample = feNSample
+        
+    def test_parameters(self):
+        return self.dt<=np.square(self.dr)/(2.*self.D)
 
 class InjectAgent(object):
     
@@ -287,7 +303,7 @@ class InjectAgent(object):
         for i,edge in enumerate(edges):
             conc[i,:] = edge.concentration
             
-    def reconstruct_results(self, graph, output_directory=None,recon_interstitium=True,name=None, recon_vascular=True, log=False):
+    def reconstruct_results(self, graph, path=None, output_directory=None,recon_interstitium=True,name=None, recon_vascular=True, log=False):
 
         self.graph = graph
         
@@ -298,7 +314,7 @@ class InjectAgent(object):
         
         if recon_vascular:
             try:
-                nodeFile = os.path.join(output_directory,'nodeList.dill')
+                nodeFile = os.path.join(path,'nodeList.dill')
                 if not os.path.isfile(nodeFile):
                     print 'Generating node list...'
                     self.nodeList = self.graph.node_list()
@@ -315,13 +331,22 @@ class InjectAgent(object):
         if recon_interstitium:
             print('Reconstructing interstitial results...')
             import scipy
-            intObj = interstitium.Interstitium(paramSet=self.paramSet)
+
+
             interDir = os.path.join(output_directory,'interstitium_calcs')
+
+            intObj = interstitium.Interstitium(paramSet=paramSet)
+            if name is not None:
+                interDir = os.path.join(path,name)
+                interDir = os.path.join(interDir,'interstitium_calcs')
+            else:
+                interDir = os.path.join(path,'interstitium_calcs')
+
             #interDir = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\impulseinterstitium_calcs'
             nadded = 0
             init = False
-            if not os.path.exists(interDir):
-                os.mkdir(interDir)
+            #import pdb
+            #pdb.set_trace()
             if os.path.isdir(interDir):
                 files = os.listdir(interDir)
                 for i,f in enumerate(files):
@@ -329,13 +354,14 @@ class InjectAgent(object):
                         curFile = os.path.join(interDir,f)
                         data = np.load(curFile)
                         curgrid = data['grid']
-                        print('Reconstructing file {} of {}: {}. Max conc: {}'.format(i+1,len(files),f,np.max(curgrid)))
+                        print('Reconstructing file {} of {}: {}. Min/Max conc: {}, {}'.format(i+1,len(files),f,np.nanmin(curgrid),np.nanmax(curgrid)))
                         grid_dims = data['grid_dims']
                         embedDims = data['embedDims']
                         if not init:
                             grid = curgrid
+                            grid[np.isnan(curgrid)] = 0.
                         else:
-                            grid += curgrid
+                            grid[~np.isnan(curgrid)] += curgrid[~np.isnan(curgrid)]
                         nadded += 1
                         init = True
                         pixdim = [data['dx'],data['dy'],data['dz'],data['dt']]
@@ -488,6 +514,8 @@ class InjectAgent(object):
             
         # Reconstruct individual inlet results
         eDir = os.path.join(output_directory,'vascular_calcs')
+        if not os.path.exists(eDir):
+            os.mkdir(eDir)
         #eDir = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\impulseedge_calcs'
         files = os.listdir(eDir)
         nfiles = len(files)
@@ -726,6 +754,7 @@ class InjectAgent(object):
         import dill as pickle
         import logging
         
+        output_directoryIn = output_directory
         if name is not None:
             output_directory = os.path.join(output_directory,name)
             if not os.path.isdir(output_directory):
@@ -758,7 +787,7 @@ class InjectAgent(object):
             target.close()
         logging.basicConfig(filename=logFile,level=logging.DEBUG,format='%(asctime)s %(levelname)s: %(message)s')
         
-        nodeFile = os.path.join(output_directory,'nodeList.dill')
+        nodeFile = os.path.join(output_directoryIn,'nodeList.dill')
         #if True:
         if not os.path.isfile(nodeFile):
             print 'Generating node list...'
@@ -846,13 +875,17 @@ class InjectAgent(object):
             concFunc = impulse
         
         log = None
-        argList = [[nodeFile,n.index,concFunc,timeFile,output_directory,nedge,None,None,leaky_vessels,log,self.paramSet] for n in inletNodes]
+
+
+
+        argList = [[self.paramSet,nodeFile,n.index,concFunc,timeFile,output_directory,nedge,None,None,leaky_vessels,log] for n in inletNodes]
+
 
         if parallel:
             p.map(_worker_function,argList)
         else:
-            import pdb
-            pdb.set_trace()
+
+
             for arg in argList:
                 _worker_function(arg)
 
@@ -1092,7 +1125,11 @@ def _worker_function(args):
         Q_limit_count = 0
         c_limit_count = 0
         
-        nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims,leaky_vessels,log,paramSet = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8],args[9],args[10]
+
+
+
+        paramSet,nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims,leaky_vessels,log = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8],args[9],args[10]
+
         
         import os
         eDir = os.path.join(odir,'vascular_calcs')
@@ -1136,12 +1173,16 @@ def _worker_function(args):
             if not os.path.exists(intDir):
                 os.makedirs(intDir)
             intFile = os.path.join(intDir ,'interstitium_inlet{}.npz'.format(inletNodeIndex))            
-            
+
+           
+
+
+
             intr = interstitium.Interstitium(paramSet=paramSet)
             nodeCoords = np.asarray([n.coords for n in nodeList])
             intr.set_grid_dimensions(nodeCoords,time,grid_dims=grid_dims,embed_dims=embed_dims)
             grid = np.zeros(intr.grid_dims,dtype='float')
-            info += ', Ktrans {}, D {}, dr {}, nr {}, embed dims {}, grid_dims {}'.format(intr.ktrans,intr.D,intr.dr,intr.nr,intr.embedDims,intr.grid_dims)
+            info += ', D {}, dr {}, nr {}, embed dims {}, grid_dims {}'.format(intr.D,intr.dr,intr.nr,intr.embedDims,intr.grid_dims)
             
         #import socket
         #info += ', host {}'.format(socket.gethostname())
@@ -1163,6 +1204,15 @@ def _worker_function(args):
         t0 = timeMod.time()
         
         exitStr = 'undefined'
+        
+        #import pdb
+        #pdb.set_trace()
+        
+        inletEdge = inletNode.edges[0]
+        inletRad = inletEdge.get_scalar('Radii')
+        inletLength = inletEdge.length
+        inletVol = np.pi*np.square(inletRad)*inletLength # um3
+        inletVol = np.sum(inletVol * 1e-15) # litre
     
         while endloop is False:
             count += 1
@@ -1217,7 +1267,7 @@ def _worker_function(args):
                             if leaky_vessels:
                                 try:
                                     if concIn[0] is None:
-                                        conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n])
+                                        conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n]) * inletVol
                                     else:
                                         if len(concIn)==1:
                                             nxtConc = concIn[0]
@@ -1232,7 +1282,11 @@ def _worker_function(args):
                                     c_v = np.repeat([conc],via_edge.npoints,axis=0)
                                     #import pdb
                                     #pdb.set_trace()
-                                    c_v_out = intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,set_grid_dims=False,progress=False,store_results=True)
+                                    flow = via_edge.get_scalar('Flow') # nL/min
+                                    flow = flow * 60. * 1e-12 # L/s
+                                    vessel_radius = via_edge.get_scalar('Radii') * 1e-6 # m
+                                    vessel_length = via_edge.length * 1e-6 # m
+                                    c_v_out = intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,set_grid_dims=False,progress=False,store_results=True,vessel_length=vessel_length,vessel_radius=vessel_radius,flow=flow)
                                     grid += intr.grid
                                     #c_v_out = np.repeat([c_v_out],via_edge.npoints,axis=0)
                                     via_edge.concentration = c_v_out
@@ -1241,7 +1295,7 @@ def _worker_function(args):
                                     
                             else:
                                 try:
-                                    conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n])
+                                    conc = Q[n]*edge_Q[ve]*concFunc(time,delay[n]) * inletVol
                                     via_edge.concentration = np.repeat([conc],via_edge.npoints,axis=0)
                                 except:
                                     raise  
@@ -1335,75 +1389,70 @@ def _worker_function(args):
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
-    #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1'
+    #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
+    dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1'
     #dir_ = r'D:'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\ca1'
+    #dir_ = r'D:\SW1222\1'
     f = os.path.join(dir_,'spatialGraph_RIN.am')
     #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-    #f = os.path.join(dir_,'Flow2AmiraPressure.am')
 
+    #f = os.path.join(dir_,'Flow2AmiraPressure.am')
+    #f = os.path.join(dir_,'spatialGraph_RIN.am')
+
+    #odir = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1'
+    odir = dir_
+    
     graph = spatialgraph.SpatialGraph()
     print('Reading graph...')
     graph.read(f)
     print('Graph read')
     
-    reconOnly = False
+    recon = False
+    crawl = True
     logRecon = True
     resume = True
     parallel = True
     largest_inflow = False
     leaky_vessels = True
-    name = 'impulse'
-    concFunc = impulse
-    
-    recon_vascular = True
-    recon_interstitium = True
-    
-    crawl = True
-    
-    #import pdb
-    #pdb.set_trace()
-    
-    if crawl:
-        print 'Crawling...'
 
-        ia = InjectAgent()
-        try:
-            if not reconOnly:
-                ia.crawl(graph,output_directory=dir_,resume=resume,parallel=parallel)
-                print('Simulation complete')
-            ia.reconstruct_crawl(graph,output_directory=dir_)
-        except KeyboardInterrupt:
-            print('Ctrl-C interrupt! Saving graph')
-            ia.save_graph(output_directory=dir_)
+    name = 'gd_2'
+    concFunc = gd
  
+    if recon:
+        recon_vascular = False
+        recon_interstitium = True
+        ia = InjectAgent()
+        #import pdb
+        #pdb.set_trace()
+        print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
+        ia.reconstruct_results(graph,path=dir_,output_directory=odir,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
     else:
-        if reconOnly:
-            ia = InjectAgent()
-            print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
-            ia.reconstruct_results(graph,output_directory=dir_,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
-        else:
-            print 'Simulating...'
-            
-            if name=='gd':
-                paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=2.08e-10,feNSample=3)
-            if True:
-                paramset = ParameterSet(dt=60.,nt=200,pixSize=[150.,150.,150.],ktrans=0.1,D=7e-11*1e12,feNSample=3)
-                
-            ia = InjectAgent(paramSet=paramset)
+        print 'Simulating...'
+        #paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=7e-11*1e12,feNSample=3)
+        #paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],P=1e-6,D=2.08e-10,feNSample=3)
+        paramset = ParameterSet(dt=0.9,nt=72000,nr=10,dr=100.,pixSize=[150.,150.,150.],P=1e-2,D=2.08e2,feNSample=3)
+        if not paramset.test_parameters():
+            import pdb
+            pdb.set_trace()
+        ia = InjectAgent(paramSet=paramset)
+
+        if crawl:
+            print 'Crawling...'
             try:
-                ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,concFunc=concFunc,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)
-                #ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)
-                print('Simulation complete')
-                ia.reconstruct_results(graph,output_directory=dir_,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
+                if not recon:
+                    ia.crawl(graph,output_directory=dir_,resume=resume,parallel=parallel)
+                    print('Simulation complete')
+                ia.reconstruct_crawl(graph,output_directory=dir_)
             except KeyboardInterrupt:
                 print('Ctrl-C interrupt! Saving graph')
                 ia.save_graph(output_directory=dir_)
-        
+        else:
+            ia.inject(graph, output_directory=odir, resume=resume, parallel=parallel, name=name, concFunc=concFunc, largest_inflow=largest_inflow, leaky_vessels=leaky_vessels)
+ 
 if __name__ == "__main__":
     #import cProfile
     #cProfile.run('main()')
