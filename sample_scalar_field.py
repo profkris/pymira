@@ -17,8 +17,9 @@ matplotlib.rcParams.update({'font.size': 22})
 #path = r'D:\160113_paul_simulation_results\LS147T\1\ca1_kt0p00001\interstitial_concentration_recon'
 #path = r'D:\160113_paul_simulation_results\LS147T\1'
 #path = r'D:\gd\interstitial_concentration_recon'
-path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\parker\interstitial_concentration_recon'
+#path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\parker\interstitial_concentration_recon'
 #path = r'D:\gd_kt001\interstitial_concentration_recon'
+path = r'C:\Users\simon\Dropbox\Mesentery\gd\interstitial_concentration_recon'
 files = []
 for f in os.listdir(path):
     if f.endswith('.am'):
@@ -44,23 +45,26 @@ dims = d0.shape
 
 data = meshes[-1].get_field('Lattice')['data']
 
-mxInds = list(np.unravel_index(data.argmax(), data.shape))
-targ = 10 # nth largest value
-targVal = np.partition(data.flatten(), -targ)[-targ]
-targInds = np.where(data==targVal)
-targInds = [targInds[0][0],targInds[1][0],targInds[2][0]]
+nth_largest = True
+fromAmira = False
 
-sample = [int(dims[0]/2.),int(dims[1]/2.),int(dims[2]/2.)]
-sample = [4,24,39] # Hot spot
-sample = [24,39,4]
-sample = mxInds
-sample = targInds
-
-offset = [-189.5,-200.,-200.]
-pixsize = [150.519,152.659,151.243]
-coords = [4448,2292,9818]
-#coords = [3050.,2293.,7944.] # central low uptake
-sample = np.asarray([int((x-offset[i])/pixsize[i]) for i,x in enumerate(coords)])
+if nth_largest is True:
+    mxInds = list(np.unravel_index(data.argmax(), data.shape))
+    targ = 10 # nth largest value
+    targVal = np.partition(data.flatten(), -targ)[-targ]
+    targInds = np.where(data==targVal)
+    targInds = [targInds[0][0],targInds[1][0],targInds[2][0]]
+    sample = targInds
+elif fromAmira:
+    offset = [-189.5,-200.,-200.]
+    pixsize = [150.519,152.659,151.243]
+    coords = [4448,2292,9818]
+    #coords = [3050.,2293.,7944.] # central low uptake
+    sample = np.asarray([int((x-offset[i])/pixsize[i]) for i,x in enumerate(coords)])
+else:
+    sample = [int(dims[0]/2.),int(dims[1]/2.),int(dims[2]/2.)] # Centre
+    #sample = [4,24,39] # Hot spot
+    #sample = [24,39,4]
 
 def process_sample(data,meshes,time,sample,logs=True,smooth=False,width=9):
     

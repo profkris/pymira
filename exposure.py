@@ -68,19 +68,14 @@ def concentration_from_timeseries(graphs,log=True):
 def main():
     
     dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\ca1_kt0p0001'
-    
 
-
-
-    
     if True:
         #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
         
         #f = os.path.join(dir_,'spatialGraph_RIN.am')
         #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-        f = os.path.join(dir_,'ct_output.am')
+        #f = os.path.join(dir_,'ct_output.am')
 
-        
         editor = spatialgraph.Editor()
     
         print('Reading graph...')
@@ -106,6 +101,8 @@ def main():
         
         conc = concentration_from_timeseries(graphs)
         
+        #import pdb
+        #pdb.set_trace()
         radii = graphs[0].get_data('Radii')
         epi = graphs[0].edgepoint_edge_indices()
         
@@ -118,13 +115,13 @@ def main():
         #thr = np.linspace(np.max(exposure),np.min(exposure),num=10)
         #thr = np.max(exposure) / 100.
         #thr = np.median(exposure[-1])
-        thr = 1e-14
-        import pdb
-        pdb.set_trace()
+        thr = 1e20 #1e-14
+        #import pdb
+        #pdb.set_trace()
         removedEdgePoint[exposure>thr] = 1
         
         nodeFile = os.path.join(dir_,'nodeList.dill')
-        if os.path.isfile(nodefile):
+        if os.path.isfile(nodeFile):
             with open(nodeFile ,'rb') as fo:
                 nodeList = pickle.load(fo)
         else:
@@ -141,15 +138,6 @@ def main():
         out_time = np.asarray([time[-1]])
         #out_time = [time[-1]] #np.asarray(time[-1])
         #out_time = [time[-1]]
-        
-
-
-
-
-
-
-
-
 
     else:
         import dill
@@ -186,7 +174,7 @@ def main():
             #edge.add_scalar('ExposureThreshold'.format(t),curVals)
                         
         new_graph = graphs[0].node_list_to_graph(nodeList)
-        remEdges = True
+        remEdges = False
         if len(remEdgeInds)>0 and remEdges is True:
             #new_graph = editor.delete_edges(new_graph,remEdgeInds)
             nl = new_graph.node_list()
@@ -195,16 +183,11 @@ def main():
                 inj.vertex_flow_ordering(node)                    
                 if node.nconn>0 and node.is_inlet:
                     inletNodes.append(node.index)
-                    
-            #import pdb
-            #pdb.set_trace()
             
             new_graph.set_graph_sizes() # shouldn't have to do this...
             graphList, graphSize = new_graph.identify_graphs()
             graphInds = np.unique(graphList)
             # See if any graphs have been isolated from an inlet
-            
-            #remEdgeInds = []
                             
             largestNet = True
             if not largestNet:
@@ -234,7 +217,10 @@ def main():
             new_graph = editor.delete_edges(new_graph,remEdgeInds)
 
         print 't={}, thr={}: {} {}%'.format(t,thr,count,count*100./float(len(edges)))
-        new_graph.write(os.path.join(dir_,'exposure\exposure{}.am'.format(t)))
+        odir = os.path.join(dir_,'exposure')
+        if not os.path.exists(odir):
+            os.mkdir(odir)
+        new_graph.write(os.path.join(odir,'exposure{}.am'.format(t)))
             
     #new_graph = graph.node_list_to_graph(nodeList)
     #new_graph.write(dir_+'ct_output_with_exposure.am')

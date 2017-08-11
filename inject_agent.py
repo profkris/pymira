@@ -76,11 +76,11 @@ def gd(t,delay):
     
     return a1*np.exp(-(t-delay)*m1) + a2*np.exp(-(t-delay)*m2)
     
-def impulse(t,delay):
+def impulse(t,delay,length=1.):
     
     import numpy as np
-    length = 1. #s
-    pos = delay
+    #length = 1. #s
+    #pos = delay
     conc = np.zeros(t.shape[0])
     conc[t>=delay] = 1.
     conc[t>(delay+length)] = 0.
@@ -88,7 +88,8 @@ def impulse(t,delay):
     
 class ParameterSet(object):
     
-    def __init__(self,dt=1.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=7e-11*1e12,feNSample=3):
+    def __init__(self,dt=1.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=7e-11*1e12,feNSample=3,
+                      nr=10,max_r=1000.):
         self.name = ''
         self.conc_function = None
         
@@ -105,7 +106,9 @@ class ParameterSet(object):
         self.dy = None
         self.dz = None
         self.dt = None
-                        
+        self.nr = nr
+        self.max_r = max_r #um #dr*nr
+        self.dr = self.max_r / float(self.nr)                        
         self.ktrans = ktrans #/min
         self.ef = 0.2 # Not used
         self.D = D #m2/s Gd-DTPA (https://books.google.es/books?id=6fZGf8ave3wC&pg=PA343&lpg=PA343&dq=diffusion+coefficient+of+gd-dtpa&source=bl&ots=Ceg432CWar&sig=4PuxViFn9lL7pwOAkFVGwtHRe4M&hl=en&sa=X&ved=0ahUKEwjs1O-Z-NPTAhVJShQKHa6PBKQQ6AEIODAD#v=onepage&q=diffusion%20coefficient%20of%20gd-dtpa&f=false)
@@ -138,7 +141,7 @@ class InjectAgent(object):
         self.nodeList = None
         self.graph = None
         
-        self.interstitium = interstitium.Interstitium()
+        self.interstitium = interstitium.Interstitium(paramSet=paramSet)
         
     def vertex_flow_ordering(self,node):
 
@@ -306,13 +309,13 @@ class InjectAgent(object):
                 self.save_graph(output_directory=output_directory,logConc=log)
             except Exception,e:
                 print e,nodeFile
-                import pdb
-                pdb.set_trace()
+                #import pdb
+                #pdb.set_trace()
                
         if recon_interstitium:
             print('Reconstructing interstitial results...')
             import scipy
-            intObj = interstitium.Interstitium()
+            intObj = interstitium.Interstitium(paramSet=self.paramSet)
             interDir = os.path.join(output_directory,'interstitium_calcs')
             #interDir = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\impulseinterstitium_calcs'
             nadded = 0
@@ -339,6 +342,8 @@ class InjectAgent(object):
                         boundingBox = data['embedDims'].flatten()
                     except Exception,e:
                         print('Error loading {}: {}'.format(curFile,e))
+                        import pdb
+                        pdb.set_trace()
                 #ofile = os.path.join(output_directory,'interstitium.nii')
                 sm = False
                 if sm:
@@ -393,7 +398,86 @@ class InjectAgent(object):
                     m.write(ofile)
                 #intObj.save_grid(output_directory,grid=grid,pixdim=pixdim,format='amira')
                 print('Interstitial concentration grid written to {}'.format(output_directory))
+
+    def reconstruct_crawl(self,graph,output_directory=None,name=None, log=False):
+
+        self.graph = graph
+
+        if name is not None:
+            output_directory = os.path.join(output_directory,name)
+
+        import dill as pickle
+        
+        if True:
+            nodeFile = os.path.join(output_directory,'nodeList.dill')
+            if not os.path.isfile(nodeFile):
+                print 'Generating node list...'
+                self.nodeList = self.graph.node_list()
+            else:
+                with open(nodeFile ,'rb') as fo:
+                    self.nodeList = pickle.load(fo)
+          
+            print('Generating edge list...')
+            edges = self.graph.edges_from_node_list(self.nodeList)
+                
+            # Reconstruct individual inlet results
+            eDir = os.path.join(output_directory,'crawl_calcs')
+            #eDir = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\impulseedge_calcs'
+            files = os.listdir(eDir)
+            nfiles = len(files)
+            print('Loading crawl calc results ({} files)...'.format(len(files)))
             
+            init = False
+ 
+            for fi,f in enumerate(files):
+                print('Reading file {} of {}: {}'.format(fi+1,nfiles,f))
+                try:
+                    with open(os.path.join(eDir,f),'rb') as fo:
+                        curEdges,ind = pickle.load(fo)
+                        
+                    if not init:
+                        for e in edges:
+                            e.distance = np.asarray([-1.])
+                            e.delay = np.asarray([-1.])
+                        init = True
+            
+                    for curEdge in curEdges:
+                        #concImported = True
+                        srcEdge = [e for e in edges if e.index==curEdge.index]
+                        #import pdb
+                        #pdb.set_trace()
+                        if (srcEdge[0].distance < 0.) | (curEdge.distance<srcEdge[0].distance):# and curEdge.distance>=0.):
+                            srcEdge[0].distance = curEdge.distance
+                        if (srcEdge[0].delay < 0.) | (curEdge.delay[1]<srcEdge[0].delay):
+                            srcEdge[0].delay = curEdge.delay[1]
+                except Exception,err:
+                    print err
+  
+            print('Adding data and distance data to graph')
+
+            if True: #new version - creates multiple graph files (one per timepoint). Import into Amira with load timeseries
+                # Add concentration(t=1s) as a scalar field
+                odir = os.path.join(output_directory,'crawl_recon')
+                if not os.path.isdir(odir):
+                    os.mkdir(odir)
+                for edge in edges:
+                    try:
+                        edge.add_scalar('Distance',np.repeat(edge.distance,edge.npoints))
+                        edge.add_scalar('Delay',np.repeat(edge.delay,edge.npoints))
+                    except Exception,err:
+                        print err
+                        import pdb
+                        pdb.set_trace()
+                new_graph = self.graph.node_list_to_graph(self.nodeList)
+                ofile = os.path.join(odir,'crawl_recon.am')
+                print('Writing {}'.format(ofile))
+                new_graph.write(ofile)
+            
+#        except Exception,e:
+#            print e,nodeFile
+#            #import pdb
+#            #pdb.set_trace()
+               
     def save_graph(self,output_directory=None,remove_zeros=False,logConc=False):
          
         if self.graph is None or self.nodeList is None:
@@ -526,7 +610,115 @@ class InjectAgent(object):
                 #conc = self.get_concentration(edges)
                 #with open(ofile, 'wb') as handle:
                 #    pickle.dump(ofile, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    
+ 
+    def crawl(self, graph, output_directory=None,largest_inflow=False,resume=False,parallel=True):
+        self.graph = graph   
+
+        import dill as pickle
+        import logging
+                
+        logFile = os.path.join(output_directory,'crawl.log')
+        runFile = os.path.join(output_directory,'running_crawl.log')
+        
+        if resume:
+            eDir = os.path.join(output_directory,'crawl_calcs')
+            if os.path.isdir(eDir):
+                files = os.listdir(eDir)
+                #nfiles = len(files)
+                inletVisited = []
+                #prefix = 'inlet'
+                #suffix = '.dill'
+                for fi,f in enumerate(files):
+                    try:
+                        ind = int((f.replace('crawl_inlet','')).replace('.dill',''))
+                        inletVisited.append(ind)
+                        print('Inlet previously visited: {}'.format(ind))
+                    except Exception,e:
+                        print('Could not load {}: {}'.format(f,e))
+            else:
+                inletVisited = []
+        else:
+            inletVisited = []
+            #logging.basicConfig(filename=logFile, filemode='w', level=logging.DEBUG) # Initialise log file
+            target = open(logFile, 'w') # truncate log file
+            target.close()
+        logging.basicConfig(filename=logFile,level=logging.DEBUG,format='%(asctime)s %(levelname)s: %(message)s')
+        
+        nodeFile = os.path.join(output_directory,'nodeList.dill')
+        if False:
+        #if not os.path.isfile(nodeFile):
+            print 'Generating node list...'
+            nodeList = graph.node_list()
+            self.nodeList = nodeList
+            print 'Calculating flow ordering...'
+            for node in nodeList:
+                self.vertex_flow_ordering(node)
+                #nconn = np.asarray([x.nconn for x in self.nodeList])
+        
+            #sTerminal = np.where(nconn==1)[0]
+            #nTerminal = len(sTerminal)
+            
+            sInlet = [node.index for node in self.nodeList if node.is_inlet==True]# and node.flow_direction[0]>=0]
+            #nInlet = len(sInlet)
+            total_inflow = np.abs(np.sum([self.nodeList[i].flow[0] for i in sInlet]))
+            inletNodes = [self.nodeList[x] for x in sInlet]
+            for inletNode in inletNodes:
+                inletNode.inletQ = inletNode.flow[0] / total_inflow
+                inletNode.inletDelay = 0.
+            
+            print('Pickling node list...')
+            with open(nodeFile,'wb') as fo:
+                pickle.dump(nodeList,fo)
+        else:
+            with open(nodeFile ,'rb') as fo:
+                self.nodeList = pickle.load(fo)
+            inletNodes = [n for n in self.nodeList if n.is_inlet]
+           
+        inletNodes = [n for n in inletNodes if n.index not in inletVisited]
+        
+        if largest_inflow:
+            inletNodes = [inletNodes[np.argmax([n.inletQ for n in inletNodes])]]
+        #nInlets = len(inletNodes)
+        
+        # Sort from highest to lowest Q
+        inletQ = np.asarray([n.inletQ for n in inletNodes])
+        inds = inletQ.argsort()
+        inds[:] = inds[::-1] # Reverse sort
+        inletNodes = [inletNodes[ind] for ind in inds]
+            
+        #import socket
+        #strtInfo = 'CRAWL STARTED: nInlets {}, name {}, parallel {}, resume {}, largest_inflow {}, leaky_vessels {}, output_directory {}, host {}'.format(nInlets,name,parallel,resume,largest_inflow,leaky_vessels,output_directory,socket.gethostname())
+        #logging.info(strtInfo)
+        #print('Logging to {}'.format(logFile))
+        #print strtInfo
+                
+        edgeFile = os.path.join(output_directory,'edgeList.dill')
+        if not os.path.isfile(edgeFile):
+            edges = graph.edges_from_node_list(self.nodeList)
+        else:
+            with open(edgeFile ,'rb') as fo:
+                edges = pickle.load(fo)
+        nedge = len(edges)
+            
+        #graphFile = os.path.join(output_directory,'graph.dill')
+
+        import pathos.multiprocessing as multiprocessing
+        ncpu = multiprocessing.cpu_count()
+        p = multiprocessing.ProcessingPool(ncpu/2)
+        
+        log = None
+        argList = [[nodeFile,n.index,output_directory,nedge,log] for n in inletNodes]
+
+        if parallel:
+            p.map(_crawl_worker_function,argList)
+        else:
+            import pdb
+            pdb.set_trace()
+            for arg in argList:
+                _crawl_worker_function(arg)
+
+        self.save_graph(output_directory=output_directory)
+   
     def inject(self, graph, output_directory=None, resume=False, parallel=True, name=None, concFunc=None, largest_inflow=False, leaky_vessels=True):
 
         self.graph = graph   
@@ -540,16 +732,16 @@ class InjectAgent(object):
                 os.mkdir(output_directory)
                 
         logFile = os.path.join(output_directory,'inject.log')
-        runFile = os.path.join(output_directory,'running.log')
+        #runFile = os.path.join(output_directory,'running.log')
         
         if resume:
             eDir = os.path.join(output_directory,'vascular_calcs')
             if os.path.isdir(eDir):
                 files = os.listdir(eDir)
-                nfiles = len(files)
+                #nfiles = len(files)
                 inletVisited = []
-                prefix = 'inlet'
-                suffix = '.dill'
+                #prefix = 'inlet'
+                #suffix = '.dill'
                 for fi,f in enumerate(files):
                     try:
                         ind = int((f.replace('edges_inlet','')).replace('.dill',''))
@@ -654,15 +846,179 @@ class InjectAgent(object):
             concFunc = impulse
         
         log = None
-        argList = [[nodeFile,n.index,concFunc,timeFile,output_directory,nedge,None,None,leaky_vessels,log] for n in inletNodes]
+        argList = [[nodeFile,n.index,concFunc,timeFile,output_directory,nedge,None,None,leaky_vessels,log,self.paramSet] for n in inletNodes]
 
         if parallel:
             p.map(_worker_function,argList)
         else:
+            import pdb
+            pdb.set_trace()
             for arg in argList:
                 _worker_function(arg)
 
         self.save_graph(output_directory=output_directory)
+        
+def _crawl_worker_function(args):
+    
+    inletIndex = None
+    runFile = None
+    
+    try:
+    
+        import pymira.front as frontPKG
+        import numpy as np
+        import dill as pickle
+        import sys, traceback
+
+        nodeListFile,inletNodeIndex,odir,nedge,log = args[0],args[1],args[2],args[3],args[4]
+        
+        import os
+        eDir = os.path.join(odir,'crawl_calcs')
+        if not os.path.exists(eDir):
+            os.makedirs(eDir)
+        vascFile = os.path.join(eDir,'crawl_inlet{}.dill'.format(inletNodeIndex))
+        
+        import logging
+        import os
+        logging.basicConfig(filename=os.path.join(odir,'crawl.log'),level=logging.DEBUG,format='%(asctime)s %(levelname)s: %(message)s')
+        
+        with open(nodeListFile ,'rb') as fo:
+            nodeList = pickle.load(fo)
+        
+        nnode = len(nodeList)
+        
+        inletNode = [n for n in nodeList if n.index==inletNodeIndex][0]
+        inletIndex = inletNode.index
+        #print('Inlet index: {}'.format(inletIndex))
+        info = 'STARTING inlet {} crawl: inlet_Q {}'.format(inletIndex,inletNode.inletQ)
+        
+        vedges = []
+        visited = np.zeros(nnode,dtype='bool') # []
+        visited_edges = np.zeros(nedge,dtype='bool')
+        edgesOut = []
+        curNode = inletNode
+
+        logging.info(info)
+        print info
+        
+        #print('Inlet node info: delay: {} Q:{}'.format(inletNode.inletDelay,inletNode.inletQ))
+        front = frontPKG.Front([inletNode],delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance,conc=None,verbose=False)
+        
+        # START WALK...
+        endloop = False
+        count = 0
+        #nStepMax = 200 #1e3
+        
+        # Stats
+        max_n_front = 0
+        import time as timeMod
+        t0 = timeMod.time()
+        
+        exitStr = 'undefined'
+    
+        while endloop is False:
+            count += 1
+            #if count>=nStepMax:
+            #    endloop = True
+
+            #dur = timeMod.time() - t0                
+            
+            #if len(front.Q)>0:
+            #    mnQ = np.min(front.Q[0:front.front_size])
+            #    mxQ = np.max(front.Q[0:front.front_size])
+            #    mxC = np.max(front.conc[0:front.front_size])
+                #print('Inlet: {}., iteration: {}, front size: {},maxQ: {}, c_v(max): {}, c_i(max) {}'.format(inletNodeIndex,count,front.front_size,mnQ,mxC,np.max(intr.grid)))
+    
+            if front.front_size>0 and endloop is False:
+                if front.front_size>max_n_front:
+                    max_n_front = front.front_size
+                (current_nodes,delay,Q,distance,concIn) = front.get_current_front()
+    
+                for n,curNode in enumerate(current_nodes):
+                    #print('Q: {}'.format(curNode.Q))
+                    #print('dP: {}'.format(curNode.delta_pressure))
+                    
+                    if not visited[curNode.index]:
+                        visited[curNode.index] = True
+                    
+                        res = [(nodeList[nodeIndex],curNode.edges[i],curNode.Q[i]) for i,nodeIndex in enumerate(curNode.connecting_node) if curNode.Q[i]>0.]
+                        #Q_limit_count += len([i for i,nodeIndex in enumerate(curNode.connecting_node) if curNode.Q[i]>0.]
+                            
+                        if len(res)>0:
+                            
+                            # Select qualifying branches
+                            next_nodes = [r[0] for r in res if r[2]!=0.]
+                            via_edges = [r[1] for r in res if r[2]!=0.]
+                            edge_Q = [r[2] for r in res if r[2]!=0.]
+                            
+                            delay_from = []
+                            Q_from = []
+                            distance_from = []
+                            conc_from = [] # np.empty(0,dtype='float')
+                            #import pdb
+                            #pdb.set_trace()
+                            for ve,via_edge in enumerate(via_edges):                        
+                                if via_edge not in vedges:
+                                    vedges.append(via_edge)
+                                if not visited_edges[via_edge.index]:
+                                    visited_edges[via_edge.index] = True
+                                    edgesOut.append(via_edge)
+                                    via_edge.distance = distance[n]
+                                    #via_edge.delayQ = delay[n]
+                                                        
+                                delay_from.append(np.sum(via_edge.delay)+delay[n])
+                                Q_from.append(Q[n]*edge_Q[ve])
+                                distance_from.append(np.sum(via_edge.length)+distance[n])
+                                
+                            # Eliminate nodes that have a Q lower than limit
+                            inds = [i for i,q in enumerate(Q_from)]
+                            #Q_limit_count += len([q for q in Q_from if q<=Q_limit])
+    
+                            if len(inds)>0:
+                                try:
+                                    front.step_front([next_nodes[i] for i in inds],
+                                                 delay=[delay_from[i] for i in inds],
+                                                 Q=[Q_from[i] for i in inds],
+                                                 distance=[distance_from[i] for i in inds],
+                                                 conc=[None]*len(inds))
+                                except Exception,err:
+                                    print err
+                                    import pdb
+                                    pdb.set_trace()
+                            else:
+                                pass
+                        else:
+                            pass
+                    else:
+                        pass
+
+                front.complete_step()
+                
+                save_every_step = False
+                ss = 5
+                if save_every_step and count % ss == ss-1:
+                    print 'Writing vascular (inlet {}, step {}): {}'.format(inletNodeIndex,count,vascFile)
+                    with open(vascFile,'wb') as fo:
+                        pickle.dump((edgesOut,inletNodeIndex),fo)
+                    
+            else:
+                endloop = True
+                exitStr = 'front complete'
+                
+        elTime = timeMod.time() - t0
+        exitInfoStr = 'COMPLETED inlet {} ({}): nstep {}, max size {}, end size {}, inlet Q {}, elapsed time {}'.format(inletIndex,exitStr,front.nstep,max_n_front,front.front_size,inletNode.inletQ,elTime)
+        logging.info(exitInfoStr)
+        print exitInfoStr
+
+        with open(vascFile,'wb') as fo:
+            pickle.dump((edgesOut,inletNodeIndex),fo)
+                 
+    except:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        errFmt = traceback.format_exception(exc_type, exc_value,exc_traceback)
+        print 'ERROR: {}'.format(errFmt)
+        logging.error('Interstitium calc ({}): {}'.format(inletIndex,errFmt))
+     
         
 def _worker_function(args):
     
@@ -731,12 +1087,12 @@ def _worker_function(args):
             cnew = Q*scipy.ndimage.interpolation.shift(conc,d)
             return cnew.clip(min=0.)
         
-        Q_limit = 1e-9
-        c_limit = 1e-100
+        Q_limit = 1e-15
+        c_limit = 1e-1000
         Q_limit_count = 0
         c_limit_count = 0
         
-        nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims,leaky_vessels,log = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8],args[9]
+        nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims,leaky_vessels,log,paramSet = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8],args[9],args[10]
         
         import os
         eDir = os.path.join(odir,'vascular_calcs')
@@ -781,7 +1137,7 @@ def _worker_function(args):
                 os.makedirs(intDir)
             intFile = os.path.join(intDir ,'interstitium_inlet{}.npz'.format(inletNodeIndex))            
             
-            intr = interstitium.Interstitium()
+            intr = interstitium.Interstitium(paramSet=paramSet)
             nodeCoords = np.asarray([n.coords for n in nodeList])
             intr.set_grid_dimensions(nodeCoords,time,grid_dims=grid_dims,embed_dims=embed_dims)
             grid = np.zeros(intr.grid_dims,dtype='float')
@@ -848,6 +1204,8 @@ def _worker_function(args):
                         Q_from = []
                         distance_from = []
                         conc_from = [] # np.empty(0,dtype='float')
+                        #import pdb
+                        #pdb.set_trace()
                         for ve,via_edge in enumerate(via_edges):                        
                             if via_edge not in vedges:
                                 vedges.append(via_edge)
@@ -900,7 +1258,7 @@ def _worker_function(args):
                                 conc_from = np.append(conc_from,via_edge.concentration[-1,:][np.newaxis],axis=0)
                             
                         # Eliminate nodes that have a Q lower than limit
-                        inds = [i for i,q in enumerate(Q_from) if q>Q_limit and np.max(conc_from[i])>c_limit]
+                        inds = [i for i,q in enumerate(Q_from) if q>Q_limit]# and np.max(conc_from[i])>c_limit]
                         Q_limit_count += len([q for q in Q_from if q<=Q_limit])
                         c_limit_count += len([c for c in conc_from if np.max(c)<=c_limit])
                         #import pdb
@@ -977,8 +1335,8 @@ def _worker_function(args):
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
-    dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1'
+    dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
+    #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1'
     #dir_ = r'D:'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
@@ -986,39 +1344,65 @@ def main():
     #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\ca1'
     f = os.path.join(dir_,'spatialGraph_RIN.am')
     #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-    #f = dir_ + 'Flow2AmiraPressure.am'
+    #f = os.path.join(dir_,'Flow2AmiraPressure.am')
 
     graph = spatialgraph.SpatialGraph()
     print('Reading graph...')
     graph.read(f)
     print('Graph read')
     
-    recon = False
+    reconOnly = False
     logRecon = True
     resume = True
     parallel = True
     largest_inflow = False
     leaky_vessels = True
-    name = 'gd'
-    concFunc = gd
- 
-    if recon:
-        recon_vascular = False
-        recon_interstitium = True
+    name = 'impulse'
+    concFunc = impulse
+    
+    recon_vascular = True
+    recon_interstitium = True
+    
+    crawl = True
+    
+    #import pdb
+    #pdb.set_trace()
+    
+    if crawl:
+        print 'Crawling...'
+
         ia = InjectAgent()
-        print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
-        ia.reconstruct_results(graph,output_directory=dir_,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
-    else:
-        print 'Simulating...'
-        paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=7e-11*1e12,feNSample=3)
-        ia = InjectAgent(paramSet=paramset)
         try:
-            ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,concFunc=concFunc,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)
-            #ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)
-            print('Simulation complete')
+            if not reconOnly:
+                ia.crawl(graph,output_directory=dir_,resume=resume,parallel=parallel)
+                print('Simulation complete')
+            ia.reconstruct_crawl(graph,output_directory=dir_)
         except KeyboardInterrupt:
             print('Ctrl-C interrupt! Saving graph')
             ia.save_graph(output_directory=dir_)
+ 
+    else:
+        if reconOnly:
+            ia = InjectAgent()
+            print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
+            ia.reconstruct_results(graph,output_directory=dir_,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
+        else:
+            print 'Simulating...'
+            
+            if name=='gd':
+                paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=2.08e-10,feNSample=3)
+            if True:
+                paramset = ParameterSet(dt=60.,nt=200,pixSize=[150.,150.,150.],ktrans=0.1,D=7e-11*1e12,feNSample=3)
+                
+            ia = InjectAgent(paramSet=paramset)
+            try:
+                ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,concFunc=concFunc,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)
+                #ia.inject(graph,output_directory=dir_,resume=resume,parallel=parallel,name=name,largest_inflow=largest_inflow,leaky_vessels=leaky_vessels)
+                print('Simulation complete')
+                ia.reconstruct_results(graph,output_directory=dir_,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
+            except KeyboardInterrupt:
+                print('Ctrl-C interrupt! Saving graph')
+                ia.save_graph(output_directory=dir_)
         
 if __name__ == "__main__":
     #import cProfile

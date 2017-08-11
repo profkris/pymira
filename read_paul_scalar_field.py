@@ -11,7 +11,8 @@ import numpy as np
 #path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\Pressure mmHg'
 #path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T - Post-VDA\1\Pressure mmHg'
 #path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\Perfusion ml_min_100g'
-path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T - Post-VDA\1\Perfusion ml_min_100g'
+#path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T - Post-VDA\1\Perfusion ml_min_100g'
+path = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\Velocity log_e(um_s)'
 files = [os.path.join(path,f) for f in os.listdir(path) if f.endswith('.txt')]
 files.sort(key=lambda f: int(filter(str.isdigit, f)))
 
@@ -42,7 +43,7 @@ for i,f in enumerate(files):
             assert len(tmp)==ncol
             #import pdb
             #pdb.set_trace()
-            grid[i,j,:] = tmp
+            grid[i,j,:] = np.abs(tmp)
         except Exception,e:
             print 'Error ({},{}): {}'.format(i,j,e)
            

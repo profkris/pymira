@@ -39,6 +39,9 @@ class Interstitium(object):
         self.dy = None
         self.dz = None
         self.dt = None
+        self.nr = paramSet.nr # 10
+        self.max_r = paramSet.max_r #1000. #um #dr*nr
+        self.dr = paramSet.dr #self.max_r / float(self.nr)
                         
         self.ktrans = paramSet.ktrans #0.00001 #/min
         self.ef = paramSet.ef #  not used
@@ -230,10 +233,6 @@ class Interstitium(object):
             ktrans = self.ktrans
         if D is None:
             D = self.D
-        
-        self.nr = 10
-        self.max_r = 1000. #um #dr*nr
-        self.dr = self.max_r / float(self.nr)
 
         if embed_dims is None:
             pad = self.max_r / 5.

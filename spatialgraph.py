@@ -470,7 +470,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         nodeScalars = np.zeros([nnodescalar,nnode])
         for i in range(nnodescalar):
             #nodeScalars.append(np.concatenate([s[i] for s in nodeScalarData]))
-            nodeScalars[i,:] = nodeScalarData[i::nnodescalar,0]
+            nodeScalars[i,:] = nodeScalarData[i::nnodescalar][0]
         
         #import spatialgraph
         graph = SpatialGraph(initialise=True,scalars=scalarNames,node_scalars=nodeScalarNames)
@@ -633,6 +633,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
         #plt.gca().set_xscale("log")
         plt.show()
         return fig
+        
+    def plot_graph(self):
+        nc = self.get_data('VertexCoordinates')
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection = '3d')
+        skip = 1
+        ax.scatter(nc[::skip,0],nc[::skip,1],nc[::skip,2], c='r', marker='o',s=1)
 
 class Editor(object):
     
