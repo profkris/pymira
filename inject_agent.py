@@ -109,6 +109,7 @@ class ParameterSet(object):
         self.dx = None
         self.dy = None
         self.dz = None
+
         self.dr = dr
         self.nr = nr
                         
@@ -1401,7 +1402,7 @@ def main():
     graph.read(f)
     print('Graph read')
     
-    recon = False
+    recon = True
     crawl = False
     logRecon = True
     resume = True
@@ -1413,13 +1414,21 @@ def main():
     concFunc = ca1
  
     if recon:
-        recon_vascular = False
-        recon_interstitium = True
         ia = InjectAgent()
-        #import pdb
-        #pdb.set_trace()
-        print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
-        ia.reconstruct_results(graph,path=dir_,output_directory=odir,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
+        if crawl:
+            print 'Crawling...'
+            try:
+                ia.reconstruct_crawl(graph,output_directory=dir_)
+            except Exception,e:
+                print e
+        else:
+            recon_vascular = False
+            recon_interstitium = True
+            
+            #import pdb
+            #pdb.set_trace()
+            print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
+            ia.reconstruct_results(graph,path=dir_,output_directory=odir,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
     else:
         print 'Simulating...'
         #paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=7e-11*1e12,feNSample=3)
@@ -1432,15 +1441,21 @@ def main():
             pdb.set_trace()
         else:
             print 'Passed parameter test'
-        import pdb
-        pdb.set_trace()
+
         ia = InjectAgent(paramSet=paramset)
 
         if crawl:
             print 'Crawling...'
-            ia.inject(graph, output_directory=odir, resume=resume, parallel=parallel, name=name, concFunc=concFunc, largest_inflow=largest_inflow, leaky_vessels=leaky_vessels)
+            try:
+                if not recon:
+                ia.crawl(graph,output_directory=dir_,resume=resume,parallel=parallel)
+                print('Simulation complete')
+                ia.reconstruct_crawl(graph,output_directory=dir_)
+            except KeyboardInterrupt:
+                print('Ctrl-C interrupt! Saving graph')
+                ia.save_graph(output_directory=dir_)
         else:
-            ia.inject(
+            ia.inject(graph, output_directory=odir, resume=resume, parallel=parallel, name=name, concFunc=concFunc, largest_inflow=largest_inflow, leaky_vessels=leaky_vessels)
  
 if __name__ == "__main__":
     #import cProfile
