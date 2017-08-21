@@ -39,17 +39,11 @@ class Interstitium(object):
         self.dy = None
         self.dz = None
 
-
-
-
-
-
         self.dt = paramSet.dt
         self.nt = paramSet.nt        
         self.dr = paramSet.dr
         self.nr = paramSet.nr
         self.max_r = self.dr * self.nr
-
                         
         #self.ktrans = paramSet.ktrans #0.00001 #/min
         self.ef = paramSet.ef #  not used
