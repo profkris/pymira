@@ -1411,7 +1411,7 @@ def main():
     graph.read(f)
     print('Graph read')
     
-    recon = False
+    recon = True
     crawl = True
     logRecon = True
     resume = True
@@ -1419,17 +1419,25 @@ def main():
     largest_inflow = False
     leaky_vessels = True
 
-    name = 'gd_2'
-    concFunc = gd
+    name = 'ca1'
+    concFunc = ca1
  
     if recon:
-        recon_vascular = False
-        recon_interstitium = True
         ia = InjectAgent()
-        #import pdb
-        #pdb.set_trace()
-        print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
-        ia.reconstruct_results(graph,path=dir_,output_directory=odir,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
+        if crawl:
+            print 'Crawling...'
+            try:
+                ia.reconstruct_crawl(graph,output_directory=dir_)
+            except Exception,e:
+                print e
+        else:
+            recon_vascular = False
+            recon_interstitium = True
+            
+            #import pdb
+            #pdb.set_trace()
+            print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
+            ia.reconstruct_results(graph,path=dir_,output_directory=odir,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
     else:
         print 'Simulating...'
         #paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=7e-11*1e12,feNSample=3)
@@ -1443,9 +1451,8 @@ def main():
         if crawl:
             print 'Crawling...'
             try:
-                if not recon:
-                    ia.crawl(graph,output_directory=dir_,resume=resume,parallel=parallel)
-                    print('Simulation complete')
+                ia.crawl(graph,output_directory=dir_,resume=resume,parallel=parallel)
+                print('Simulation complete')
                 ia.reconstruct_crawl(graph,output_directory=dir_)
             except KeyboardInterrupt:
                 print('Ctrl-C interrupt! Saving graph')
