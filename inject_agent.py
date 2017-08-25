@@ -110,13 +110,6 @@ class ParameterSet(object):
         self.dy = None
         self.dz = None
 
-
-
-
-
-
-
-
         self.dr = dr
         self.nr = nr
                         
@@ -857,7 +850,7 @@ class InjectAgent(object):
         import pathos.multiprocessing as multiprocessing
         #import multiprocessing
         ncpu = multiprocessing.cpu_count()
-        p = multiprocessing.ProcessingPool(ncpu/2)
+        p = multiprocessing.ProcessingPool(ncpu)
         
         #intr = interstitium.Interstitium()
         #intr.set_grid_dimensions(graph.get_data('EdgePointCoordinates'),self.time)
@@ -876,16 +869,13 @@ class InjectAgent(object):
         
         log = None
 
-
-
         argList = [[self.paramSet,nodeFile,n.index,concFunc,timeFile,output_directory,nedge,None,None,leaky_vessels,log] for n in inletNodes]
 
 
         if parallel:
+            print 'Parallel prcessing on {} cores'.format(ncpu)
             p.map(_worker_function,argList)
         else:
-
-
             for arg in argList:
                 _worker_function(arg)
 
@@ -1394,6 +1384,7 @@ def main():
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\ca1'
     #dir_ = r'D:\SW1222\1'
+    dir_ = r'/mnt/sdc/data/simulations/SW1222/1/'
     f = os.path.join(dir_,'spatialGraph_RIN.am')
     #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
 
@@ -1408,41 +1399,54 @@ def main():
     graph.read(f)
     print('Graph read')
     
-    recon = False
-    crawl = True
+    recon = True
+    crawl = False
     logRecon = True
     resume = True
-    parallel = True
+    parallel = False
     largest_inflow = False
     leaky_vessels = True
 
-    name = 'gd_2'
-    concFunc = gd
+    name = 'ca1'
+    concFunc = ca1
  
     if recon:
-        recon_vascular = False
-        recon_interstitium = True
         ia = InjectAgent()
-        #import pdb
-        #pdb.set_trace()
-        print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
-        ia.reconstruct_results(graph,path=dir_,output_directory=odir,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
+        if crawl:
+            print 'Crawling...'
+            try:
+                ia.reconstruct_crawl(graph,output_directory=dir_)
+            except Exception,e:
+                print e
+        else:
+            recon_vascular = False
+            recon_interstitium = True
+            
+            #import pdb
+            #pdb.set_trace()
+            print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
+            ia.reconstruct_results(graph,path=dir_,output_directory=odir,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
     else:
         print 'Simulating...'
         #paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=7e-11*1e12,feNSample=3)
         #paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],P=1e-6,D=2.08e-10,feNSample=3)
-        paramset = ParameterSet(dt=0.9,nt=72000,nr=10,dr=100.,pixSize=[150.,150.,150.],P=1e-2,D=2.08e2,feNSample=3)
+        paramset = ParameterSet(dt=10.,nt=600,nr=10,dr=100.,pixSize=[150.,150.,150.],P=1e-2,D=2.08e2,feNSample=3)
+        print 'Testing parameters'
         if not paramset.test_parameters():
+            print 'Failed parameter test'
             import pdb
             pdb.set_trace()
+        else:
+            print 'Passed parameter test'
+
         ia = InjectAgent(paramSet=paramset)
 
         if crawl:
             print 'Crawling...'
             try:
                 if not recon:
-                    ia.crawl(graph,output_directory=dir_,resume=resume,parallel=parallel)
-                    print('Simulation complete')
+                ia.crawl(graph,output_directory=dir_,resume=resume,parallel=parallel)
+                print('Simulation complete')
                 ia.reconstruct_crawl(graph,output_directory=dir_)
             except KeyboardInterrupt:
                 print('Ctrl-C interrupt! Saving graph')
