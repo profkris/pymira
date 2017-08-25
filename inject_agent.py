@@ -1125,9 +1125,6 @@ def _worker_function(args):
         Q_limit_count = 0
         c_limit_count = 0
         
-
-
-
         paramSet,nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims,leaky_vessels,log = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8],args[9],args[10]
 
         
