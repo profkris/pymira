@@ -110,6 +110,13 @@ class ParameterSet(object):
         self.dy = None
         self.dz = None
 
+
+
+
+
+
+
+
         self.dr = dr
         self.nr = nr
                         
@@ -448,7 +455,10 @@ class InjectAgent(object):
             
             init = False
  
-            for fi,f in enumerate(files):
+            #for fi,f in enumerate(files):
+            f = files[0]
+            fi = 0
+            if True:
                 print('Reading file {} of {}: {}'.format(fi+1,nfiles,f))
                 try:
                     with open(os.path.join(eDir,f),'rb') as fo:
@@ -875,7 +885,7 @@ class InjectAgent(object):
         import pathos.multiprocessing as multiprocessing
         #import multiprocessing
         ncpu = multiprocessing.cpu_count()
-        p = multiprocessing.ProcessingPool(ncpu)
+        p = multiprocessing.ProcessingPool(ncpu/2)
         
         #intr = interstitium.Interstitium()
         #intr.set_grid_dimensions(graph.get_data('EdgePointCoordinates'),self.time)
@@ -898,7 +908,6 @@ class InjectAgent(object):
 
 
         if parallel:
-            print 'Parallel prcessing on {} cores'.format(ncpu)
             p.map(_worker_function,argList)
         else:
             for arg in argList:
@@ -1443,7 +1452,6 @@ def main():
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\ca1'
     #dir_ = r'D:\SW1222\1'
-    dir_ = r'/mnt/sdc/data/simulations/SW1222/1/'
     f = os.path.join(dir_,'spatialGraph_RIN.am')
     #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
 
@@ -1459,16 +1467,11 @@ def main():
     print('Graph read')
     
     recon = True
-   crawl = False
-  gRecon = True
-
-
-
-
-    resume = True
+    crawl = True
+    logRecon = True
+    resume = False
     parallel = False
-    largest_inflow = False
-
+    largest_inflow = True
     leaky_vessels = True
 
     name = 'ca1'
@@ -1498,26 +1501,16 @@ def main():
         print 'Simulating...'
         #paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=7e-11*1e12,feNSample=3)
         #paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],P=1e-6,D=2.08e-10,feNSample=3)
-        paramset = ParameterSet(dt=10.,nt=600,nr=10,dr=100.,pixSize=[150.,150.,150.],P=1e-2,D=2.08e2,feNSample=3)
-        print 'Testing parameters'
+        paramset = ParameterSet(dt=0.9,nt=72000,nr=10,dr=100.,pixSize=[150.,150.,150.],P=1e-2,D=2.08e2,feNSample=3)
         if not paramset.test_parameters():
-            print 'Failed parameter test'
             import pdb
             pdb.set_trace()
-        else:
-            print 'Passed parameter test'
-
         ia = InjectAgent(paramSet=paramset)
 
         if crawl:
             print 'Crawling...'
             try:
-<<<<<<< HEAD
                 ia.crawl(graph,path=dir_,output_directory=odir,resume=resume,parallel=parallel)
-=======
-                if not recon:
-                ia.crawl(graph,output_directory=dir_,resume=resume,parallel=parallel)
->>>>>>> 148fcbda771aa2931cb038310077a857f1d46191
                 print('Simulation complete')
                 ia.reconstruct_crawl(graph,output_directory=odir)
             except KeyboardInterrupt:
