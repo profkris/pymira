@@ -230,13 +230,16 @@ class Interstitium(object):
         for j in xrange(nt-1):
             c_i[:,j+1] = np.dot(A,c_i[:,j]) + M*(c_v[j]-c_i[:,j]) #(np.dot(B,R[:,j]))
             c_v_out[j+1] += np.sum(M*(c_i[0,j]-c_v[j]))
+            if not np.all(np.isfinite(c_i)) or not np.all(np.isfinite(c_v_out)):
+                import pdb
+                pdb.set_trace()
          
         if not(np.all(np.isfinite(c_i))):
             c_i[:] = 0.
-            #print 'Infinite Ci!'
+            print 'Infinite Ci!'
         if not(np.all(np.isfinite(c_v_out))):
             c_v_out[:] = 0.
-            #print 'Infinite Cv!'
+            print 'Infinite Cv!'
             
         #c_i = np.nan_to_num(c_i)
         #c_v_out = np.nan_to_num(c_v_out)
@@ -361,7 +364,11 @@ class Interstitium(object):
         D = [self.D]*nnode # um2/s
         P = [self.P]*nnode
         
-        surface_area = vessel_length * np.square(vessel_radius) * np.pi # m2
+        try:
+            surface_area = vessel_length[1:] * np.square(vessel_radius[1:]) * np.pi # m2
+        except:
+            import pdb
+            pdb.set_trace()
         
         # Set radial array for finite element calc
         r = np.linspace(0,self.max_r,num=self.nr)

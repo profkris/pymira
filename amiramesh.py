@@ -80,6 +80,7 @@ class AmiraMesh(object):
         
         # Data type
         if 'ascii' in self.fileType.lower():
+            #curData = curData.splitlines()
             curData = [s.strip().split(' ') for s in curData.splitlines() if s]
             comment_line = []
             for k,cnt in enumerate(curData):
@@ -100,6 +101,8 @@ class AmiraMesh(object):
                 dtype = np.dtype('i')
             elif curField['type']=='long':
                 dtype = np.dtype('i')
+            elif curField['type']=='byte':
+                dtype = np.dtype('byte')
             else: # Default to float
                 dtype = np.dtype('f')
             try:
@@ -112,8 +115,6 @@ class AmiraMesh(object):
                 pdb.set_trace()
 
         elif 'binary' in self.fileType.lower():
-            import pdb
-            pdb.set_trace()
             #curData = self.decode_rle(self,curData,uncompressed_size)
 
             if curField['encoding']=='raw':
@@ -398,7 +399,7 @@ class AmiraMesh(object):
             mInd += len(mrk)
             self.fieldRange.append(mInd)
         self.fieldRange.append(len(self.data))
-        
+
         for i,curField in enumerate(self.fields):
             self._read_file_data(self.data,self.fieldRange[i],self.fieldRange[i+1],curField['marker'])
         self.fieldNames = [x['name'] for x in self.fields]

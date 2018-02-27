@@ -1221,15 +1221,26 @@ class Editor(object):
         
         return graph
         
-    def remove_graphs_smaller_than(self, graph, lim):
+    def remove_graphs_smaller_than(self, graph, lim, pfile=None):
 
-        graphNodeIndex, graph_size = graph.identify_graphs(progBar=True)
-        import pdb
-        pdb.set_trace()
-        largest_graph_index = np.argmax(graph_size)
-        node_indices = np.arange(graph.nnode)
-        nodes_to_delete = node_indices[graphNodeIndex!=largest_graph_index]
-        graph = self.delete_nodes(graph,nodes_to_delete)    
+        if pfile is None:
+            graphNodeIndex, graph_size = graph.identify_graphs(progBar=True)
+        else:
+            import pickle
+            plist = pickle.load(open(pfile,"r"))
+            graphNodeIndex, graph_size = plist[0],plist[1]
+            
+        graph_index_to_delete = np.where(graph_size<lim)
+        nodes_to_delete = []
+        for gitd in graph_index_to_delete[0]:
+            inds = np.where(graphNodeIndex==gitd)
+            nodes_to_delete.extend(inds[0].tolist())
+        nodes_to_delete = np.asarray(nodes_to_delete)
+            
+        #node_indices = np.arange(graph.nnode)
+        #nodes_to_delete = node_indices[graphNodeIndex!=largest_graph_index]
+        graph = self.delete_nodes(graph,nodes_to_delete)
+        return graph
 
 class Node(object):
     
