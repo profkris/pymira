@@ -527,18 +527,31 @@ class SpatialGraph(amiramesh.AmiraMesh):
         ns1 = len(s1[0])
             
         nconn = ns0 + ns1
+        try:
+            edge_inds = np.concatenate((s0[0],s1[0]))
+        except Exception,e:
+            print e
+            import pdb
+            pdb.set_trace()
             
         connecting_node = np.zeros(nconn,dtype='int')
         connecting_node[0:ns0] = edgeConn[s0[0],1]
         connecting_node[ns0:ns0+ns1] = edgeConn[s1[0],0]
-        return connecting_node
+        return connecting_node, edge_inds
         
-    def identify_graphs(self,progBar=False):
+    def identify_graphs(self,progBar=False,ignore_node=None,ignore_edge=None,verbose=False,add_scalar=True):
         
         nodeCoords = self.get_data('VertexCoordinates')
         conn = self.get_data('EdgeConnectivity')
         nnodes = len(nodeCoords)
         nedge = len(conn)
+        
+        if ignore_node is None:
+            ignore_node = np.zeros(self.nnode,dtype='bool')
+            ignore_node[:] = False
+        if ignore_edge is None:
+            ignore_edge = np.zeros(self.nedge,dtype='bool')
+            ignore_edge[:] = False
         
         #import pdb
         #pdb.set_trace()
@@ -558,38 +571,41 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 pbar.update(1)
             
             #if graphIndex[nodeIndex] == -1:
-            if True:
-                connIndex = self.connected_nodes(nodeIndex)
+            if not ignore_node[nodeIndex]:
+                connIndex,edge_inds = self.connected_nodes(nodeIndex)
+                connIndex = [connIndex[ei] for ei,edgeInd in enumerate(edge_inds) if not ignore_edge[edgeInd]]
                 nconn = len(connIndex)
                 # See if connected nodes have been assigned a graph index
                 if nconn>0:
                     # Get graph indices for connected nodes
                     connGraphIndex = graphIndex[connIndex]
-                    # If one or more connected nodes has an index, assign the minimum one to the curret node
-                    if not all(connGraphIndex==-1):
-                        #mn = np.min(np.append(connGraphIndex[connGraphIndex>=0],count))
-                        #unq = np.unique(np.append(connGraphIndex[connGraphIndex>=0],count))
-                        mn = np.min(connGraphIndex[connGraphIndex>=0])
-                        unq = np.unique(connGraphIndex[connGraphIndex>=0])
-                        inds = [i for i,g in enumerate(graphIndex) if g in unq]
-                        graphIndex[inds] = mn
-                        graphIndex[connIndex] = mn
-                        graphIndex[nodeIndex] = mn
-                        #print 'Node {} set to {} (from neighbours)'.format(nodeIndex,mn)
-                        count = mn
-                    else:
-                        # No graph indices in vicinity
-                        if graphIndex[nodeIndex] == -1:
-                            count = next_count_value(graphIndex)
-                            graphIndex[connIndex] = count
-                            graphIndex[nodeIndex] = count
-                            #print 'Node {} set to {} (new index)'.format(nodeIndex,count)
+                    #if not ignore_edge[edge_inds]:
+                    if True:
+                        # If one or more connected nodes has an index, assign the minimum one to the curret node
+                        if not all(connGraphIndex==-1):
+                            #mn = np.min(np.append(connGraphIndex[connGraphIndex>=0],count))
+                            #unq = np.unique(np.append(connGraphIndex[connGraphIndex>=0],count))
+                            mn = np.min(connGraphIndex[connGraphIndex>=0])
+                            unq = np.unique(connGraphIndex[connGraphIndex>=0])
+                            inds = [i for i,g in enumerate(graphIndex) if g in unq]
+                            graphIndex[inds] = mn
+                            graphIndex[connIndex] = mn
+                            graphIndex[nodeIndex] = mn
+                            #print 'Node {} set to {} (from neighbours)'.format(nodeIndex,mn)
+                            count = mn
                         else:
-                            count = graphIndex[nodeIndex]
-                            graphIndex[connIndex] = count
-                            #print 'Node {} neighbours set to {}'.format(nodeIndex,count)
-                        #graphIndex[nodeIndex] = count
-                        #graphIndex[connIndex] = count
+                            # No graph indices in vicinity
+                            if graphIndex[nodeIndex] == -1:
+                                count = next_count_value(graphIndex)
+                                graphIndex[connIndex] = count
+                                graphIndex[nodeIndex] = count
+                                #print 'Node {} set to {} (new index)'.format(nodeIndex,count)
+                            else:
+                                count = graphIndex[nodeIndex]
+                                graphIndex[connIndex] = count
+                                #print 'Node {} neighbours set to {}'.format(nodeIndex,count)
+                            #graphIndex[nodeIndex] = count
+                            #graphIndex[connIndex] = count
                 else:
                     # No graph indices in vicinity and no connected nodes
                     count = next_count_value(graphIndex)
@@ -612,13 +628,14 @@ class SpatialGraph(amiramesh.AmiraMesh):
             self.nodeList = self.node_list()
             
         edges = self.edges_from_node_list(self.nodeList)
-            
-        for e in edges:
-            indS,indE = graphIndex[e.start_node_index],graphIndex[e.end_node_index]
-            if indS!=indE:
-                import pdb
-                pdb.set_trace()
-            e.add_scalar('Graph',np.repeat(indS,e.npoints))
+        
+        if add_scalar:
+            for e in edges:
+                indS,indE = graphIndex[e.start_node_index],graphIndex[e.end_node_index]
+                if indS!=indE:
+                    import pdb
+                    pdb.set_trace()
+                e.add_scalar('Graph',np.repeat(indS,e.npoints))
             
         return graphIndex, graph_size
  

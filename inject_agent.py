@@ -1376,15 +1376,15 @@ def _worker_function(args):
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
-    #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
-    dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1'
+    dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
+    #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1'
     #dir_ = r'D:'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\ca1'
     #dir_ = r'D:\SW1222\1'
-    dir_ = r'/mnt/sdc/data/simulations/SW1222/1/'
+    #dir_ = r'/mnt/sdc/data/simulations/SW1222/1/'
     f = os.path.join(dir_,'spatialGraph_RIN.am')
     #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
 
@@ -1400,7 +1400,7 @@ def main():
     print('Graph read')
     
     recon = True
-    crawl = False
+    crawl = True
     logRecon = True
     resume = True
     parallel = False
@@ -1444,7 +1444,7 @@ def main():
         if crawl:
             print 'Crawling...'
             try:
-                if not recon:
+                #if not recon:
                 ia.crawl(graph,output_directory=dir_,resume=resume,parallel=parallel)
                 print('Simulation complete')
                 ia.reconstruct_crawl(graph,output_directory=dir_)
