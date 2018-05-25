@@ -80,7 +80,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         if not amiramesh.AmiraMesh.read(self,*args,**kwargs):
             return False
         if self.get_parameter_value("ContentType")!="HxSpatialGraph":
-            print 'Warning: File is not an Amira SpatialGraph!'
+            print('Warning: File is not an Amira SpatialGraph!')
 
         self.set_graph_sizes()
                 
@@ -127,8 +127,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
         for x in self.definitions:
             x['size'] = [0]
         for x in self.fields:
-            x['shape'] = [0L,x['nelements']]
-            x['nentries'] = [0L]
+            x['shape'] = [0,x['nelements']]
+            x['nentries'] = [0]
             
     def add_node(self,node=None,index=0,coordinates=[0.,0.,0.]):
         nodeCoords = self.get_field('VertexCoordinates')['data']
@@ -207,12 +207,12 @@ class SpatialGraph(amiramesh.AmiraMesh):
             try:
                 nfile = os.path.join(path,'nodeList.dill')
                 if os.path.isfile(nfile):
-                    print('Loading node list from file: {}'.format(nfile))
+                    print(('Loading node list from file: {}'.format(nfile)))
                     import dill as pickle
                     with open(nfile,'rb') as fo:
                         nodeList = pickle.load(fo)
                     return nodeList
-            except Exception,e:
+            except Exception as e:
                 print(e)
         return None
        
@@ -334,7 +334,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
     def remove_field(self,fieldName):
         f = [(i,f) for (i,f) in enumerate(self.fields) if f['name']==fieldName]
         if f[0][1] is None:
-            print('Could not locate requested field: {}'.format(fieldName))
+            print(('Could not locate requested field: {}'.format(fieldName)))
             return
         _  = self.fields.pop(f[0][0])
         
@@ -385,7 +385,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
     def _print(self):
         print('GRAPH')
-        print('Fields: {}'.format(self.fieldNames))
+        print(('Fields: {}'.format(self.fieldNames)))
         for f in self.fields:
             print(f)
             
@@ -399,11 +399,11 @@ class SpatialGraph(amiramesh.AmiraMesh):
             fields = [f for f in self.fields if f['definition']==defName]
             for f in fields:
                 if f['nentries'][0]!=defSize:
-                    print('{} field size does not match {} definition size!'.format(f['name'],defName))
+                    print(('{} field size does not match {} definition size!'.format(f['name'],defName)))
                 if f['shape'][0]!=defSize:
-                    print('{} shape size does not match {} definition size!'.format(f['name'],defName))
+                    print(('{} shape size does not match {} definition size!'.format(f['name'],defName)))
                 if not all(x==y for x,y in zip(f['data'].shape,f['shape'])):
-                    print('{} data shape does not match shape field!'.format(f['name']))
+                    print(('{} data shape does not match shape field!'.format(f['name'])))
 
         if deep:
             for nodeInd in range(self.nnode):
@@ -411,18 +411,18 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 for i,e in enumerate(node.edges):
                     if not node.edge_indices_rev[i]:
                         if not all(x==y for x,y in zip(e.start_node_coords,node.coords)):
-                            print('Node coordinates ({}) do not match start of edge ({}) coordinates: {} {}'.format(node.index,e.index,e.start_node_coords,node.coords))
+                            print(('Node coordinates ({}) do not match start of edge ({}) coordinates: {} {}'.format(node.index,e.index,e.start_node_coords,node.coords)))
                         if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
-                            print('Edge start point does not match edge/node start ({}) coordinates'.format(e.index))
+                            print(('Edge start point does not match edge/node start ({}) coordinates'.format(e.index)))
                         if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
-                            print('Edge end point does not match edge/node end ({}) coordinates'.format(e.index))
+                            print(('Edge end point does not match edge/node end ({}) coordinates'.format(e.index)))
                     else:
                         if not all(x==y for x,y in zip(e.end_node_coords,node.coords)):
-                            print('Node coordinates ({}) do not match end of edge ({}) coordinates'.format(node.index,e.index))
+                            print(('Node coordinates ({}) do not match end of edge ({}) coordinates'.format(node.index,e.index)))
                         if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
-                            print('Edge end point does not match edge start (REVERSE) ({}) coordinates'.format(e.index))
+                            print(('Edge end point does not match edge start (REVERSE) ({}) coordinates'.format(e.index)))
                         if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
-                            print('Edge start point does not match edge end (REVERSE) ({}) coordinates'.format(e.index))        
+                            print(('Edge start point does not match edge end (REVERSE) ({}) coordinates'.format(e.index)))        
 
     def edges_from_node_list(self,nodeList):
         
@@ -529,8 +529,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
         nconn = ns0 + ns1
         try:
             edge_inds = np.concatenate((s0[0],s1[0]))
-        except Exception,e:
-            print e
+        except Exception as e:
+            print(e)
             import pdb
             pdb.set_trace()
             
@@ -566,7 +566,6 @@ class SpatialGraph(amiramesh.AmiraMesh):
             pbar = tqdm(total=nnodes) # progress bar
         
         for nodeIndex,node in enumerate(nodeCoords):
-            #print nodeIndex
             if progBar:
                 pbar.update(1)
             
@@ -925,7 +924,7 @@ class Editor(object):
             return graph
             
         graph = self.delete_nodes(graph,zero_conn)
-        print '{} isolated nodes removed'.format(len(zero_conn))
+        print(('{} isolated nodes removed'.format(len(zero_conn))))
         return graph
         
     def remove_selfconnected_edges(self,graph):
@@ -938,7 +937,7 @@ class Editor(object):
         if len(selfconn)==0:
             return graph
             
-        print 'Removing {} self-connected edges...'.format(len(selfconn))
+        print('Removing {} self-connected edges...'.format(len(selfconn)))
         self.delete_edges(graph,selfconn,remove_disconnected_nodes=False)
         return graph
     
@@ -947,9 +946,9 @@ class Editor(object):
         import pickle
         import os
 
-        print 'Generating node list...'
+        print('Generating node list...')
         nodeList = graph.node_list(path=path)
-        print 'Node list complete.'
+        print('Node list complete.')
         
         nnode = graph.nnode
         nedge = graph.nedge        
@@ -975,7 +974,7 @@ class Editor(object):
             if (node.nconn==1 or node.nconn>2) and node_now_edge[node.index]==0 and node_edges_checked[node.index]==0:
                 # If so, make a new node object
                 if node_converted[node.index]==0:
-                    print('NODE (START) {} {} {}'.format(newNodeCount,node.index,node.nconn))
+                    print(('NODE (START) {} {} {}'.format(newNodeCount,node.index,node.nconn)))
                     newNode = Node(index=newNodeCount,coordinates=node.coords,connecting_node=[],old_index=node.index)
                     # Mark node as having been converted to a new node (rather than an edge)
                     node_converted[node.index] = 1
@@ -984,7 +983,7 @@ class Editor(object):
                     node_index_lookup[node.index] = newNodeIndex
                     newNodeCount += 1
                 else:
-                    print('NODE (START, REVISITED) {} {} {}'.format(newNodeCount,node.index,node.nconn))
+                    print(('NODE (START, REVISITED) {} {} {}'.format(newNodeCount,node.index,node.nconn)))
                     ind = node_index_lookup[node.index]
                     if ind<0:
                         import pdb
@@ -1027,7 +1026,7 @@ class Editor(object):
                                 pdb.set_trace()
                                 
                             # Create edge object to add points to during walk
-                            print('EDGE {}'.format(newEdgeCount))
+                            print(('EDGE {}'.format(newEdgeCount)))
                             newEdge = Edge(index=newEdgeCount,start_node_index=newNode.index,
                                                start_node_coords=newNode.coords,
                                                coordinates=ecoords,
@@ -1146,7 +1145,7 @@ class Editor(object):
                                         #print('REVISITED NODE {} (END)'.format(endNode.index))
                                     # If node hasn't been converted, and isn't an edge
                                     elif node_now_edge[curNodeIndex]==0:
-                                        print('NODE (END) {} {}'.format(newNodeCount,curNode.index))
+                                        print(('NODE (END) {} {}'.format(newNodeCount,curNode.index)))
                                         end_node_index_new = newNodeCount
                                         endNode = Node(index=end_node_index_new,coordinates=curNode.coords,connecting_node=[],old_index=curNode.index)
                                         node_converted[curNodeIndex] = 1
@@ -1162,8 +1161,8 @@ class Editor(object):
                                         if stat!=0:
                                             import pdb
                                             pdb.set_trace()
-                                        print('EDGE COMPLETE: end node {}'.format(endNode.index))
-                                    except Exception,e:
+                                        print(('EDGE COMPLETE: end node {}'.format(endNode.index)))
+                                    except Exception as e:
                                         print(e)
                                         import pdb
                                         pdb.set_trace()
@@ -1190,11 +1189,11 @@ class Editor(object):
                             if newEdge.start_node_index==newNode.index:
                                 res = newNode.add_edge(newEdge)
                                 if not res:
-                                    print('Error: Edge {} is already attached to node {}'.format(newEdge.index,newNode.index))
+                                    print(('Error: Edge {} is already attached to node {}'.format(newEdge.index,newNode.index)))
                             elif newEdge.end_node_index==newNode.index:
                                 res = newNode.add_edge(newEdge,reverse=True)
                                 if not res:
-                                    print('Error: Edge {} is already attached to node {}'.format(newEdge.index,newNode.index))
+                                    print(('Error: Edge {} is already attached to node {}'.format(newEdge.index,newNode.index)))
                             else:
                                 import pdb
                                 pdb.set_trace()
@@ -1357,7 +1356,7 @@ class Node(object):
     def add_scalar(self,name,values):
         
         if name in self.scalarNames:
-            print('Error: Node scalar field {} already exists!'.format(name))
+            print(('Error: Node scalar field {} already exists!'.format(name)))
             return
             
         if len(self.scalars)==0:
@@ -1374,12 +1373,12 @@ class Node(object):
         scalar[0]
             
     def _print(self):
-        print('NODE ({}):'.format(self.index))
-        print('Coordinate: {}'.format(self.coords))
-        print('Connected to: {}'.format(self.connecting_node))
+        print(('NODE ({}):'.format(self.index)))
+        print(('Coordinate: {}'.format(self.coords)))
+        print(('Connected to: {}'.format(self.connecting_node)))
         if len(self.connecting_node)>0:
             edgeInd = [e.index for e in self.edges]
-            print('Connected via edges: {}'.format(edgeInd))
+            print(('Connected via edges: {}'.format(edgeInd)))
             
 class Edge(object):
     
@@ -1512,7 +1511,7 @@ class Edge(object):
             if set_if_exists:
                 self.set_scalar(name,values)
             else:
-                print('Error: Scalar field {} already exists!'.format(name))
+                print(('Error: Scalar field {} already exists!'.format(name)))
             return
             
         if len(self.scalars)==0:
@@ -1534,20 +1533,20 @@ class Edge(object):
     def set_scalar(self,name,values):
         scalarInd = [i for i,x in enumerate(self.scalars) if self.scalarNames[i]==name]
         if len(scalarInd)==0:
-            print 'Scalar does not exist!'
+            print('Scalar does not exist!')
             return
         oldVals = self.scalars[scalarInd[0]]
         if len(values)!=len(oldVals):
-            print 'Incorrect number of scalar values!'
+            print('Incorrect number of scalar values!')
             return
         self.scalars[scalarInd[0]] = values
             
     def _print(self):
-        print('EDGE ({})'.format(self.index))
-        print('Number of points: {}'.format(self.npoints))
-        print('Start node (index,coords): {} {}'.format(self.start_node_index,self.start_node_coords))
-        print('End node (index,coords): {} {}'.format(self.end_node_index,self.end_node_coords))
+        print(('EDGE ({})'.format(self.index)))
+        print(('Number of points: {}'.format(self.npoints)))
+        print(('Start node (index,coords): {} {}'.format(self.start_node_index,self.start_node_coords)))
+        print(('End node (index,coords): {} {}'.format(self.end_node_index,self.end_node_coords)))
         if self.scalarNames is not None:
-            print('Scalar fields: {}'.format(self.scalarNames))
+            print(('Scalar fields: {}'.format(self.scalarNames)))
         if not self.complete:
             print('Incomplete...')

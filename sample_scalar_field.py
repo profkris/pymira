@@ -33,13 +33,13 @@ for f in os.listdir(path):
 
 nfile = len(files)
 #Sort files
-files.sort(key=lambda f: int(filter(str.isdigit, f)))
+files.sort(key=lambda f: int(list(filter(str.isdigit, f))))
 
 meshes = []
 time = []
 for f in files:
     m = mesh.Mesh()
-    print 'Reading {}'.format(f)
+    print('Reading {}'.format(f))
     m.read(os.path.join(path,f))
     meshes.append(m)
     time.append(m.get_parameter_value('Time'))
@@ -160,7 +160,7 @@ def fit_sample(time,cur,sample):
     pyplot.figure()
     pyplot.plot(time/60., cur, "ro", time/60., fitfunc(p1, time), "r-") 
     #print('Sample: {}'.format(s))
-    print('Fit params: {}'.format(p1))
+    print(('Fit params: {}'.format(p1)))
     
 def heterogen_analysis(conc,gfile):
     gfile = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1\gd\vascular_recon\concentration_t0.am'

@@ -42,7 +42,7 @@ def parker(t,delay):
         conc[conc<0] = 0.
         conc[~np.isfinite(conc)] = 0.
         
-    except Exception,e:
+    except Exception as e:
         print(e)
         import pdb
         pdb.set_trace()
@@ -309,15 +309,15 @@ class InjectAgent(object):
             try:
                 nodeFile = os.path.join(path,'nodeList.dill')
                 if not os.path.isfile(nodeFile):
-                    print 'Generating node list...'
+                    print('Generating node list...')
                     self.nodeList = self.graph.node_list()
                 else:
                     with open(nodeFile ,'rb') as fo:
                         self.nodeList = pickle.load(fo)
                   
                 self.save_graph(output_directory=output_directory,logConc=log)
-            except Exception,e:
-                print e,nodeFile
+            except Exception as e:
+                print(e,nodeFile)
                 #import pdb
                 #pdb.set_trace()
                
@@ -347,7 +347,7 @@ class InjectAgent(object):
                         curFile = os.path.join(interDir,f)
                         data = np.load(curFile)
                         curgrid = data['grid']
-                        print('Reconstructing file {} of {}: {}. Min/Max conc: {}, {}'.format(i+1,len(files),f,np.nanmin(curgrid),np.nanmax(curgrid)))
+                        print(('Reconstructing file {} of {}: {}. Min/Max conc: {}, {}'.format(i+1,len(files),f,np.nanmin(curgrid),np.nanmax(curgrid))))
                         grid_dims = data['grid_dims']
                         embedDims = data['embedDims']
                         if not init:
@@ -359,18 +359,18 @@ class InjectAgent(object):
                         init = True
                         pixdim = [data['dx'],data['dy'],data['dz'],data['dt']]
                         boundingBox = data['embedDims'].flatten()
-                    except Exception,e:
-                        print('Error loading {}: {}'.format(curFile,e))
+                    except Exception as e:
+                        print(('Error loading {}: {}'.format(curFile,e)))
                         import pdb
                         pdb.set_trace()
                 #ofile = os.path.join(output_directory,'interstitium.nii')
                 sm = False
                 if sm:
                     medwinsize = 5
-                    print('Median filtering: {}'.format(medwinsize))
+                    print(('Median filtering: {}'.format(medwinsize)))
                     #import pdb
                     #pdb.set_trace()
-                    for j in xrange(grid.shape[0]):
+                    for j in range(grid.shape[0]):
                         #print j
                         grid[j] = scipy.ndimage.filters.median_filter(grid[j],size=medwinsize)
                         
@@ -391,7 +391,7 @@ class InjectAgent(object):
                 #tp_late = np.linspace(60,np.max(self.output_times),num=20)
                 #tp_late = np.arange(60,np.max(self.output_times),20)
                 #timePoints = np.append(tp_early,tp_late)
-                print 'Interstitial timepoints: {}'.format(timePoints)
+                print('Interstitial timepoints: {}'.format(timePoints))
                 
                 #import pdb
                 #pdb.set_trace()
@@ -412,11 +412,11 @@ class InjectAgent(object):
                         cur[le0] = -1e30
                     m = mesh.Mesh(data=cur,boundingBox=boundingBox)
                     ofile = os.path.join(odir,'interstitial_conc_t{}.am'.format(ti))
-                    print('Writing (max conc {}) {}'.format(np.max(cur),ofile))
+                    print(('Writing (max conc {}) {}'.format(np.max(cur),ofile)))
                     m.add_parameter('Time',np.asscalar(tp))
                     m.write(ofile)
                 #intObj.save_grid(output_directory,grid=grid,pixdim=pixdim,format='amira')
-                print('Interstitial concentration grid written to {}'.format(output_directory))
+                print(('Interstitial concentration grid written to {}'.format(output_directory)))
 
     def reconstruct_crawl(self,graph,output_directory=None,name=None, log=False):
 
@@ -430,7 +430,7 @@ class InjectAgent(object):
         if True:
             nodeFile = os.path.join(output_directory,'nodeList.dill')
             if not os.path.isfile(nodeFile):
-                print 'Generating node list...'
+                print('Generating node list...')
                 self.nodeList = self.graph.node_list()
             else:
                 with open(nodeFile ,'rb') as fo:
@@ -444,12 +444,12 @@ class InjectAgent(object):
             #eDir = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\impulseedge_calcs'
             files = os.listdir(eDir)
             nfiles = len(files)
-            print('Loading crawl calc results ({} files)...'.format(len(files)))
+            print(('Loading crawl calc results ({} files)...'.format(len(files))))
             
             init = False
  
             for fi,f in enumerate(files):
-                print('Reading file {} of {}: {}'.format(fi+1,nfiles,f))
+                print(('Reading file {} of {}: {}'.format(fi+1,nfiles,f)))
                 try:
                     with open(os.path.join(eDir,f),'rb') as fo:
                         curEdges,ind = pickle.load(fo)
@@ -469,8 +469,8 @@ class InjectAgent(object):
                             srcEdge[0].distance = curEdge.distance
                         if (srcEdge[0].delay < 0.) | (curEdge.delay[1]<srcEdge[0].delay):
                             srcEdge[0].delay = curEdge.delay[1]
-                except Exception,err:
-                    print err
+                except Exception as err:
+                    print(err)
   
             print('Adding data and distance data to graph')
 
@@ -483,13 +483,13 @@ class InjectAgent(object):
                     try:
                         edge.add_scalar('Distance',np.repeat(edge.distance,edge.npoints))
                         edge.add_scalar('Delay',np.repeat(edge.delay,edge.npoints))
-                    except Exception,err:
-                        print err
+                    except Exception as err:
+                        print(err)
                         import pdb
                         pdb.set_trace()
                 new_graph = self.graph.node_list_to_graph(self.nodeList)
                 ofile = os.path.join(odir,'crawl_recon.am')
-                print('Writing {}'.format(ofile))
+                print(('Writing {}'.format(ofile)))
                 new_graph.write(ofile)
             
 #        except Exception,e:
@@ -512,14 +512,14 @@ class InjectAgent(object):
         #eDir = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\impulseedge_calcs'
         files = os.listdir(eDir)
         nfiles = len(files)
-        print('Loading concentration calc results ({} files)...'.format(len(files)))
+        print(('Loading concentration calc results ({} files)...'.format(len(files))))
         #concImported = False
         init = False
         
         #files = ['edges_inlet530.dill']
         
         for fi,f in enumerate(files):
-            print('Reading file {} of {}: {}'.format(fi+1,nfiles,f))
+            print(('Reading file {} of {}: {}'.format(fi+1,nfiles,f)))
             with open(os.path.join(eDir,f),'rb') as fo:
                 curEdges,ind = pickle.load(fo)
                 
@@ -539,7 +539,7 @@ class InjectAgent(object):
                     cur = curEdge.concentration
                     srcEdge[0].concentration += cur
                 else:
-                    print 'Shapes incompatible! {} {}'.format(srcEdge[0].concentration.shape,curEdge.concentration.shape)
+                    print('Shapes incompatible! {} {}'.format(srcEdge[0].concentration.shape,curEdge.concentration.shape))
                     
         if logConc:
             logMin = -1e30
@@ -582,7 +582,7 @@ class InjectAgent(object):
             #tp_late = np.arange(60,np.max(self.output_times),20)
             #timePoints = np.append(tp_early,tp_late)
             
-            print 'Vascular timepoints: {}'.format(timePoints)
+            print('Vascular timepoints: {}'.format(timePoints))
             for ti,tp in enumerate(timePoints):
                 mx = -1e30
                 for edge in edges:
@@ -597,7 +597,7 @@ class InjectAgent(object):
                     edge.add_scalar('Concentration',curConc)
                 new_graph = self.graph.node_list_to_graph(self.nodeList)
                 ofile = os.path.join(odir,'concentration_t{}.am'.format(ti))
-                print('Writing {}, max conc {}'.format(ofile,mx))
+                print(('Writing {}, max conc {}'.format(ofile,mx)))
                 new_graph.add_parameter('Time',np.asscalar(tp))
                 new_graph.write(ofile)
         
@@ -606,7 +606,7 @@ class InjectAgent(object):
             # Remove edges with AUC=0
             print('Identifying zero-concentration edges')
             edge_to_delete = [e.index for e in edges if np.all(e.get_scalar('AUC')==0.)]
-            print('Deleting {} EDGES'.format(len(edge_to_delete)))
+            print(('Deleting {} EDGES'.format(len(edge_to_delete))))
             node_to_delete = np.zeros(len(self.nodeList),dtype='int')
             ndelcount = 0
             for nInd,n in enumerate(self.nodeList):
@@ -622,7 +622,7 @@ class InjectAgent(object):
             new_graph = self.graph.node_list_to_graph(self.nodeList)
             if output_directory is not None:
                 ofile = os.path.join(output_directory,'ct_output.am')
-                print('Writing graph to file ({})...'.format(ofile))
+                print(('Writing graph to file ({})...'.format(ofile)))
                 new_graph.write(ofile)
                 print('Writing complete')
                 
@@ -653,9 +653,9 @@ class InjectAgent(object):
                     try:
                         ind = int((f.replace('crawl_inlet','')).replace('.dill',''))
                         inletVisited.append(ind)
-                        print('Inlet previously visited: {}'.format(ind))
-                    except Exception,e:
-                        print('Could not load {}: {}'.format(f,e))
+                        print(('Inlet previously visited: {}'.format(ind)))
+                    except Exception as e:
+                        print(('Could not load {}: {}'.format(f,e)))
             else:
                 inletVisited = []
         else:
@@ -668,10 +668,10 @@ class InjectAgent(object):
         nodeFile = os.path.join(output_directory,'nodeList.dill')
         if False:
         #if not os.path.isfile(nodeFile):
-            print 'Generating node list...'
+            print('Generating node list...')
             nodeList = graph.node_list()
             self.nodeList = nodeList
-            print 'Calculating flow ordering...'
+            print('Calculating flow ordering...')
             for node in nodeList:
                 self.vertex_flow_ordering(node)
                 #nconn = np.asarray([x.nconn for x in self.nodeList])
@@ -768,9 +768,9 @@ class InjectAgent(object):
                     try:
                         ind = int((f.replace('edges_inlet','')).replace('.dill',''))
                         inletVisited.append(ind)
-                        print('Inlet previously visited: {}'.format(ind))
-                    except Exception,e:
-                        print('Could not load {}: {}'.format(f,e))
+                        print(('Inlet previously visited: {}'.format(ind)))
+                    except Exception as e:
+                        print(('Could not load {}: {}'.format(f,e)))
             else:
                 inletVisited = []
         else:
@@ -783,10 +783,10 @@ class InjectAgent(object):
         nodeFile = os.path.join(output_directoryIn,'nodeList.dill')
         #if True:
         if not os.path.isfile(nodeFile):
-            print 'Generating node list...'
+            print('Generating node list...')
             nodeList = graph.node_list()
             self.nodeList = nodeList
-            print 'Calculating flow ordering...'
+            print('Calculating flow ordering...')
             for node in nodeList:
                 self.vertex_flow_ordering(node)
                 nconn = np.asarray([x.nconn for x in self.nodeList])
@@ -825,8 +825,8 @@ class InjectAgent(object):
         import socket
         strtInfo = 'SIMULATION STARTED: nInlets {}, name {}, parallel {}, resume {}, largest_inflow {}, leaky_vessels {}, output_directory {}, host {}'.format(nInlets,name,parallel,resume,largest_inflow,leaky_vessels,output_directory,socket.gethostname())
         logging.info(strtInfo)
-        print('Logging to {}'.format(logFile))
-        print strtInfo
+        print(('Logging to {}'.format(logFile)))
+        print(strtInfo)
                 
         edgeFile = os.path.join(output_directory,'edgeList.dill')
         if True:
@@ -873,7 +873,7 @@ class InjectAgent(object):
 
 
         if parallel:
-            print 'Parallel prcessing on {} cores'.format(ncpu)
+            print('Parallel prcessing on {} cores'.format(ncpu))
             p.map(_worker_function,argList)
         else:
             for arg in argList:
@@ -922,7 +922,7 @@ def _crawl_worker_function(args):
         curNode = inletNode
 
         logging.info(info)
-        print info
+        print(info)
         
         #print('Inlet node info: delay: {} Q:{}'.format(inletNode.inletDelay,inletNode.inletQ))
         front = frontPKG.Front([inletNode],delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance,conc=None,verbose=False)
@@ -1004,8 +1004,8 @@ def _crawl_worker_function(args):
                                                  Q=[Q_from[i] for i in inds],
                                                  distance=[distance_from[i] for i in inds],
                                                  conc=[None]*len(inds))
-                                except Exception,err:
-                                    print err
+                                except Exception as err:
+                                    print(err)
                                     import pdb
                                     pdb.set_trace()
                             else:
@@ -1020,7 +1020,7 @@ def _crawl_worker_function(args):
                 save_every_step = False
                 ss = 5
                 if save_every_step and count % ss == ss-1:
-                    print 'Writing vascular (inlet {}, step {}): {}'.format(inletNodeIndex,count,vascFile)
+                    print('Writing vascular (inlet {}, step {}): {}'.format(inletNodeIndex,count,vascFile))
                     with open(vascFile,'wb') as fo:
                         pickle.dump((edgesOut,inletNodeIndex),fo)
                     
@@ -1031,7 +1031,7 @@ def _crawl_worker_function(args):
         elTime = timeMod.time() - t0
         exitInfoStr = 'COMPLETED inlet {} ({}): nstep {}, max size {}, end size {}, inlet Q {}, elapsed time {}'.format(inletIndex,exitStr,front.nstep,max_n_front,front.front_size,inletNode.inletQ,elTime)
         logging.info(exitInfoStr)
-        print exitInfoStr
+        print(exitInfoStr)
 
         with open(vascFile,'wb') as fo:
             pickle.dump((edgesOut,inletNodeIndex),fo)
@@ -1039,7 +1039,7 @@ def _crawl_worker_function(args):
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         errFmt = traceback.format_exception(exc_type, exc_value,exc_traceback)
-        print 'ERROR: {}'.format(errFmt)
+        print('ERROR: {}'.format(errFmt))
         logging.error('Interstitium calc ({}): {}'.format(inletIndex,errFmt))
      
         
@@ -1175,7 +1175,7 @@ def _worker_function(args):
         #info += ', host {}'.format(socket.gethostname())
         
         logging.info(info)
-        print info
+        print(info)
         
         #print('Inlet node info: delay: {} Q:{}'.format(inletNode.inletDelay,inletNode.inletQ))
         front = frontPKG.Front([inletNode],delay=inletNode.inletDelay,Q=inletNode.inletQ,distance=inletNode.distance,conc=None,verbose=False)
@@ -1315,8 +1315,8 @@ def _worker_function(args):
                                              Q=[Q_from[i] for i in inds],
                                              distance=[distance_from[i] for i in inds],
                                              conc=nxtConc)
-                            except Exception,err:
-                                print err
+                            except Exception as err:
+                                print(err)
                                 import pdb
                                 pdb.set_trace()
                         else:
@@ -1334,11 +1334,11 @@ def _worker_function(args):
                 save_every_step = False
                 ss = 5
                 if save_every_step and count % ss == ss-1:
-                    print 'Writing vascular (inlet {}, step {}): {}'.format(inletNodeIndex,count,vascFile)
+                    print('Writing vascular (inlet {}, step {}): {}'.format(inletNodeIndex,count,vascFile))
                     with open(vascFile,'wb') as fo:
                         pickle.dump((edgesOut,inletNodeIndex),fo)
                     if leaky_vessels:
-                        print 'Writing interstitial (inlet {}, step {}): {}'.format(inletNodeIndex,count,intFile)                        
+                        print('Writing interstitial (inlet {}, step {}): {}'.format(inletNodeIndex,count,intFile))                        
                         np.savez(intFile,grid=grid,grid_dims=intr.grid_dims,embedDims=intr.embedDims,dx=intr.dx,dy=intr.dy,dz=intr.dz,dt=intr.dt)
                     
             elif count>=nStepMax:
@@ -1356,7 +1356,7 @@ def _worker_function(args):
         elTime = timeMod.time() - t0
         exitInfoStr = 'COMPLETED inlet {} ({}): nstep {}, max size {}, end size {}, inlet Q {}, Q_limit {}, Q_limit_count {}, c_limit_count {}, elapsed time {}'.format(inletIndex,exitStr,front.nstep,max_n_front,front.front_size,inletNode.inletQ,Q_limit,Q_limit_count,c_limit_count,elTime)
         logging.info(exitInfoStr)
-        print exitInfoStr
+        print(exitInfoStr)
 
         with open(vascFile,'wb') as fo:
             pickle.dump((edgesOut,inletNodeIndex),fo)
@@ -1367,7 +1367,7 @@ def _worker_function(args):
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         errFmt = traceback.format_exception(exc_type, exc_value,exc_traceback)
-        print 'ERROR: {}'.format(errFmt)
+        print('ERROR: {}'.format(errFmt))
         logging.error('Interstitium calc ({}): {}'.format(inletIndex,errFmt))
         
         
@@ -1413,36 +1413,36 @@ def main():
     if recon:
         ia = InjectAgent()
         if crawl:
-            print 'Crawling...'
+            print('Crawling...')
             try:
                 ia.reconstruct_crawl(graph,output_directory=dir_)
-            except Exception,e:
-                print e
+            except Exception as e:
+                print(e)
         else:
             recon_vascular = False
             recon_interstitium = True
             
             #import pdb
             #pdb.set_trace()
-            print 'Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium)
+            print('Reconstructing... Vesels: {} Interstitium {}'.format(recon_vascular,recon_interstitium))
             ia.reconstruct_results(graph,path=dir_,output_directory=odir,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon)
     else:
-        print 'Simulating...'
+        print('Simulating...')
         #paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],ktrans=0.00001,D=7e-11*1e12,feNSample=3)
         #paramset = ParameterSet(dt=16.,nt=1200,pixSize=[150.,150.,150.],P=1e-6,D=2.08e-10,feNSample=3)
         paramset = ParameterSet(dt=10.,nt=600,nr=10,dr=100.,pixSize=[150.,150.,150.],P=1e-2,D=2.08e2,feNSample=3)
-        print 'Testing parameters'
+        print('Testing parameters')
         if not paramset.test_parameters():
-            print 'Failed parameter test'
+            print('Failed parameter test')
             import pdb
             pdb.set_trace()
         else:
-            print 'Passed parameter test'
+            print('Passed parameter test')
 
         ia = InjectAgent(paramSet=paramset)
 
         if crawl:
-            print 'Crawling...'
+            print('Crawling...')
             try:
                 #if not recon:
                 ia.crawl(graph,output_directory=dir_,resume=resume,parallel=parallel)

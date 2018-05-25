@@ -29,8 +29,8 @@ def load_timeseries_graph(dir_):
                 graph.append(g)
                 t = np.float(g.get_parameter_value('Time'))
                 time.append(t)
-            except Exception,e:
-                print e
+            except Exception as e:
+                print(e)
                 
     time = np.asarray(time)
     graph = np.asarray(graph)
@@ -61,7 +61,7 @@ def concentration_from_timeseries(graphs,log=True):
                 conc[gi,:] = np.exp(field['data'])
         else:
             conc[gi,:] = conc[gi-1,:]
-            print('Data missing: {}'.format(gi))
+            print(('Data missing: {}'.format(gi)))
             
     return conc
 
@@ -216,7 +216,7 @@ def main():
             remEdgeInds = np.unique(remEdgeInds)
             new_graph = editor.delete_edges(new_graph,remEdgeInds)
 
-        print 't={}, thr={}: {} {}%'.format(t,thr,count,count*100./float(len(edges)))
+        print('t={}, thr={}: {} {}%'.format(t,thr,count,count*100./float(len(edges))))
         odir = os.path.join(dir_,'exposure')
         if not os.path.exists(odir):
             os.mkdir(odir)

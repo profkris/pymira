@@ -21,7 +21,7 @@ def merge_graphs(graph1,graph2):
         f = graph2.get_field(fName)
         marker = graph1.generate_next_marker()
         f['marker'] = marker
-        print('Adding {} {}...'.format(marker,fName))
+        print(('Adding {} {}...'.format(marker,fName)))
         graph1.fields.append(f)
 
 dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'  
@@ -39,7 +39,7 @@ mFiles = [fn,ff]#,fv]
 fo = os.path.join(dir_,'spatialGraph_flag.am')
 
 graph = sp.SpatialGraph()
-print('Reading source graph: {}'.format(mFiles[0]))
+print(('Reading source graph: {}'.format(mFiles[0])))
 graph.read(mFiles[0])
 
 for f in mFiles[1:]:

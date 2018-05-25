@@ -61,7 +61,7 @@ class Mesh(amiramesh.AmiraMesh):
         elif np_data_type=='<i4':
             data_type = 'short'
         else:
-            print('Data type not supported! {}'.format(np.data_type))
+            print(('Data type not supported! {}'.format(np.data_type)))
             return
             
         dims = data.shape

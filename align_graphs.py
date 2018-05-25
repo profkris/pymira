@@ -15,7 +15,7 @@ flag = graph.get_field(name='flag')['data']
 # Get node list
 nodeFile = os.path.join(path,'nodeList.dill')
 if not os.path.isfile(nodeFile):
-    print 'Generating node list...'
+    print('Generating node list...')
     nodeList = graph.node_list()
             
     print('Pickling node list...')
@@ -33,7 +33,7 @@ graph_flow.read(os.path.join(path2,'spatialGraph_RIN.am'))
 # Get node list
 nodeFile = os.path.join(path2,'nodeList.dill')
 if not os.path.isfile(nodeFile):
-    print 'Generating node list...'
+    print('Generating node list...')
     nodeList_flow = graph.node_list()
             
     print('Pickling node list...')

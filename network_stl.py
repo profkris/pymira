@@ -44,7 +44,7 @@ def graph_to_stl(graph):
         strtRev = strtNode.edge_indices_rev[strtBranchInd]
         endBranchInd = [i for i,e in enumerate(endNode.edges) if e.index==edge.index][0]
         endRev = endNode.edge_indices_rev[endBranchInd]
-        print strtRev,endRev,pts
+        print(strtRev,endRev,pts)
         
         #print strtNode.nconn
         if strtNode.nconn==1:
@@ -57,7 +57,7 @@ def graph_to_stl(graph):
             vec2 = (coords[strtNode.index]-coords[endNode.index])/length2
             strt_face_angle = np.arccos(np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2)))
             strt_face_angle = np.rad2deg(strt_face_angle)
-            print other_conn,strtNode.index,endNode.index,coords[other_conn],coords[strtNode.index],coords[endNode.index]
+            print(other_conn,strtNode.index,endNode.index,coords[other_conn],coords[strtNode.index],coords[endNode.index])
             import pdb
             pdb.set_trace()
         else:
@@ -108,7 +108,7 @@ def graph_to_stl(graph):
             
             #print('Points:{}{}, center:{}, orient:{}'.format(pts[i],pts[i+1],center,vec))
             curRad = np.mean(radius[i:i+1]*2)
-            print fa[i],fa[i+1]
+            print(fa[i],fa[i+1])
             #newMesh = tube_mesh(curRad,thickness,length,orientation=vec,center=center,outer_only=True,start_face_angle=-fa[i],end_face_angle=fa[i+1])
             nlength = 2
             alpha = 360.
@@ -219,7 +219,7 @@ def align_vector_rotation(A,B):
     Fi = np.nan_to_num(Fi)
     try:
         U = Fi * G * np.linalg.inv(Fi)
-    except Exception,e:
+    except Exception as e:
         print(e)
         import pdb
         pdb.set_trace()
