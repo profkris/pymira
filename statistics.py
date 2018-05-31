@@ -90,8 +90,8 @@ class Statistics(object):
                     i = xInds[0]
                     j = yInds[0]
                     k = zInds[0]
-                except Exception,e:
-                    print e
+                except Exception as e:
+                    print(e)
                     import pdb
                     pdb.set_trace()
                     
@@ -329,13 +329,13 @@ class Statistics(object):
         coords = self.graph.get_data('VertexCoordinates')
         try:
             total_volume = self.volume(coords)
-        except Exception,e:
+        except Exception as e:
             print(e)
             total_volume = -1.
         blood_fraction = blood_volume / total_volume
-        print('TUMOUR VOLUME (um3): {}'.format(total_volume))
-        print('BLOOD VOLUME (um3): {}'.format(blood_volume))
-        print('BLOOD VOLUME FRACTION: {}'.format(blood_fraction))
+        print(('TUMOUR VOLUME (um3): {}'.format(total_volume)))
+        print(('BLOOD VOLUME (um3): {}'.format(blood_volume)))
+        print(('BLOOD VOLUME FRACTION: {}'.format(blood_fraction)))
         
         if path is not None:
             with open(os.path.join(path,'volume.txt'),'wb') as fo:

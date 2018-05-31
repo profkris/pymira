@@ -28,7 +28,7 @@ flag = graph.get_field(name='flag')['data']
 nodeFile = os.path.join(path,'nodeList.dill')
 #if not os.path.isfile(nodeFile):
 if True:
-    print 'Generating node list...'
+    print('Generating node list...')
     nodeList = graph.node_list()
             
     print('Pickling node list...')
@@ -77,7 +77,7 @@ graph2.read(os.path.join(path2,'spatialGraph_RIN.am'))
 nodeFile2 = os.path.join(path2,'nodeList.dill')
 if True:
 #if not os.path.isfile(nodeFile2):
-    print 'Generating node list...'
+    print('Generating node list...')
     nodeList2 = graph2.node_list()
             
     print('Pickling node list...')
@@ -108,7 +108,7 @@ red_node2 = []
 mapping = []
 for i,node in enumerate(nodeList):
     #cShift = rn.coords + dif
-    print '{} of {}'.format(i,len(nodeList))
+    print('{} of {}'.format(i,len(nodeList)))
     #co = rn.coords
     #co = [co[0]*trMat[0,0],co[1]*trMat[1,1],co[2]*trMat[2,2]]
     #co = [co[0]+trMat[3,0],co[1]+trMat[3,1],co[0]+trMat[3,2]]

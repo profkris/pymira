@@ -39,7 +39,7 @@ class AmiraMesh(object):
             fin = self.fieldOffset[self.dataFieldCount]-1
             if eof:
                 fin += 1
-            print curDataMarker
+            print(curDataMarker)
             if not self._read_file_data(content,strt,fin,curDataMarker):
                 return
         
@@ -54,8 +54,8 @@ class AmiraMesh(object):
                 try:
                     marker = mtch.group(0)
                     markerIndex = int(marker.replace('@',''))
-                except Exception,e:
-                    print(repr(e))
+                except Exception as e:
+                    print((repr(e)))
                     return chk,marker,markerIndex
         return chk,marker,markerIndex
         
@@ -66,8 +66,8 @@ class AmiraMesh(object):
         curDef = [x for x in self.definitions if x['name']==curField['definition']][0]
         
         # Update field entry to include data size and shape
-        curField['nentries'] = [long(x) for x in curDef['size']]
-        curShape = [long(x) for x in curDef['size']]
+        curField['nentries'] = [int(x) for x in curDef['size']]
+        curShape = [int(x) for x in curDef['size']]
         if curField['nelements']>1:
             curShape.append(curField['nelements'])
         curField['shape'] = curShape
@@ -106,8 +106,8 @@ class AmiraMesh(object):
                 curData = np.asarray(curData,dtype=dtype)
                 curData = np.reshape(curData,curField['shape'])
                 curField['data'] = curData
-            except Exception,e:
-                print 'Error, {}.Line: {} '.format(e,curData)
+            except Exception as e:
+                print(('Error, {}.Line: {} '.format(e,curData)))
                 import pdb
                 pdb.set_trace()
 
@@ -201,7 +201,7 @@ class AmiraMesh(object):
         bytesRead = 0
         fileSize = os.path.getsize(filename)
         
-        with open(filename,'rb') as f:
+        with open(filename,'r') as f:
             i = -1
             while True:
                 if inHeader:
@@ -287,7 +287,7 @@ class AmiraMesh(object):
                         spl = [x for x in spl if x]
                         nspl = len(spl)
                         if nspl>2:
-                            self.definitions.append({'name':spl[1],'size':[long(x) for x in spl[2:]]})
+                            self.definitions.append({'name':spl[1],'size':[int(x) for x in spl[2:]]})
                         else:
                             raise Exception('Error: Unexpected formatting on definition line!')
                             #return False
@@ -321,7 +321,7 @@ class AmiraMesh(object):
                                     fieldDataType = fieldDataType[0]
                                     fieldName = fieldType.replace(fieldDataType,'',1).strip()
                                     nel = 1
-                            except Exception,e:
+                            except Exception as e:
                                 raise Exception(e)
                                 #return None
 
@@ -611,7 +611,7 @@ class AmiraMesh(object):
     def close_error(self,filename):
         
         fileSize = os.path.getsize(filename) # file size in bytes
-        bytesRead = 0L
+        bytesRead = 0
         content = []
         count = 0
         try:
@@ -622,16 +622,16 @@ class AmiraMesh(object):
                     newContent = f.read()
                     content.append(newContent)
                     bytesRead += sys.getsizeof(newContent)
-                    print count,' Total read:',bytesRead
-        except Exception,e:
-            print 'Exception: ',e
+                    print((count,' Total read:',bytesRead))
+        except Exception as e:
+            print(('Exception: ',e))
             
         import pdb
         pdb.set_trace()
           
-        print 'File size:',fileSize 
-        print '% read = ',bytesRead*100./float(fileSize)
-        print 'count: ',count 
+        print(('File size:',fileSize)) 
+        print(('% read = ',bytesRead*100./float(fileSize)))
+        print(('count: ',count)) 
         
 
         

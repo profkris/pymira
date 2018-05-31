@@ -138,6 +138,6 @@ for tInd,t in enumerate(time):
         
     energy -= pEnergy
     
-    print('Volume {} Pressure {} Energy {} pEnergy {}'.format(volume,pressure,energy,pEnergy))
+    print(('Volume {} Pressure {} Energy {} pEnergy {}'.format(volume,pressure,energy,pEnergy)))
 
 plot_cell(perimPosition)

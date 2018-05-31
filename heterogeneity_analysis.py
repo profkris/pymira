@@ -15,7 +15,7 @@ inds = np.where(concl>0.)
 coords = np.asarray([[inds[0][i],inds[1][i],inds[2][i]] for i,tmp in enumerate(inds[0])])
 from scipy.spatial import ConvexHull
 hull = ConvexHull(coords)
-edges = zip(*coords)
+edges = list(zip(*coords))
 fig = plt.figure()
 ax = fig.add_subplot(111,projection='3d')
 

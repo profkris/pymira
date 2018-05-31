@@ -34,7 +34,7 @@ ofile = os.path.join(path,'spatialGraph_flag_RIN_scaled.am')
 
 from pymira import spatialgraph, statistics
 graph = spatialgraph.SpatialGraph()
-print('Reading graph... {}'.format(f))
+print(('Reading graph... {}'.format(f)))
 graph.read(f)
 print('Graph read')
 if ps is not None:
