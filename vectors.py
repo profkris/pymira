@@ -203,6 +203,18 @@ def point_inside_cylinder(p,x0,x1,r):
     else:
         return True
         
+def point_beyond_cylinder_ends(p,x0,x1,r):
+    """
+    Tests if a point p is beyond the ends of the ends of a cylinder with central line defined by x0 and x1
+    and radius r.
+    """
+    pap1 = point_above_plane(p,x1-x0,x1)
+    pap0 = point_above_plane(p,x0-x1,x0)
+    if pap1 or pap0:
+        return False
+    else:
+        return True
+        
 def sphere_inside_cylinder(p,sr,x0,x1,r):
     """
     Tests if a sphere (centre, p; radius, sr) overlaps with a cylinder, with central line defined by x0 and x1

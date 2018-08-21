@@ -43,16 +43,16 @@ class SpatialGraph(amiramesh.AmiraMesh):
 
         self.add_field(name='VertexCoordinates',marker='@1',
                               definition='VERTEX',type='float',
-                              nelements=3,nentries=[0])
+                              nelements=3,nentries=[0],data=None)
         self.add_field(name='EdgeConnectivity',marker='@2',
                               definition='EDGE',type='int',
-                              nelements=2,nentries=[0])
+                              nelements=2,nentries=[0],data=None)
         self.add_field(name='NumEdgePoints',marker='@3',
                               definition='EDGE',type='int',
-                              nelements=1,nentries=[0])
+                              nelements=1,nentries=[0],data=None)
         self.add_field(name='EdgePointCoordinates',marker='@4',
                               definition='POINT',type='float',
-                              nelements=3,nentries=[0])
+                              nelements=3,nentries=[0],data=None)
                               
         offset = len(self.fields) + 1
         
@@ -152,26 +152,31 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         # Add connection
         if edgeConn is not None:
-            newData = np.vstack([edgeConn, np.asarray([startNode.index,endNode.index])])
+            newData = np.squeeze(np.vstack([edgeConn, np.asarray([startNode.index,endNode.index])]))
             self.set_definition_size('EDGE',[1,newData.shape[0]])
         else:
-            newData = np.asarray([startNode.index,endNode.index])
+            newData = np.asarray([[startNode.index,endNode.index]])
             self.set_definition_size('EDGE',newData.shape[0])
         self.set_data(newData,name='EdgeConnectivity')
         
         # Add number of edge points
         npoints = edge.coordinates.shape[0]
         if nedgepoints is not None:
-            newData = np.vstack([nedgepoints, np.asarray(npoints)])
+            try:
+                newData = np.append(nedgepoints,npoints) #np.squeeze(np.vstack([np.squeeze(nedgepoints), np.asarray(npoints)]))
+            except Exception as exep:
+                print(exep)
+                import pdb
+                pdb.set_trace()
         else:
-            newData = np.asarray(npoints)
+            newData = np.asarray([npoints])
         self.set_data(newData,name='NumEdgePoints')
         
         # Add edge point coordinates
         if edgeCoords is not None:
-            newData = np.vstack([edgeCoords, np.asarray(edge.coordinates)])
+            newData = np.squeeze(np.vstack([np.squeeze(edgeCoords), np.asarray(edge.coordinates)]))
         else:
-            newData = np.asarray(edge.coordinates)
+            newData = np.asarray([edge.coordinates])
         self.set_definition_size('POINTS',newData.shape[0])
         self.set_data(newData,name='EdgePointCoordinates')
 
@@ -1271,15 +1276,20 @@ class Node(object):
             edgeInds = [e.index for e in graph.edgeList]
                 
             vertCoords = graph.get_field('VertexCoordinates')['data']
+            if vertCoords is None:
+                return
             edgeConn = graph.get_field('EdgeConnectivity')['data']
             
             #s0 = [j for j,x in enumerate(edgeConn) if index in x]
             #s0 = np.where(edgeConn==index)
             #ns0 = len(s0)
-            s0 = np.where(edgeConn[:,0]==index)
-            ns0 = len(s0[0])
-            s1 = np.where(edgeConn[:,1]==index)
-            ns1 = len(s1[0])
+            if edgeConn is not None:
+                s0 = np.where(edgeConn[:,0]==index)
+                ns0 = len(s0[0])
+                s1 = np.where(edgeConn[:,1]==index)
+                ns1 = len(s1[0])
+            else:
+                ns0,ns1,s0,s1 = 0,0,[],[]
             
             self.coords = vertCoords[index,:]
             self.nconn = ns0 + ns1
@@ -1291,38 +1301,42 @@ class Node(object):
             self.connecting_node = []
             self.edges = []
     
-            for e in s0[0]:
-                self.edge_indices.append(e)
-                if e not in edgeInds:                  
-                    newEdge = Edge(graph=graph,index=e)
-                    edgeInds.append(e)
-                    graph.edgeList.append(newEdge)
-                else:
-                    newEdge = [edge for edge in graph.edgeList if edge.index==e]
-                    if len(newEdge)==1:
-                        newEdge = newEdge[0]
+            if len(s0)>0:
+                for e in s0[0]:
+                    self.edge_indices.append(e)
+                    if e not in edgeInds:  
+                        #import pdb
+                        #pdb.set_trace()
+                        newEdge = Edge(graph=graph,index=e)
+                        edgeInds.append(e)
+                        graph.edgeList.append(newEdge)
                     else:
-                        import pdb
-                        pdb.set_trace()
-                self.edges.append(newEdge)
-                self.edge_indices_rev.append(False)
-                self.connecting_node.append(edgeConn[e,1])
-            for e in s1[0]:
-                self.edge_indices.append(e)
-                self.edge_indices_rev.append(True)
-                if e not in edgeInds:                  
-                    newEdge = Edge(graph=graph,index=e)
-                    edgeInds.append(e)
-                    graph.edgeList.append(newEdge)
-                else:
-                    newEdge = [edge for edge in graph.edgeList if edge.index==e]
-                    if len(newEdge)==1:
-                        newEdge = newEdge[0]
+                        newEdge = [edge for edge in graph.edgeList if edge.index==e]
+                        if len(newEdge)==1:
+                            newEdge = newEdge[0]
+                        else:
+                            import pdb
+                            pdb.set_trace()
+                    self.edges.append(newEdge)
+                    self.edge_indices_rev.append(False)
+                    self.connecting_node.append(edgeConn[e,1])
+            if len(s1)>0:
+                for e in s1[0]:
+                    self.edge_indices.append(e)
+                    self.edge_indices_rev.append(True)
+                    if e not in edgeInds:                  
+                        newEdge = Edge(graph=graph,index=e)
+                        edgeInds.append(e)
+                        graph.edgeList.append(newEdge)
                     else:
-                        import pdb
-                        pdb.set_trace()
-                self.edges.append(newEdge)
-                self.connecting_node.append(edgeConn[e,0])
+                        newEdge = [edge for edge in graph.edgeList if edge.index==e]
+                        if len(newEdge)==1:
+                            newEdge = newEdge[0]
+                        else:
+                            import pdb
+                            pdb.set_trace()
+                    self.edges.append(newEdge)
+                    self.connecting_node.append(edgeConn[e,0])
                 
     def add_edge(self,edge,reverse=False):
         if self.edges is None:
@@ -1402,13 +1416,13 @@ class Edge(object):
             nodeCoords = graph.get_field('VertexCoordinates')['data']
             edgeConn = graph.get_field('EdgeConnectivity')['data']
             nedgepoints = graph.get_field('NumEdgePoints')['data']
-            self.coordinates = self.get_coordinates_from_graph(graph,index)
+            self.coordinates = np.squeeze(self.get_coordinates_from_graph(graph,index))
             self.start_node_index = edgeConn[index,0]
             self.start_node_coords = nodeCoords[self.start_node_index,:]
             #self.end_node_index = edgeConn[index,1]
             #self.end_node_coords = nodeCoords[self.end_node_index,:]
             self.npoints = nedgepoints[index]
-            self.coordinates = self.get_coordinates_from_graph(graph,index)
+            #self.coordinates = self.get_coordinates_from_graph(graph,index)
             self.scalars,self.scalarNames = self.get_scalars_from_graph(graph,index)
             self.complete_edge(nodeCoords[edgeConn[index,1],:],edgeConn[index,1])
             
