@@ -66,8 +66,8 @@ def tortured_path(a,b,tortuosity=None):
     #path[1,:] = b
     
     dbPrev = length
-    lim1 = 0. #sigma/10. #length/100. # 0. #length / 10. # Gradient of line - needs to head downhill (>=0)
-    lim2 = length/2.#3. # Distance from central line
+    #lim1 = 0. #sigma/10. #length/100. # 0. #length / 10. # Gradient of line - needs to head downhill (>=0)
+    #lim2 = length/2.#3. # Distance from central line
     #for i in range(1,npoints-1):
     i = 1
     count = 0
@@ -76,7 +76,7 @@ def tortured_path(a,b,tortuosity=None):
         prevPoint = path[i-1]
         theta_r = np.deg2rad(np.random.normal(loc=0.,scale=30))
         phi_r = np.deg2rad(np.random.normal(loc=0.,scale=30))
-        l_r = np.random.uniform(low=length/50.,high=length/10.)
+        l_r = np.random.uniform(low=length/100.,high=length/10.)
         #l_r = length / 10.
         
         #newPoint = prevPoint + np.random.normal(scale=sigma,size=3)
@@ -115,7 +115,10 @@ def tortured_path(a,b,tortuosity=None):
         loc,dpl = point_to_line(newPoint,a,b)
 
         db = np.linalg.norm(newPoint-b)
-        acc = dpl < np.random.normal(loc=0.,scale=tortuosity)#/10.)
+        if tortuosity<=0:
+            acc = True
+        else:
+            acc = dpl < np.random.normal(loc=0.,scale=tortuosity)#/10.)
         acc2 = dbPrev-db > 0. #np.random.normal(loc=sigma,scale=2.*sigma)
         
         if acc and acc2: # and acc2: #(dbPrev-db)>lim1 and acc: #dpl<lim2 and acc: # and \
