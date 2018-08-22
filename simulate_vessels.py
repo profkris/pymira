@@ -6,11 +6,17 @@ Created on Fri Feb 23 08:37:38 2018
 """
 
 import numpy as np
-import copy
 import nibabel as nib
 import scipy.ndimage.interpolation as interp
 import scipy.ndimage.measurements as measurements 
 from pymira import tortured_path
+import sys
+import os
+
+if sys.platform=='win32':
+    dropboxpath = r'C:\Users\simon\Dropbox'
+else:
+    dropboxpath = r'/media/simon/Dropbox/Dropbox'
 
 class VesselNetwork(object):
     
@@ -641,7 +647,7 @@ trans = np.matmul(tr,scale)
 vessel_val = 2
 if True:
     print('Adding vessels to grid...')
-    ofile = r'C:\Users\simon\Dropbox\simulated_network_nobg.nii'
+    ofile = os.path.join(dropbox_dir,'simulated_network_nobg.nii')
     for i,e in enumerate(coords):
         import pdb
         pdb.set_trace()
@@ -738,12 +744,12 @@ if False:
         
     grid += tissue
     
-    ofile = r'C:\Users\simon\Dropbox\simulated_network.nii'
+    ofile = os.path.join(dropbox_dir,'simulated_network.nii')
     img = nib.Nifti1Image(grid,trans)
     nib.save(img,ofile)
     print('Saved to: {}'.format(ofile))   
     
-import winsound
-duration = 1000  # millisecond
-freq = 440  # Hz
-winsound.Beep(freq, duration)
+#import winsound
+#duration = 1000  # millisecond
+#freq = 440  # Hz
+#winsound.Beep(freq, duration)
