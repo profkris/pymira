@@ -624,7 +624,7 @@ class InjectAgent(object):
                     edge.add_scalar('Concentration',curConc)
                 new_graph = self.graph.node_list_to_graph(self.nodeList)
                 ofile = os.path.join(odir,'concentration_t{}.am'.format(ti))
-                print('Writing {}, max conc {}'.format(ofile,mx))
+                print('Writing interstitial: {}, max conc {}'.format(ofile,mx))
                 new_graph.add_parameter('Time',np.asscalar(tp))
                 new_graph.write(ofile)
         
@@ -770,9 +770,9 @@ class InjectAgent(object):
 
         self.save_graph(output_directory=output_directory)
    
-    def inject(self, graph, output_directory=None, resume=False, parallel=True, name=None, concFunc=None, largest_inflow=False, leaky_vessels=True, ignore_delay=False):
+    def inject(self, graph, int_file=None, output_directory=None, resume=False, parallel=True, name=None, concFunc=None, largest_inflow=False, leaky_vessels=True, ignore_delay=False):
 
-        self.graph = graph   
+        self.graph = graph
 
         import dill as pickle
         import logging
@@ -869,13 +869,18 @@ class InjectAgent(object):
                 edges = pickle.load(fo)
         nedge = len(edges)
             
-        graphFile = os.path.join(output_directory,'graph.dill')
+        #graphFile = os.path.join(output_directory,'graph.dill')
+        #intFile = os.path.join(output_directory,'interstitial.dill')
                 
         timeFile = os.path.join(output_directory,'time.dill')
         #if not os.path.isfile(timeFile):
         if True:
             with open(timeFile,'wb') as fo:
                 pickle.dump(self.time,fo)
+                
+        #int_file = os.path.join(output_directory,'interstitial_velocity.am')
+        if not os.path.isfile(int_file):
+            int_file = None
 
         import pathos.multiprocessing as multiprocessing
         #import multiprocessing
@@ -899,8 +904,7 @@ class InjectAgent(object):
         
         log = None
 
-        argList = [[self.paramSet,nodeFile,n.index,concFunc,timeFile,output_directory,nedge,None,None,leaky_vessels,log,ignore_delay] for n in inletNodes]
-
+        argList = [[self.paramSet,nodeFile,n.index,concFunc,timeFile,int_file,output_directory,nedge,None,None,leaky_vessels,log,ignore_delay] for n in inletNodes]
 
         if parallel:
             p.map(_worker_function,argList)
@@ -1182,8 +1186,16 @@ def _worker_function(args):
         c_limit = 1e-1000
         Q_limit_count = 0
         c_limit_count = 0
+
+        paramSet,nodeListFile,inletNodeIndex,concFunc,timeFile,int_file,odir,nedge,grid_dims,embed_dims,leaky_vessels,log,ignore_delay = args #,args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8],args[9],args[10],args[11]
         
-        paramSet,nodeListFile,inletNodeIndex,concFunc,timeFile,odir,nedge,grid_dims,embed_dims,leaky_vessels,log,ignore_delay = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8],args[9],args[10],args[11]
+        if int_file is not None:
+            from pymira import vector_field
+            int_vel = vector_field.VectorField()
+            int_vel.read(int_file)
+            #intvel = int_vel.get_data('Lattice')
+            #import pdb
+            #pdb.set_trace()
         
         import os
         eDir = os.path.join(odir,'vascular_calcs')
@@ -1330,13 +1342,13 @@ def _worker_function(args):
                                         
                                     edgeInd = np.zeros(via_edge.npoints,dtype='int')
                                     c_v = np.repeat([conc],via_edge.npoints,axis=0)
-                                    #import pdb
-                                    #pdb.set_trace()
+                                    import pdb
+                                    pdb.set_trace()
                                     flow = via_edge.get_scalar('Flow') # nL/min
                                     flow = flow * 60. * 1e-12 # L/s
                                     vessel_radius = via_edge.get_scalar('Radii') * 1e-6 # m
                                     vessel_length = via_edge.length * 1e-6 # m
-                                    c_v_out = intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,set_grid_dims=False,progress=False,store_results=True,vessel_length=vessel_length,vessel_radius=vessel_radius,flow=flow)
+                                    c_v_out = intr.interstitial_diffusion(via_edge.coordinates,edgeInd,c_v,time,velocity=int_vel,set_grid_dims=False,progress=False,store_results=True,vessel_length=vessel_length,vessel_radius=vessel_radius,flow=flow)
                                     grid += intr.grid
                                     #c_v_out = np.repeat([c_v_out],via_edge.npoints,axis=0)
                                     via_edge.concentration = c_v_out
@@ -1442,7 +1454,11 @@ def _worker_function(args):
 
 def main():         
     #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
+
     #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
+
+    dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
+
     #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1'
     #dir_ = r'D:'
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
@@ -1450,18 +1466,26 @@ def main():
     #dir_ = r'D:\160113_paul_simulation_results\LS147T\1'
     #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1\ca1'
     #dir_ = r'D:\SW1222\1'
+    dir_ = r'C:\Users\simon\Dropbox\SW1222\Pre-VDA\gd'
+
     #f = os.path.join(dir_,'spatialGraph_RIN.am')
+
+    #dir_ = r'/mnt/sdc/data/simulations/SW1222/1/'
+    f = os.path.join(dir_,'spatialGraph_RIN.am')
+
     #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
 
-    dataName = 'ls174t'
+    dataName = 'sw1222'
     if dataName == 'mesentery':
         dir_ = r'C:\Users\simon\Dropbox\Mesentery'
         f = os.path.join(dir_,'Flow2AmiraPressure.am')
     elif dataName == 'ls174t':
         dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\LS147T\1'
         f = os.path.join(dir_,'spatialGraph_RIN.am')
+        int_file = os.path.join(dir_,r'LSpre_IFV_Vector\interstitial_velocity_2.am')
     elif dataName == 'sw1222':
-        dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1'
+        #dir_ = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1'
+        dir_ = r'C:\Users\simon\Dropbox\SW1222\Pre-VDA\gd'
         f = os.path.join(dir_,'spatialGraph_RIN.am')
 
     #odir = r'C:\Users\simon\Dropbox\160113_paul_simulation_results\SW1222\1'
@@ -1472,18 +1496,18 @@ def main():
     graph.read(f)
     print('Graph read')
     
-    recon_only = False
+    recon_only = True
     crawl = False
     logRecon = False
     resume = False
-    parallel = False
+    parallel = True
     largest_inflow = False
     ignore_delay = False
     leaky_vessels = True
-    recon_vascular = True
+    recon_vascular = False
     recon_interstitium = True
 
-    name = 'gd2'
+    name = 'gd'
     concFunc = gd
     
     #paramset = ParameterSet(dt=1.,nt=100,pixSize=[150.,150.,150.],D=7e-11*1e12,feNSample=3)
@@ -1518,14 +1542,19 @@ def main():
         if crawl:
             print 'Crawling...'
             try:
+
                 ia.crawl(graph,path=dir_,output_directory=odir,resume=resume,parallel=parallel)
+
+                #if not recon:
+                ia.crawl(graph,output_directory=dir_,resume=resume,parallel=parallel)
+
                 print('Simulation complete')
                 ia.reconstruct_crawl(graph,output_directory=odir)
             except KeyboardInterrupt:
                 print('Ctrl-C interrupt! Saving graph')
                 ia.save_graph(output_directory=dir_)
         else:
-            ia.inject(graph, output_directory=odir, resume=resume, parallel=parallel, name=name, concFunc=concFunc, largest_inflow=largest_inflow, leaky_vessels=leaky_vessels, ignore_delay=ignore_delay)
+            ia.inject(graph, int_file=int_file, output_directory=odir, resume=resume, parallel=parallel, name=name, concFunc=concFunc, largest_inflow=largest_inflow, leaky_vessels=leaky_vessels, ignore_delay=ignore_delay)
             ia.reconstruct_results(graph,path=dir_,output_directory=odir,name=name,recon_interstitium=recon_interstitium,recon_vascular=recon_vascular,log=logRecon,paramSet=paramset)
  
 if __name__ == "__main__":

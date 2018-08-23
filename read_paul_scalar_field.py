@@ -17,6 +17,13 @@ import numpy as np
 #path = r'C:\Users\simon\Dropbox\Perfusion'
 path = r'C:\Users\simon\Dropbox\SW1222\Pre-VDA\Pressure - mmHg'
 path = r'C:\Users\simon\Dropbox\SW1222\Pre-VDA\Perfusion - ml_min_100g'
+path = r'C:\Users\simon\Dropbox\Glioma\Interstitial_Perfusion'
+path = r'C:\Users\simon\Dropbox\LS147T (1)\Pre-VDA\Pressure (mmHg)'
+path = r'C:\Users\simon\Downloads\LSpre_IFV\Data'
+
+path = r'C:\Users\simon\Dropbox\Pre-VDA SW1222\IFP\Data'
+#r'C:\Users\simon\Dropbox\Glioma\Perfusion'
+#r'C:\Users\simon\Dropbox\Glioma\Velocity\Data'
 
 files = [os.path.join(path,f) for f in os.listdir(path) if f.endswith('.txt')]
 files.sort(key=lambda f: int(filter(str.isdigit, f)))
@@ -40,7 +47,7 @@ for i,f in enumerate(files):
         bbox = [0.,pixSize[0]*nslice, 0.,pixSize[1]*nrow, 0.,pixSize[2]*ncol]
         bboxStr = '{} {} {} {} {} {}'.format(0.,pixSize[0]*nslice,0.,pixSize[1]*nrow,0.,pixSize[2]*ncol)
     
-    print nrow,len(cur)
+    #print nrow,len(cur)
     if nrow!=len(cur):
         import pdb
         pdb.set_trace()
@@ -53,8 +60,10 @@ for i,f in enumerate(files):
             assert len(tmp)==ncol
             #import pdb
             #pdb.set_trace()
-            print np.max(tmp)
-            grid[i,j,:] = np.abs(tmp)
+            #print np.max(tmp)
+            #tmp = log(tmp);
+            #tmp[isnan(tmp)] = 0.;
+            grid[i,j,:] = tmp #np.abs(tmp)
         except Exception,e:
             print 'Error ({},{}): {}'.format(i,j,e)
            
@@ -62,7 +71,7 @@ for i,f in enumerate(files):
 #pyplot.figure()
 #pyplot.imshow(np.squeeze(grid[:,30,:]))
            
-    grid[grid>1e-5] = 0.
+    #grid[grid<1e-12] = 0.
            
 print 'Min/max: {} {}'.format(np.min(grid),np.max(grid))
 
@@ -71,6 +80,6 @@ from pymira import mesh
 m = mesh.Mesh()
 m.set_lattice_data(grid)
 m.set_bounding_box(bbox)
-ofile = os.path.join(path,'perfusion.am')
+ofile = os.path.join(path,'pressure.am')
 m.write(ofile)
 print 'Written to {}'.format(ofile)

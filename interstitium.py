@@ -187,7 +187,7 @@ class Interstitium(object):
         idx = (np.abs(array-value)).argmin()
         return idx #array[idx]
         
-    def radial_diffusion(self,coords,c_v,D,P,flow,surface_area,k,h,nr,nt,time):
+    def radial_diffusion(self,coords,c_v,D,P,flow,surface_area,k,h,nr,nt,time,velocity=None):
         
         lam = D*k/np.square(h) # + np.power(dr,-2) + np.power(dr,-2))
         #print('Lambda: {}'.format(lam))
@@ -233,6 +233,13 @@ class Interstitium(object):
             if not np.all(np.isfinite(c_i)) or not np.all(np.isfinite(c_v_out)):
                 import pdb
                 pdb.set_trace()
+                
+            #if velocity is not None:
+            #    vel = velocity.get_data('Lattice')
+            #    bbox = velocity.get_parameter_value('BoundingBox')
+                
+            #    import pdb
+            #    pdb.set_trace()
          
         if not(np.all(np.isfinite(c_i))):
             c_i[:] = 0.
@@ -342,7 +349,7 @@ class Interstitium(object):
         dz = (self.embedDims[2][1]-self.embedDims[2][0]) / float(self.ng[2])
         self.dx,self.dy,self.dz = dx,dy,dz
         
-    def interstitial_diffusion(self,nodes,index,conc,time,plot_conc=False,set_grid_dims=True,progress=True,flatten_z=False,med_reg=False,store_results=True,vessel_length=None,vessel_radius=None,flow=None):
+    def interstitial_diffusion(self,nodes,index,conc,time,velocity=None,plot_conc=False,set_grid_dims=True,progress=True,flatten_z=False,med_reg=False,store_results=True,vessel_length=None,vessel_radius=None,flow=None):
         
         """ Simulates vascular exchange and diffusion through interstitium
         """        
@@ -396,12 +403,15 @@ class Interstitium(object):
             #if True:
 
                 c_v = conc[ni,:]
-                c_i,c_v_out = self.radial_diffusion(curNode,c_v,D[ni],P[ni],flow[ni],surface_area[ni],self.dt,self.dr,self.nr,self.nt,time)
+                c_i,c_v_out = self.radial_diffusion(curNode,c_v,D[ni],P[ni],flow[ni],surface_area[ni],self.dt,self.dr,self.nr,self.nt,time,velocity=velocity)
                 conc_out[ni,:] = c_v_out
                 
                 if store_results: # To bypass finite element bit (speeds up calculation and reduces memory)
                     # Regrid
                     c_i = c_i[:,tgInd]
+                    
+                    import pdb
+                    pdb.set_trace()
     
                     for ri,radius in enumerate(r):
                         #sph = self.sphere_coordinates(radius,curNode,10)
