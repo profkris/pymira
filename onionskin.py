@@ -18,17 +18,17 @@ cfile = None
 efile = None
 
 graph = spatialgraph.SpatialGraph()
-print 'Reading graph...'
+print('Reading graph...')
 graph.read(file)
 
 if cfile is not None:
     cgraph = spatialgraph.SpatialGraph()
-    print 'Reading graph...'
+    print('Reading graph...')
     cgraph.read(cfile)
 
 if efile is not None:
     egraph = spatialgraph.SpatialGraph()
-    print 'Reading graph...'
+    print('Reading graph...')
     egraph.read(efile)
 
 coords = graph.get_data('VertexCoordinates')
@@ -42,7 +42,7 @@ exposure = egraph.get_data('Exposure')
 
 from scipy.spatial import ConvexHull
 hull = ConvexHull(coords)
-edges = zip(*coords)
+edges = list(zip(*coords))
 fig = plt.figure()
 ax = fig.add_subplot(111,projection='3d')
 

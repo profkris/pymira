@@ -25,7 +25,7 @@ for f in os.listdir(path):
 
 nfile = len(files)
 #Sort files
-files.sort(key=lambda f: int(filter(str.isdigit, f)))
+files.sort(key=lambda f: int(list(filter(str.isdigit, f))))
 
 meshes = []
 time = []
@@ -47,7 +47,7 @@ def plot_conc(sample,meshes,time):
         for edge in curnode.edges:
             try:
                 conc[i] += edge.get_scalar('Concentration')[0]
-            except Exception,e:
+            except Exception as e:
                 import pdb
                 pdb.set_trace()
         conc[i] /= float(len(curnode.edges))

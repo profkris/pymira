@@ -83,7 +83,7 @@ class Interstitium(object):
         Fi = np.asmatrix(Fi)
         try:
             U = Fi * G * np.linalg.inv(Fi)
-        except Exception,e:
+        except Exception as e:
             print(e)
         
         return U
@@ -192,7 +192,7 @@ class Interstitium(object):
         lam = D*k/np.square(h) # + np.power(dr,-2) + np.power(dr,-2))
         #print('Lambda: {}'.format(lam))
         A = np.zeros((nr,nr))
-        for i in xrange(nr):
+        for i in range(nr):
             A[i,i] = 1 - 2.*lam
             if i>0:
                 A[i-1,i] = lam
@@ -227,7 +227,7 @@ class Interstitium(object):
 
         M = (c_i.shape[0]/float(self.feNSample)) * k #ktrans #* (vessel_surfArea / interstitial_volume)
         
-        for j in xrange(nt-1):
+        for j in range(nt-1):
             c_i[:,j+1] = np.dot(A,c_i[:,j]) + M*(c_v[j]-c_i[:,j]) #(np.dot(B,R[:,j]))
             c_v_out[j+1] += np.sum(M*(c_i[0,j]-c_v[j]))
             if not np.all(np.isfinite(c_i)) or not np.all(np.isfinite(c_v_out)):
@@ -295,16 +295,16 @@ class Interstitium(object):
         test = k<=np.square(h)/(2.*D)
         
         if verbose or not test:
-            print('Max TIME: {} s, {} min'.format(self.max_time,self.max_time/60.))
-            print('dt: {} s'.format(self.dt))
-            print('nt: {} s'.format(self.nt))
-            print('Max RADIUS: {} um'.format(self.max_r))
-            print('dr: {} um'.format(self.dr))
-            print('nr: {} um'.format(self.nr))
-            print('D: {} um2/s'.format(D))
+            print(('Max TIME: {} s, {} min'.format(self.max_time,self.max_time/60.)))
+            print(('dt: {} s'.format(self.dt)))
+            print(('nt: {} s'.format(self.nt)))
+            print(('Max RADIUS: {} um'.format(self.max_r)))
+            print(('dr: {} um'.format(self.dr)))
+            print(('nr: {} um'.format(self.nr)))
+            print(('D: {} um2/s'.format(D)))
             #print('Ktrans: {} /s'.format(ktrans))
-            print('Embedding dims: {} um'.format(self.embedDims))
-            print('k<=h2/2D   k (dt) = {}, h (dr) = {}, h2/2D = {}'.format(k,h,np.square(h)/(2.*D)))        
+            print(('Embedding dims: {} um'.format(self.embedDims)))
+            print(('k<=h2/2D   k (dt) = {}, h (dr) = {}, h2/2D = {}'.format(k,h,np.square(h)/(2.*D))))        
         
         assert test
         
@@ -442,8 +442,8 @@ class Interstitium(object):
 
         if med_reg and store_results:
             pbar = tqdm(total=self.nt)
-            print 'Median regularisation...'
-            for i in xrange(self.nt):
+            print('Median regularisation...')
+            for i in range(self.nt):
                 pbar.update(1)
                 self.grid[i] = scipy.ndimage.filters.median_filter(self.grid[i],size=13)
             pbar.close()
@@ -460,7 +460,7 @@ class Interstitium(object):
     def smooth_grid(self,n,grid=None):
         if grid is None:
             grid = self.grid
-        for i in xrange(grid.shape[0]):
+        for i in range(grid.shape[0]):
             grid[i] = scipy.ndimage.filters.median_filter(grid[i],size=n)
         return grid
         
@@ -469,7 +469,7 @@ class Interstitium(object):
         if grid is None:
             grid = self.grid
             
-        print('Max C_i: {} mM'.format(np.max(grid)))
+        print(('Max C_i: {} mM'.format(np.max(grid))))
             
         if format.lower()=='amira':
             pass
@@ -497,7 +497,7 @@ class Interstitium(object):
                 hdr['pixdim'][3] = pixdim[2]
                 hdr['pixdim'][4] = pixdim[3]
             ofile = os.path.join(path,'interstitial.nii')
-            print('Saving to {}'.format(ofile))
+            print(('Saving to {}'.format(ofile)))
             nib.save(img,ofile)
     
     def display_grid(self,last=True):
@@ -508,7 +508,7 @@ class Interstitium(object):
             im = self.grid[-1,:,:]
             plt.imshow(im,vmin=0,vmax=0.002)
         else:
-            for i in xrange(0,self.grid.shape[0],10):
+            for i in range(0,self.grid.shape[0],10):
                 plt.figure()
                 im = self.grid[i,:,:]
                 plt.imshow(im,vmin=0,vmax=0.01)
@@ -552,7 +552,7 @@ def main():
             conc[ci,:] = field['data']
         else:
             conc[ci,:] = conc[ci-1,:]
-            print('Data missing: {}'.format(concFields[ci]))
+            print(('Data missing: {}'.format(concFields[ci])))
     
     #nodes = [[10.,10.,10.],
     #         [10.,20.,10.],

@@ -20,7 +20,7 @@ ofile = dir_ + 'spatialGraph_constrained.am'
 #fo = dir_ + 'circle.am'
 #ofile = dir_ + 'circle_RIN.am'
 
-print 'Loading graph...'
+print('Loading graph...')
 amdata.read(fo)
 print('Graph loaded')
 #print('Performing sanity check...')

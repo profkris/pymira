@@ -74,7 +74,7 @@ class Front(object):
             ext_size = int(self.capacity)
             
         if self.verbose:
-            print('FRONT: Increasing capacity from {} to {}'.format(self.capacity,self.capacity+ext_size))
+            print(('FRONT: Increasing capacity from {} to {}'.format(self.capacity,self.capacity+ext_size)))
             
         self.next_nodes.extend([None]*ext_size)
         self.next_delays.extend([None]*ext_size)
@@ -125,7 +125,7 @@ class Front(object):
             nunique = unique.shape[0]
             maxconc = np.max(self.conc)
             maxQ = np.max(self.Q)
-            print('FRONT: Completed step {}. Front size = {}, no. unique {}, max Q {}, max conc {}. Capacity = {}'.format(self.nstep,self.front_size,nunique,maxQ,maxconc,self.capacity)) 
+            print(('FRONT: Completed step {}. Front size = {}, no. unique {}, max Q {}, max conc {}. Capacity = {}'.format(self.nstep,self.front_size,nunique,maxQ,maxconc,self.capacity))) 
         
         self.next_nodes = [None] * self.capacity
         self.next_delays = [None] * self.capacity

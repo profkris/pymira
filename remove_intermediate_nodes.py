@@ -30,7 +30,7 @@ ofile = os.path.join(dir_ , 'spatialGraph_RIN.am')
 #fo = dir_+'LS1_spatialGraph_scaled.am'
 #ofile = dir_+'LS1_spatialGraph_RIN.am'
 
-print 'Loading graph...'
+print('Loading graph...')
 amdata.read(fo)
 print('Graph loaded')
 
