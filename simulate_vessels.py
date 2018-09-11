@@ -14,9 +14,9 @@ import sys
 import os
 
 if sys.platform=='win32':
-    dropboxpath = r'C:\Users\simon\Dropbox'
+    dropbox_dir = r'C:\Users\simon\Dropbox'
 else:
-    dropboxpath = r'/media/simon/Dropbox/Dropbox'
+    dropbox_dir = r'/media/simon/Dropbox/Dropbox'
 
 class VesselNetwork(object):
     
@@ -573,8 +573,12 @@ def vessel_grid(extent=None,dims=None,r=10.,c=np.asarray([0.,0.,0.]),R=None,rot=
     # Create a circle of size r (um), in centre of grid
     circ = np.zeros(dims[0:2])+outside
     ct = np.asarray([dims[i]/2 for i in range(3)])
-    for x in range(dims[0]/2-r_pix[0],dims[0]/2+r_pix[0]):
-        for y in range(dims[1]/2-r_pix[1],dims[0]/2+r_pix[1]):
+    xl = int(dims[0]/2-r_pix[0])
+    xh = int(dims[0]/2+r_pix[0])
+    yl = int(dims[1]/2-r_pix[1])
+    yh = int(dims[1]/2+r_pix[1])
+    for x in range(xl,xh):
+        for y in range(yl,yh):
             #for z in range(0,l_pix[2]):
             if True:
                 xy = np.asarray([x,y])
@@ -582,7 +586,9 @@ def vessel_grid(extent=None,dims=None,r=10.,c=np.asarray([0.,0.,0.]),R=None,rot=
                     circ[x,y] = inside
 
     # Copy circle to create cylinder of length l, in centre of grid
-    for z in range((dims[2]-l_pix[2])/2,(dims[2]+l_pix[2])/2):
+    zl = int((dims[2]-l_pix[2])/2)
+    zh = int((dims[2]+l_pix[2])/2)
+    for z in range(zl,zh):
         grid[:,:,z] = circ
         
     #subgrid = 
@@ -611,7 +617,7 @@ def vessel_grid(extent=None,dims=None,r=10.,c=np.asarray([0.,0.,0.]),R=None,rot=
 
 v = vessel_network_3d()
 
-gfile = r'C:\Users\simon\Dropbox\simulated_network.am'
+gfile = os.path.join(dropbox_dir,'simulated_network_{}.am'.format(1))
 sg = list_to_amira(v)
 sg.write(gfile)
 print('Written graph to: {}'.format(gfile))
@@ -647,10 +653,10 @@ trans = np.matmul(tr,scale)
 vessel_val = 2
 if True:
     print('Adding vessels to grid...')
-    ofile = os.path.join(dropbox_dir,'simulated_network_nobg.nii')
+    ofile = os.path.join(dropbox_dir,'simulated_network_nobg_{}.nii'.format(1))
     for i,e in enumerate(coords):
-        import pdb
-        pdb.set_trace()
+        #import pdb
+        #pdb.set_trace()
         path = v[i].path
         for j in range(1,len(path)):
             rad_c = v[i].r[j]            
@@ -678,7 +684,7 @@ if True:
             img = nib.Nifti1Image(grid,trans)
             nib.save(img,ofile)
      
-    ofile = r'C:\Users\simon\Dropbox\simulated_network_nobg.nii'       
+    ofile = os.path.join(dropbox_dir,'simulated_network_nobg_{}.nii'.format(1))     
     img = nib.Nifti1Image(grid,trans)
     nib.save(img,ofile)
     print('Saved to: {}'.format(ofile)) 

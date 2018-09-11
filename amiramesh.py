@@ -447,7 +447,7 @@ class AmiraMesh(object):
         self.fields.append(self._field_generator(**kwargs))
         
     def write(self,filename):
-        with open(filename, 'wb') as f:
+        with open(filename, 'w') as f:
             f.write('# AmiraMesh {}\n'.format(self.fileType))
             f.write('\n')
             
