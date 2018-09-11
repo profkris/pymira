@@ -13,11 +13,6 @@ from pymira import tortured_path
 import sys
 import os
 
-if sys.platform=='win32':
-    dropbox_dir = r'C:\Users\simon\Dropbox'
-else:
-    dropbox_dir = r'/media/simon/Dropbox/Dropbox'
-
 class VesselNetwork(object):
     
     def __init__(self):
@@ -70,13 +65,6 @@ def vessel_network_3d():
   nvessel = np.sum([nb**i for i in range(nlevel)])
   print('No. vessels: {}'.format(nvessel))
   
-  # Growth process: 1 = normal, 2 = tumour
-  proc = 1
-  # Set flag defining whether to mature network or not.
-  # Setting to 1 increases the diameter of all vessels with each iteration, mimicing the maturation
-  # of blood vessels.
-  mature = False
-  
   # Define a structure to hold network information
   v = [VesselNetwork() for i in range(nvessel)]
   
@@ -100,26 +88,17 @@ def vessel_network_3d():
   sigmaT = 0.02
   sigmaP = 10.
   
-  tortFactor = 20.
+  tortFactor = 0.5
   
   # Define objects for holding growth process information
-  gp_norm = GrowthProcess('normal',gamma=gamma,beta=beta,f=f,nf=nf,theta=theta,phi=phi, \
+  gp = GrowthProcess('normal',gamma=gamma,beta=beta,f=f,nf=nf,theta=theta,phi=phi, \
         sigmaL=sigmaL,sigmaD=sigmaD,sigmaT=sigmaT,sigmaP=sigmaP)
-        
-  tum_theta = 100. * np.pi/180
-  tum_phi = tum_theta
-  
-  gp_tum = GrowthProcess('normal',gamma=gamma,beta=beta,f=f,nf=nf,theta=tum_theta,phi=tum_phi, \
-        sigmaL=0.1,sigmaD=0.3,sigmaT=0.9,sigmaP=0.9)
   
   # Populate network structure.
   # Starting vessel  
   v[0].occ = True
   v[0].l = 4500. #5000 #um
-  if mature:
-    v[0].r = 20. #um
-  else:
-    v[0].r = 500. #um
+  v[0].r = 500. #um
   v[0].theta = 0. #rad
   v[0].phi = 0. #rad
   v[0].start = [0.,0.,0.] #x,y,z (um)
@@ -147,34 +126,14 @@ def vessel_network_3d():
   level = 0
   level = level + 1
 
-  # Define parameters for situation where growth process switches during normal growth
-  # (4,4): Tumour in middle of tree
-  switchLev = -1 #Level at which growth process switches
-  switchBranch = 0 # Branch index at which growth process switches
-  switchFlag = True
-  switchProc = 2 #Index of growth process to use after switch
-
-  # Default behaviour - prior to switch use normal growth, after switch use tumour growth
-  gpUse = gp_norm
-  gpSwitch = gp_norm
-  gp = gpUse
-
   count = 1
   node_count = 2
-  
-  #import pdb
-  #pdb.set_trace()
 
   while(endloop is False):
     for i in range(nparent):
-      #print(i)
       curV = v[pSubs[i]]
-      
-      # Bisect the current vessel
-      #curV.l = gp.nf * curV.l
       curV.term = False
-      #v[pSubs[i]] = curV
-      node = curV.end #np.asarray(curV.start) + asCartesian([curV.l,curV.theta,curV.phi])
+      node = curV.end
       tmp = (curV.r[-1]**gp.gamma) / (1.+(gp.beta**gp.gamma))
       d1 = np.exp(np.log(tmp)/gp.gamma)
       d2 = gp.beta * d1
@@ -193,24 +152,10 @@ def vessel_network_3d():
         rndmL = np.random.uniform(low=-gp.sigmaL,high=gp.sigmaL)
         rndmD = np.random.uniform(low=-gp.sigmaD,high=gp.sigmaD)
         rndmT = np.random.uniform(low=-gp.sigmaT,high=gp.sigmaT)
-        rndmP = np.random.uniform(low=-gp.sigmaP,high=gp.sigmaP)
-      
+        rndmP = np.random.uniform(low=-gp.sigmaP,high=gp.sigmaP)      
+        
         newV = v[nxt[j]]
-        
-        # Look for a growth process switch
-        #stmp = np.where((switchLev==level) & (switchBranch==i))
-        #ctmp = len(stmp[0])
-        #if ctmp>0 and switchFlag==1:
-        #  newV.proc = switchProc
-        #else:
-        if True:
-          newV.proc = curV.proc
-
-        if newV.proc==2:
-          gp = gpSwitch 
-        else:
-          gp = gpUse
-        
+        newV.proc = curV.proc        
         newl = curV.l * f
         newV.l = newl + (newl*rndmL) #um
         newV.r = dnew[j] + (dnew[j]*rndmD)
@@ -230,13 +175,11 @@ def vessel_network_3d():
         newV.index = count
         newV.startIndex = curV.endIndex
         newV.endIndex = node_count
+        
         node_count += 1
-        #import pdb
-        #pdb.set_trace()
         ntry = 10
         count1 = 0
-        while True:
-            #print('Trying')
+        while True: # Try and connect to node using constrained random walk
             if tortFactor<=0:
                 path = np.asarray([newV.start,newV.end])
             else:
@@ -275,46 +218,6 @@ def vessel_network_3d():
   v = [x for x in v if x.occ is True]
     
   return v
-
-def plot_vessel_network(vin):
-
-  v = [x for x in vin if x.occ is True]
-  if len(v)==0:
-      return
-
-  #Find maximum extent
-  start = np.asarray([x.start for x in v])
-  x = start[0,:]
-  y = start[1,:]
-  z = start[2,:]
-  mnX,mxX = np.min(x),np.max(x)
-  mnY,mxY = np.min(y),np.max(y)
-  mnZ,mxZ = np.min(z),np.max(z)
-
-  # Number of levels
-  nlev = np.max([x.level for x in v])
-  print('No. of hierarchy levels: {}'.format(nlev+1))
-  
-  import matplotlib.pyplot as plt
-  from mpl_toolkits.mplot3d import Axes3D
-  fig = plt.figure()
-  ax = fig.add_subplot(111, projection='3d')
-
-  nb = len(v) # Number of branches
-  for i in range(nb):
-    curV = [x for x in v if x.index==i]
-    c = len(curV)
-    if c>1:
-        import pdb
-        pdb.set_trace()
-    curNode = curV[0].start
-    parInd = curV[0].parent
-    if parInd>0:
-        parnode = v[parInd].start
-        r = curV[0].r / 50.
-        ax.plot([curNode[0],parnode[0]], [curNode[1],parnode[1]], [curNode[2],parnode[2]],linewidth=r,color='r')
-        
-  plt.show()
   
 def coord_to_pix(coord,extent_um,dims,clip=True):
     """ Convert 3D spatial coordinates into 3D pixel indices """
@@ -378,6 +281,13 @@ def vector_align(v1,v2):
     a,b = (v1/ np.linalg.norm(v1)).reshape(3), (v2/ np.linalg.norm(v2)).reshape(3)
     v = np.cross(a,b)
     c = np.dot(a,b)
+    
+    if np.all(v==0.):
+        if c<0:
+            return np.eye(3)
+        else:
+            return np.eye(3)
+    
     s = np.linalg.norm(v)
     I = np.identity(3)
     vXStr = '{} {} {}; {} {} {}; {} {} {}'.format(0, -v[2], v[1], v[2], 0, -v[0], -v[1], v[0], 0)
@@ -534,24 +444,22 @@ def rotate_3d(vol,R,centre=[0,0,0]):
     if npix==0:
         return res
     subs_n = np.asarray([[subs[0][i],subs[1][i],subs[2][i],1] for i in range(npix)])
-    arr = np.asarray
-    #subs_n = arr([subs[0],subs[1],subs[2],np.zeros(npix)])
     
+    arr = np.asarray    
     subs_np1 = arr([np.dot(tr,s) for s in subs_n])
     subs_np2 = arr([np.dot(Rhi,s) for s in subs_np1])
     subs_np3 = arr([np.dot(tri,s) for s in subs_np2])
     subs_np = subs_np3.astype('int') # arr([subs_np3[:,0],subs_np3[:,1],subs_np3[:,2]])
-    keepInd = arr([i for i,x in enumerate(subs_np) if np.all(x>=0)]) 
+    keepInd = arr([i for i,x in enumerate(subs_np) if np.all(x>=0) and np.all(x[0:3]<vol.shape)]) 
     
     try:
         subs_np = subs_np[keepInd]
         subs_n = subs_n[keepInd]
+        res[subs_np[:,0],subs_np[:,1],subs_np[:,2]] = vol[subs_n[:,0],subs_n[:,1],subs_n[:,2]]
     except Exception as e:
         print(e)
         import pdb
         pdb.set_trace()
-    
-    res[subs_np[:,0],subs_np[:,1],subs_np[:,2]] = vol[subs_n[:,0],subs_n[:,1],subs_n[:,2]]
                 
     return res
                 
@@ -566,8 +474,6 @@ def vessel_grid(extent=None,dims=None,r=10.,c=np.asarray([0.,0.,0.]),R=None,rot=
     r_pix = [np.int(np.round(r*dims[i]/(extent[i,1]-extent[i,0]))) for i in range(3)]
     l_pix = [np.clip(np.int(np.round(l*dims[i]/(extent[i,1]-extent[i,0]))),0,dims[i]) for i in range(3)]
     print('Lpix {}, Rpix {}'.format(l_pix,r_pix))
-    
-    #gsize = np.max([l_pix,2*r_pix])
     
     grid[:] = outside
     # Create a circle of size r (um), in centre of grid
@@ -615,6 +521,86 @@ def vessel_grid(extent=None,dims=None,r=10.,c=np.asarray([0.,0.,0.]),R=None,rot=
                     
     return grid
 
+def vessel_grid_fast(extent=None,dims=None,r=10.,c=np.asarray([0.,0.,0.]),R=None,rot=[0.,0.,0.],l=10.,inside=1,outside=0):
+    
+    """ 
+    extent: bounding box for matrix (um)
+    dims: grid dimensions
+    """
+
+    r_pix = [np.int(np.round(r*dims[i]/(extent[i,1]-extent[i,0]))) for i in range(3)]
+    l_pix = [np.clip(np.int(np.round(l*dims[i]/(extent[i,1]-extent[i,0]))),0,dims[i]) for i in range(3)]
+    print('Lpix {}, Rpix {}'.format(l_pix,r_pix))
+    
+    #import pdb
+    #pdb.set_trace()
+    gsize = np.repeat(np.max([np.max(l_pix),np.max(2*r_pix)]) * 2,3)
+    #gsize = np.asarray([x+1 if x%2==0 else x for x in gsize]) # Make dimensions odd
+    grid = np.zeros(gsize,dtype='int')
+    
+    grid[:] = outside
+    # Create a circle of size r (um), in centre of grid
+    circ = np.zeros(gsize[0:2])+outside
+    ct = np.asarray([gsize[i]/2 for i in range(3)])
+    xl,xh = int(gsize[0]/2-r_pix[0]), int(gsize[0]/2+r_pix[0])
+    yl,yh = int(gsize[1]/2-r_pix[1]), int(gsize[1]/2+r_pix[1])
+    for x in range(xl,xh):
+        for y in range(yl,yh):
+            xy = np.asarray([x,y])
+            if np.linalg.norm(xy-ct[0:2])<=r_pix[0]: # and xyz[2]<l_pix[2]:
+                circ[x,y] = inside
+
+    # Copy circle to create cylinder of length l, in centre of grid
+    zl,zh = int((gsize[2]/2-l_pix[2])/2), int((gsize[2]/2+l_pix[2]/2))
+    for z in range(zl,zh):
+        grid[:,:,z] = circ
+
+    # Rotation offset
+    offset = [(x/2)-1 for x in gsize]
+    grid = rotate_3d(grid,R,centre=offset)
+    
+    # Shift to correct position
+    com_pix = coord_to_pix(c,extent,dims)
+    #com_grid = measurements.center_of_mass(grid)
+    res = np.zeros(dims,dtype='int')
+    xl,xh = int(com_pix[0]-gsize[0]/2), int(com_pix[0]+gsize[0]/2)
+    yl,yh = int(com_pix[1]-gsize[1]/2), int(com_pix[1]+gsize[1]/2)
+    zl,zh = int(com_pix[2]-gsize[2]/2), int(com_pix[2]+gsize[2]/2)
+    xlp,xhp = 0,gsize[0]
+    ylp,yhp = 0,gsize[1]
+    zlp,zhp = 0,gsize[2]
+    if xh>dims[0]:
+        xhp = xhp-(xh-dims[0])
+        xh = dims[0]
+    if yh>dims[1]:
+        yhp = yhp-(yh-dims[1])
+        yh = dims[1]
+    if zh>dims[2]:
+        zhp = zhp-(zh-dims[0])
+        zh = dims[0]
+    if xl<0:
+        xlp = xlp - xl
+        xl = 0
+    if yl<0:
+        ylp = ylp - yl
+        yl = 0
+    if zl<0:
+        zlp = zlp - zl
+        zl = 0
+    try:
+        res[xl:xh,yl:yh,zl:zh] = grid[xlp:xhp,ylp:yhp,zlp:zhp]
+    except Exception as e:
+        print(e)
+        import pdb
+        pdb.set_trace()
+                    
+    return res
+
+if sys.platform=='win32':
+    dropbox_dir = r'C:\Users\simon\Dropbox'
+else:
+    dropbox_dir = r'/media/simon/Dropbox/Dropbox'
+
 v = vessel_network_3d()
 
 gfile = os.path.join(dropbox_dir,'simulated_network_{}.am'.format(1))
@@ -629,7 +615,7 @@ xmn,xmx = np.min(coords[:,:,0]),np.max(coords[:,:,0])
 ymn,ymx = np.min(coords[:,:,1]),np.max(coords[:,:,1])
 zmn,zmx = np.min(coords[:,:,2]),np.max(coords[:,:,2])
 
-ms = 256 # matrix size
+ms = 512 # matrix size
 dims = [ms,ms,ms] # voxels
 extent = [np.min([xmn,ymn,zmn]),np.max([xmx,ymx,zmx])] # um
 extent_um = np.asarray([[extent[0],extent[1]],[extent[0],extent[1]],[extent[0],extent[1]]])
@@ -655,8 +641,6 @@ if True:
     print('Adding vessels to grid...')
     ofile = os.path.join(dropbox_dir,'simulated_network_nobg_{}.nii'.format(1))
     for i,e in enumerate(coords):
-        #import pdb
-        #pdb.set_trace()
         path = v[i].path
         for j in range(1,len(path)):
             rad_c = v[i].r[j]            
@@ -664,7 +648,6 @@ if True:
             l = np.linalg.norm(dif)
         
             print('Coordinate {} of {}, radius {}'.format(i,len(coords),rad_c))
-            
             R = vector_align(dif,[0.,0.,-1.])
             Rh = np.eye(4)
             Rh[0:3,0:3] = R
@@ -673,7 +656,7 @@ if True:
             
             com = np.mean(path[j-1:j+1,:],axis=0)
             print('L={},rot={},COM={},scale={}'.format(l,angles,com,scale))   
-            ng = vessel_grid(extent=extent_um,dims=dims,R=R,r=rad_c,c=com,l=l,rot=None,inside=vessel_val,outside=0)
+            ng = vessel_grid_fast(extent=extent_um,dims=dims,R=R,r=rad_c,c=com,l=l,rot=None,inside=vessel_val,outside=0)
             if np.max(ng)<=0:
                 #import pdb
                 #pdb.set_trace()
