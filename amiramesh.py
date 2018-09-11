@@ -108,8 +108,8 @@ class AmiraMesh(object):
                 curField['data'] = curData
             except Exception as e:
                 print(('Error, {}.Line: {} '.format(e,curData)))
-                import pdb
-                pdb.set_trace()
+                #import pdb
+                #pdb.set_trace()
 
         elif 'binary' in self.fileType.lower():
             import pdb
