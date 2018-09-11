@@ -626,9 +626,6 @@ for i in range(3):
     scale[i,i] = (extent_um[i,1]-extent_um[i,0])/dims[i]
 trans = np.matmul(tr,scale)
 
-#import pdb
-#pdb.set_trace()
-
 # Add vessels
 vessel_val = 2
 if True:
