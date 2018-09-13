@@ -601,9 +601,14 @@ if sys.platform=='win32':
 else:
     dropbox_dir = r'/media/simon/Dropbox/Dropbox'
 
+opath = os.path.join(dropbox_dir,'vessel_3d_sims')
+if not os.path.exists(opath):
+    os.makedirs(opath)
+sim_index = 1
+
 v = vessel_network_3d()
 
-gfile = os.path.join(dropbox_dir,'simulated_network_{}.am'.format(1))
+gfile = os.path.join(opath,'simulated_network_{}.am'.format(sim_index))
 sg = list_to_amira(v)
 sg.write(gfile)
 print('Written graph to: {}'.format(gfile))
@@ -639,7 +644,7 @@ trans = np.matmul(tr,scale)
 vessel_val = 2
 if True:
     print('Adding vessels to grid...')
-    ofile = os.path.join(dropbox_dir,'simulated_network_nobg_{}.nii'.format(1))
+    ofile = os.path.join(opath,'simulated_network_nobg_{}.nii'.format(sim_index))
     for i,e in enumerate(coords):
         path = v[i].path
         for j in range(1,len(path)):
@@ -667,7 +672,7 @@ if True:
             img = nib.Nifti1Image(grid,trans)
             nib.save(img,ofile)
      
-    ofile = os.path.join(dropbox_dir,'simulated_network_nobg_{}.nii'.format(1))     
+    ofile = os.path.join(opath,'simulated_network_nobg_{}.nii'.format(sim_index))     
     img = nib.Nifti1Image(grid,trans)
     nib.save(img,ofile)
     print('Saved to: {}'.format(ofile)) 
@@ -733,7 +738,7 @@ if False:
         
     grid += tissue
     
-    ofile = os.path.join(dropbox_dir,'simulated_network.nii')
+    ofile = os.path.join(opath,'simulated_network_{}.nii'.format(sim_index))
     img = nib.Nifti1Image(grid,trans)
     nib.save(img,ofile)
     print('Saved to: {}'.format(ofile))   
