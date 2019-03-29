@@ -183,18 +183,21 @@ class SpatialGraph(amiramesh.AmiraMesh):
     def number_of_node_connections(self,file=None):
     
        #Identify terminal nodes
-       nodeCoords = amdata.fields[0]['data']
-       nnode = nodeCoords.shape[0]
-       nConn = np.asarray([0]*nnode)
-       conn = amdata.fields[1]['data']
+       #nodeCoords = self.fields[0]['data']
+       #nnode = nodeCoords.shape[0]
+       #nConn = np.asarray([0]*nnode)
+       conn = self.fields[1]['data']
        
-       for i in range(nnode):
-           #ntmp1 = len(np.where(conn[:,0]==i)[0])
-           #ntmp2 = len(np.where(conn[:,1]==i)[0])
-           ntmp1 = len([j for j,x in enumerate(conn) if i in x])
-           nConn[i] = ntmp1 #+ ntmp2
-           
+       nConn = np.asarray([len([j for j,x in enumerate(conn) if i in x]) for i in range(self.nnode)])
        return nConn
+       
+       #for i in range(nnode):
+       #    #ntmp1 = len(np.where(conn[:,0]==i)[0])
+       #    #ntmp2 = len(np.where(conn[:,1]==i)[0])
+       #    ntmp1 = len([j for j,x in enumerate(conn) if i in x])
+       #    nConn[i] = ntmp1 #+ ntmp2
+           
+       #return nConn
        
     def write_node_list(self,path=None):
         

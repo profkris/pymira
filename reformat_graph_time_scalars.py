@@ -15,16 +15,17 @@ import numpy as np
 #opath = os.path.join(path,'ct_output_stack')
 
 path = r'C:\Users\simon\Dropbox\Tumour'
-file = os.path.join(path,'ct_output_parker_half_tumour.am')
-opath = os.path.join(path,'ct_output_stack_parker_half')
+file = os.path.join(path,'ct_output_parker_half_tumour_ascii.am')
+opath = r'C:\Users\simon\Dropbox\ct_output_stack_parker_half'
+#opath = os.path.join(path,'ct_output_stack_parker_half')
 
 graph = spatialgraph.SpatialGraph()
 print('Reading graph: {}'.format(file))
 graph.read(file)
 print('Graph read')
 
-tinds = [i for i,n in enumerate(sg.fieldNames) if 'TP' in n]
-inds = [i for i,n in enumerate(sg.fieldNames) if 'TP' not in n]
+tinds = [i for i,n in enumerate(graph.fieldNames) if 'TP' in n]
+inds = [i for i,n in enumerate(graph.fieldNames) if 'TP' not in n]
 
 times = [int(i.replace('TP','')) for i in graph.fieldNames if 'TP' in i]
 
