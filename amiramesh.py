@@ -387,9 +387,10 @@ class AmiraMesh(object):
                         self.data += f.read()
                     bytesRead += sys.getsizeof(self.data)
                     if bytesRead<fileSize:
-                        import pdb
-                        pdb.set_trace()
-                        raise Exception('Not all of file was read! Only '+str(bytesRead)+' of '+str(fileSize))
+                        pass
+                        #import pdb
+                        #pdb.set_trace()
+                        #raise Exception('Not all of file was read! Only {} of {}'.format(bytesRead,fileSize))
                     break
 
         self.fieldRange = []
