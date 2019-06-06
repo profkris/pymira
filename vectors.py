@@ -103,7 +103,7 @@ def align_vector_rotation(A,B):
     Fi = np.nan_to_num(Fi)
     try:
         U = Fi * G * np.linalg.inv(Fi)
-    except Exception,e:
+    except Exception as e:
         print(e)
         import pdb
         pdb.set_trace()

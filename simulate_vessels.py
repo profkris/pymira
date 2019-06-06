@@ -64,7 +64,7 @@ class VesselNetwork(object):
         z = r * np.cos( theta )
         return [x,y,z]
         
-    def create_network(self,nlevel=9,nb=2,gamma=3.,beta=1.,f=0.9,nf=0.9,theta=27.,phi=10., 
+    def create_network(self,nlevel=5,nb=2,gamma=3.,beta=1.,f=0.9,nf=0.9,theta=27.,phi=10., 
                        sigmaL=0.02,sigmaD=0.02,sigmaT=0.02,sigmaP=10.,tortFactor=0.5,verbose=False):
         """
         Creates a 3D blood vessel-like network in graph format
@@ -586,9 +586,8 @@ def main():
     if not os.path.exists(opath):
         os.makedirs(opath)
 
-    import pdb
-    pdb.set_trace()
-    vn = VesselNetwork(grow=True)
+    verb = True
+    vn = VesselNetwork(grow=True,verbose=verb)
     v = vn.network
 
     gfile = os.path.join(opath,'simulated_network_{}.am'.format(1))
@@ -598,7 +597,7 @@ def main():
     
     emb = EmbedInGrid()
     ofile = os.path.join(dropbox_dir,'simulated_network_nobg_{}.nii'.format(1))     
-    grid,extent_um,trans = emb.embed_vessels(v,ms=512,inside=2,outside=0)
+    grid,extent_um,trans = emb.embed_vessels(v,ms=512,inside=2,outside=0,verbose=verb)
     grid = emb.add_tissue(grid)
     ofile = os.path.join(dropbox_dir,'simulated_network.nii')
     emb.write(grid,ofile,trans=trans)
