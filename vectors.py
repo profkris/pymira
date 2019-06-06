@@ -92,7 +92,7 @@ def align_vector_rotation(A,B):
         #print('All negative')
         return -np.identity(3)
     
-    G = np.asmatrix(
+    G = np.matrix(
          [[A*B.T, mat(-norm(np.cross(A,B))), 0.],
          [norm(np.cross(A,B)), A*B.T,  0.],
          [0., 0., 1.],
@@ -103,7 +103,7 @@ def align_vector_rotation(A,B):
     Fi = np.nan_to_num(Fi)
     try:
         U = Fi * G * np.linalg.inv(Fi)
-    except Exception,e:
+    except Exception as e:
         print(e)
         import pdb
         pdb.set_trace()

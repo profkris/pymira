@@ -425,7 +425,8 @@ def plot_mesh(meshes):
 #gfile = 'C:\\Users\\simon\\Dropbox\\Mesentery\\Flow2AmiraPressure.am'
 #gfile = 'C:\\Anaconda2\\Lib\\site-packages\\pymira\\test_graph.am'
 pyplot.close('all')
-gfile = r'C:\Anaconda2\Lib\site-packages\pymira\test_join.am'
+#gfile = r'C:\Anaconda2\Lib\site-packages\pymira\test_join.am'
+gfile = r'C:\Users\simon\Dropbox\segmentation_database\vessels\VDA Colorectal cancer\Control\LS\LS#2\LS2_spatial_graph.am'
 from pymira import spatialgraph
 graph = spatialgraph.SpatialGraph()
 graph.read(gfile)
