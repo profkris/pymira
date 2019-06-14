@@ -34,7 +34,8 @@ def graph_to_stl(graph):
     
     tubes = []
     connectionDefined = np.zeros(nconn,dtype='int')
-    for edge in edges:
+    for ei,edge in enumerate(edges):
+        print('Edge {} of {}'.format(ei,len(edges)))
         pts = edge.coordinates
         radius = edge.get_scalar('Radii')
         strtNode = nodeList[edge.start_node_index]
@@ -44,10 +45,10 @@ def graph_to_stl(graph):
         strtRev = strtNode.edge_indices_rev[strtBranchInd]
         endBranchInd = [i for i,e in enumerate(endNode.edges) if e.index==edge.index][0]
         endRev = endNode.edge_indices_rev[endBranchInd]
-        print(strtRev,endRev,pts)
+        #print(strtRev,endRev,pts)
         
         #print strtNode.nconn
-        if strtNode.nconn==1:
+        if True: #strtNode.nconn==1:
             strt_face_angle = 0.
         elif strtNode.nconn==2:
             other_conn = strtNode.connecting_node[strtNode.connecting_node!=endNode.index]
@@ -57,7 +58,7 @@ def graph_to_stl(graph):
             vec2 = (coords[strtNode.index]-coords[endNode.index])/length2
             strt_face_angle = np.arccos(np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2)))
             strt_face_angle = np.rad2deg(strt_face_angle)
-            print(other_conn,strtNode.index,endNode.index,coords[other_conn],coords[strtNode.index],coords[endNode.index])
+            #print(other_conn,strtNode.index,endNode.index,coords[other_conn],coords[strtNode.index],coords[endNode.index])
             import pdb
             pdb.set_trace()
         else:
@@ -66,7 +67,7 @@ def graph_to_stl(graph):
         #    pass
             
         #print endNode.nconn
-        if endNode.nconn==1:
+        if True: #endNode.nconn==1:
             end_face_angle = 0.
         elif endNode.nconn==2:
             other_conn = endNode.connecting_node[endNode.connecting_node!=strtNode.index]
@@ -81,8 +82,8 @@ def graph_to_stl(graph):
         else:
             end_face_angle = 0.
             
-        import pdb
-        pdb.set_trace()
+        #import pdb
+        #pdb.set_trace()
         fa = np.zeros(pts.shape[0])
         fa[0] = strt_face_angle
         fa[pts.shape[0]-1] = end_face_angle
@@ -95,20 +96,25 @@ def graph_to_stl(graph):
             center = np.mean(np.vstack((pts[i],pts[i+1])), axis=0)
             #print strt_face_angle,end_face_angle
             
-            if i<pts.shape[0]-2:
+            if False: #i<pts.shape[0]-2:
                 length2 = np.linalg.norm(pts[i+1]-pts[i+2])
                 vec2 = (pts[i+2]-pts[i+1])/length2
                 fa[i+1] = np.arccos(np.dot(vec,vec2)/(np.linalg.norm(vec)*np.linalg.norm(vec2)))
                 fa[i+1] = -np.rad2deg(fa[i+1]) / 2.
+                
             if i==0:
                 grad[i] = vec
             elif i<pts.shape[0]-2:
                 grad[i] = pts[i+1]-pts[i]
             #verts,faces = make_tube(radius[i:i+1]*2.,[thickness,thickness],lengthorientation=vec,center=center,outer_only=True)
+            #print(fa[i],fa[i+1])
+            if np.isnan(fa[i]) or np.isnan(fa[i+1]):
+                import pdb
+                pdb.set_trace()
             
             #print('Points:{}{}, center:{}, orient:{}'.format(pts[i],pts[i+1],center,vec))
             curRad = np.mean(radius[i:i+1]*2)
-            print(fa[i],fa[i+1])
+
             #newMesh = tube_mesh(curRad,thickness,length,orientation=vec,center=center,outer_only=True,start_face_angle=-fa[i],end_face_angle=fa[i+1])
             nlength = 2
             alpha = 360.
@@ -426,7 +432,9 @@ def plot_mesh(meshes):
 #gfile = 'C:\\Anaconda2\\Lib\\site-packages\\pymira\\test_graph.am'
 pyplot.close('all')
 #gfile = r'C:\Anaconda2\Lib\site-packages\pymira\test_join.am'
-gfile = r'C:\Users\simon\Dropbox\segmentation_database\vessels\VDA Colorectal cancer\Control\LS\LS#2\LS2_spatial_graph.am'
+#gfile = r'C:\Users\simon\Dropbox\segmentation_database\vessels\VDA Colorectal cancer\Control\LS\LS#2\LS2_spatial_graph.am'
+gfile = r'C:\Users\simon\Dropbox\RoyalSocSims\subvol_4339_3691_4147.am'
+gfile = r'C:\Users\simon\Dropbox\RoyalSocSims\spatialGraph_RIN_flow_flag.am'
 from pymira import spatialgraph
 graph = spatialgraph.SpatialGraph()
 graph.read(gfile)
@@ -447,4 +455,6 @@ combined = graph_to_stl(graph)
 #
 dir_ = 'C:\\Users\\simon\\Dropbox\\'
 ##combined.save(dir_+'cylinder.stl')
-combined.save(dir_+'mesentry.stl')
+#combined.save(dir_+'mesentry.stl')
+ofile = r'C:\Users\simon\Dropbox\RoyalSocSims\spatialGraph_RIN_flow_flag.stl'
+combined.save(ofile)

@@ -25,6 +25,8 @@ amdata.read(fo)
 print('Graph loaded')
 #print('Performing sanity check...')
 #amdata.sanity_check(deep=True)
+import pdb
+pdb.set_trace()
 
 #amdata.delete_nodes([2,3,3000])
 amdata.constrain_nodes(xrange=[2000.,3000.])#,yrange=[0.,2000.])

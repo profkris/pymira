@@ -11,9 +11,13 @@ from scipy.spatial import ConvexHull
 import numpy as np
 
 path = r'C:\Users\simon\Dropbox\170606_Ben Vessel Networks\C1M3\2%'
+f = os.path.join(path,'C1M3_flow_sims_no_selfconn.am')
+
+path = r'C:\Users\simon\Dropbox\RoyalSocSims' 
+f = os.path.join(path,'spatialGraph_RIN_flow_flag.am')
 
 graph = spatialgraph.SpatialGraph()
-graph.read(os.path.join(path,'C1M3_flow_sims_no_selfconn.am'))
+graph.read(f)
 
 extent = graph.node_spatial_extent()
 
@@ -36,11 +40,25 @@ nodecoords = graph.get_data('VertexCoordinates')
 #
 #    return hull.find_simplex(p)>=0
 
-subvol = [400.,400.,500.] # um
+pc = np.asarray(
+      [[0.36,0.76],
+      [0.45,0.81],
+      [0.29,0.50]])
+
+extent = np.asarray(graph.edge_spatial_extent())
+dx0 = np.asarray([(extent[i,1]-extent[i,0])*pc[i,0] + extent[i,0] for i in range(3)])
+dx1 = np.asarray([(extent[i,1]-extent[i,0])*pc[i,1] + extent[i,0] for i in range(3)])
+
+subvol = dx1-dx0
+centre = np.asarray([(x+y)/2. for x,y in zip(dx0,dx1)]).astype('int')
+
+#subvol = [400.,400.,500.] # um
 #centre = [800,800,500]
 #centre = [500,500,500]
-centre = [1500,1000,1500]
+#centre = [1500,1000,1500]
 #centre = [1400,1100,1000]
+
+ofile = os.path.join(path,'subvol_{}_{}_{}.am'.format(centre[0],centre[1],centre[2]))
 
 verts = [[ centre[0]-subvol[0]/2.,centre[0]+subvol[0]/2.],
          [ centre[1]-subvol[1]/2.,centre[1]+subvol[1]/2.],
@@ -61,5 +79,7 @@ ed = spatialgraph.Editor()
 ed.delete_nodes(graph,node_to_delete)
 
 graph = ed.remove_disconnected_nodes(graph)
+import pdb
+pdb.set_trace()
 
-graph.write(os.path.join(path,'subvol_{}_{}_{}.am'.format(centre[0],centre[1],centre[2])))
+graph.write(ofile)
