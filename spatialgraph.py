@@ -337,7 +337,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
             return
         
         editor = Editor()
-        return editor.delete_nodes(nodes_to_delete[0])
+        return editor.delete_nodes(self,nodes_to_delete[0])
         
     def remove_field(self,fieldName):
         f = [(i,f) for (i,f) in enumerate(self.fields) if f['name']==fieldName]
