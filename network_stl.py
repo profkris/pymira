@@ -34,6 +34,8 @@ def graph_to_stl(graph):
     
     tubes = []
     connectionDefined = np.zeros(nconn,dtype='int')
+    
+    # Loop through edges
     for ei,edge in enumerate(edges):
         print('Edge {} of {}'.format(ei,len(edges)))
         pts = edge.coordinates
@@ -48,47 +50,66 @@ def graph_to_stl(graph):
         #print(strtRev,endRev,pts)
         
         #print strtNode.nconn
-        if True: #strtNode.nconn==1:
+        vec1,vec2 = None,None        
+        if True: #strtNode.nconn==1: # Terminating edge
             strt_face_angle = 0.
         elif strtNode.nconn==2:
-            other_conn = strtNode.connecting_node[strtNode.connecting_node!=endNode.index]
+            # Find the next node that the edge connects to (and which isn't the end node)
+            #other_conn = strtNode.connecting_node[strtNode.connecting_node!=endNode.index]
+            if strtNode.connecting_node[0]==strtNode.connecting_node[1]:
+                other_conn = strtNode.connecting_node[0]
+            else:
+                other_conn = [x for x in strtNode.connecting_node if x!=endNode.index][0]
+            # Calculate the distance of next and previous edges
             length1 = np.linalg.norm(coords[other_conn]-coords[strtNode.index])
             vec1 = (coords[other_conn]-coords[strtNode.index])/length1
             length2 = np.linalg.norm(coords[strtNode.index]-coords[endNode.index])
             vec2 = (coords[strtNode.index]-coords[endNode.index])/length2
-            strt_face_angle = np.arccos(np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2)))
-            strt_face_angle = np.rad2deg(strt_face_angle)
+            # Calculate angle between the two connecting edges
+            costh = np.dot(vec2,vec1)/(np.linalg.norm(vec1)*np.linalg.norm(vec2))
+            strt_face_angle = -np.arccos(np.clip(costh,-1.,1.))
+            strt_face_angle = np.rad2deg(strt_face_angle) / 2.
             #print(other_conn,strtNode.index,endNode.index,coords[other_conn],coords[strtNode.index],coords[endNode.index])
-            import pdb
-            pdb.set_trace()
+            #import pdb
+            #pdb.set_trace()
         else:
             strt_face_angle = 0.
         #if strt_face_angle!=90.:
         #    pass
+        print('Start angle: {} , v1 {} v2 {} '.format(strt_face_angle,vec1,vec2))
+        if not np.isfinite(strt_face_angle):
+            import pdb
+            pdb.set_trace()
             
         #print endNode.nconn
+        vec1,vec2 = None,None
         if True: #endNode.nconn==1:
             end_face_angle = 0.
         elif endNode.nconn==2:
-            other_conn = endNode.connecting_node[endNode.connecting_node!=strtNode.index]
+            if endNode.connecting_node[0]==endNode.connecting_node[1]:
+                other_conn = endNode.connecting_node[0]
+            else:
+                other_conn = [x for x in endNode.connecting_node if x!=strtNode.index][0]
             length1 = np.linalg.norm(coords[endNode.index]-coords[other_conn])
             vec1 = (coords[endNode.index]-coords[other_conn])/length1
             length2 = np.linalg.norm(coords[endNode.index]-coords[strtNode.index])
             vec2 = (coords[endNode.index]-coords[strtNode.index])/length2
-            end_face_angle = np.arccos(np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2)))
+            costh = np.dot(vec2,vec1)/(np.linalg.norm(vec1)*np.linalg.norm(vec2))
+            end_face_angle = np.arccos(np.clip(costh,-1.,1.))
             end_face_angle = np.rad2deg(end_face_angle)
-            import pdb
-            pdb.set_trace()
+            #import pdb
+            #pdb.set_trace()
         else:
             end_face_angle = 0.
-            
-        #import pdb
-        #pdb.set_trace()
+        print('End angle: {} , v1 {} v2 {} '.format(end_face_angle,vec1,vec2))
+        if not np.isfinite(end_face_angle):
+            import pdb
+            pdb.set_trace()
+
         fa = np.zeros(pts.shape[0])
         fa[0] = strt_face_angle
         fa[pts.shape[0]-1] = end_face_angle
         grad = np.zeros([pts.shape[0],3])
-        #grad[0,:] = 
         
         for i in range(pts.shape[0]-1):
             length = np.linalg.norm(pts[i]-pts[i+1])
@@ -100,7 +121,7 @@ def graph_to_stl(graph):
                 length2 = np.linalg.norm(pts[i+1]-pts[i+2])
                 vec2 = (pts[i+2]-pts[i+1])/length2
                 fa[i+1] = np.arccos(np.dot(vec,vec2)/(np.linalg.norm(vec)*np.linalg.norm(vec2)))
-                fa[i+1] = -np.rad2deg(fa[i+1]) / 2.
+                fa[i+1] = -np.rad2deg(fa[i+1])
                 
             if i==0:
                 grad[i] = vec
@@ -119,7 +140,7 @@ def graph_to_stl(graph):
             nlength = 2
             alpha = 360.
             nalpha = 16
-            oVerts,oFaces = make_cylinder(curRad,length,nlength,alpha,nalpha,center,vec,start_face_angle=-fa[i],end_face_angle=fa[i+1])
+            oVerts,oFaces = make_cylinder(curRad,length*1.2,nlength,alpha,nalpha,center,vec,start_face_angle=-fa[i],end_face_angle=fa[i+1])
 
             if verts is None:
                 verts = oVerts.astype('float')
@@ -144,7 +165,7 @@ def graph_to_stl(graph):
     #tubes.append(newMesh)
 
     #netMesh = mesh.Mesh(np.concatenate([t.data for t in newMesh]))
-    plot_mesh(newMesh) 
+    #plot_mesh(newMesh) 
     return newMesh
     
 def unit_vector(vector):
@@ -275,9 +296,14 @@ def rot_matrix(angle, direction, point=None):
         M[:3, 3] = point - np.dot(R, point)
     return M
 
-def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation,start_face_angle=0.,end_face_angle=0.):
+def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation,start_face_angle=0.,end_face_angle=0.,doubleSided=True):
     
     origin, xaxis, yaxis, zaxis = [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]
+    
+    if end_face_angle>180:
+        return None
+    if end_face_angle>90.:
+        end_face_angle -= 180.    
 
     #Create the length array
     if type(length) is not list:
@@ -326,16 +352,27 @@ def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation,st
         return None
 
     points = np.vstack(( px, py, pz )).T
+    if doubleSided:
+        points = np.concatenate((points,points),axis=0)
     
     # Define triangular faces
     faces = []
     for i in range(nalpha):
         if i<nalpha-1:
             faces.append([i,i+1,nalpha+i])
-            faces.append([nalpha+i,nalpha+i+1,i+1])
+            faces.append([i+1,nalpha+i+1,nalpha+i])
         else:
             faces.append([i,0,nalpha+i])
-            faces.append([nalpha+i,nalpha,0])
+            faces.append([0,nalpha,nalpha+i])
+    if doubleSided:
+        for i in range(nalpha,2*nalpha):
+            if i<nalpha-1:
+                faces.append([2*nalpha+i,i+1,i])
+                faces.append([2*nalpha+i,2*nalpha+i+1,i+1])
+            else:
+                faces.append([2*nalpha+i,0,i])
+                faces.append([2*nalpha+i,2*nalpha,0])
+    
     faces = np.asarray(faces)
 
     #Orient tube to new vector
@@ -366,8 +403,6 @@ def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation,st
         points_p[pStartInds] = pStartR
         
     if end_face_angle!=0.:
-        #import pdb
-        #pdb.set_trace()
         R = rot_matrix(np.deg2rad(end_face_angle),zaxis)  
         pEndInds = [i for i,p in enumerate(px) if p==I[-1]]
         pEnd = points_p[pEndInds]
@@ -434,7 +469,8 @@ pyplot.close('all')
 #gfile = r'C:\Anaconda2\Lib\site-packages\pymira\test_join.am'
 #gfile = r'C:\Users\simon\Dropbox\segmentation_database\vessels\VDA Colorectal cancer\Control\LS\LS#2\LS2_spatial_graph.am'
 gfile = r'C:\Users\simon\Dropbox\RoyalSocSims\subvol_4339_3691_4147.am'
-gfile = r'C:\Users\simon\Dropbox\RoyalSocSims\spatialGraph_RIN_flow_flag.am'
+#gfile = r'C:\Users\simon\Dropbox\RoyalSocSims\spatialGraph_RIN_flow_flag.am'
+#gfile = r'C:\Anaconda2\Lib\site-packages\pymira\tests\test_network_simple.am'
 from pymira import spatialgraph
 graph = spatialgraph.SpatialGraph()
 graph.read(gfile)
@@ -453,8 +489,12 @@ combined = graph_to_stl(graph)
 #
 #plot_mesh(combined)
 #
-dir_ = 'C:\\Users\\simon\\Dropbox\\'
+#dir_ = 'C:\\Users\\simon\\Dropbox\\'
+dir_ = r'C:\Users\simon\Dropbox\RoyalSocSims'
 ##combined.save(dir_+'cylinder.stl')
 #combined.save(dir_+'mesentry.stl')
-ofile = r'C:\Users\simon\Dropbox\RoyalSocSims\spatialGraph_RIN_flow_flag.stl'
+#ofile = r'C:\Users\simon\Dropbox\RoyalSocSims\spatialGraph_RIN_flow_flag.stl'
+#ofile = r'C:\Users\simon\Dropbox\RoyalSocSims\spatialGraph_RIN_flow_flag.stl'
+#ofile = r'C:\Anaconda2\Lib\site-packages\pymira\tests\test_network_simple.stl'
+ofile = r'C:\Users\simon\Dropbox\RoyalSocSims\subvol.stl'
 combined.save(ofile)
