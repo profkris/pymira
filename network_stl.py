@@ -47,7 +47,7 @@ def graph_to_stl(graph):
         print(strtRev,endRev,pts)
         
         #print strtNode.nconn
-        if strtNode.nconn==1:
+        if True: #strtNode.nconn==1:
             strt_face_angle = 0.
         elif strtNode.nconn==2:
             other_conn = strtNode.connecting_node[strtNode.connecting_node!=endNode.index]
@@ -66,7 +66,7 @@ def graph_to_stl(graph):
         #    pass
             
         #print endNode.nconn
-        if endNode.nconn==1:
+        if True: #if endNode.nconn==1:
             end_face_angle = 0.
         elif endNode.nconn==2:
             other_conn = endNode.connecting_node[endNode.connecting_node!=strtNode.index]
@@ -81,8 +81,8 @@ def graph_to_stl(graph):
         else:
             end_face_angle = 0.
             
-        import pdb
-        pdb.set_trace()
+        #import pdb
+        #pdb.set_trace()
         fa = np.zeros(pts.shape[0])
         fa[0] = strt_face_angle
         fa[pts.shape[0]-1] = end_face_angle
@@ -277,7 +277,7 @@ def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation,st
     if type(length) is not list:
         length = [length]
     if len(length)==1:
-        I = np.linspace(0, length, nlength)
+        I = np.linspace(0, length[0], nlength)
     elif len(length)==nlength-1:
         I = length
     else:
@@ -426,7 +426,8 @@ def plot_mesh(meshes):
 #gfile = 'C:\\Anaconda2\\Lib\\site-packages\\pymira\\test_graph.am'
 pyplot.close('all')
 #gfile = r'C:\Anaconda2\Lib\site-packages\pymira\test_join.am'
-gfile = r'C:\Users\simon\Dropbox\segmentation_database\vessels\VDA Colorectal cancer\Control\LS\LS#2\LS2_spatial_graph.am'
+#gfile = r'C:\Users\simon\Dropbox\segmentation_database\vessels\VDA Colorectal cancer\Control\LS\LS#2\LS2_spatial_graph.am'
+gfile = r'C:\Users\simon\Dropbox\RoyalSocSims\subvol_4339_3691_4147.am'
 from pymira import spatialgraph
 graph = spatialgraph.SpatialGraph()
 graph.read(gfile)
@@ -447,4 +448,4 @@ combined = graph_to_stl(graph)
 #
 dir_ = 'C:\\Users\\simon\\Dropbox\\'
 ##combined.save(dir_+'cylinder.stl')
-combined.save(dir_+'mesentry.stl')
+combined.save(dir_+'tumour_subvol.stl')
