@@ -75,8 +75,8 @@ class AmiraMesh(object):
         # Grab data
         fin = content[strt:].find('@')
         if fin<0:
-            fin = len(content)-1-strt
-        curData = content[strt:strt+fin-1]
+            fin = len(content)-strt
+        curData = content[strt:strt+fin] # -1
         
         # Data type
         if 'ascii' in self.fileType.lower():

@@ -140,7 +140,9 @@ def graph_to_stl(graph):
             nlength = 2
             alpha = 360.
             nalpha = 16
-            oVerts,oFaces = make_cylinder(curRad,length*1.2,nlength,alpha,nalpha,center,vec,start_face_angle=-fa[i],end_face_angle=fa[i+1])
+            oVerts,oFaces = make_cylinder(curRad,length,nlength,alpha,nalpha,center,vec,start_face_angle=-fa[i],end_face_angle=fa[i+1])
+            import pdb
+            pdb.set_trace()
 
             if verts is None:
                 verts = oVerts.astype('float')
@@ -296,7 +298,7 @@ def rot_matrix(angle, direction, point=None):
         M[:3, 3] = point - np.dot(R, point)
     return M
 
-def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation,start_face_angle=0.,end_face_angle=0.,doubleSided=True):
+def make_cylinder(radius, length, nlength, alpha, nalpha, center, orientation,start_face_angle=0.,end_face_angle=0.,doubleSided=False):
     
     origin, xaxis, yaxis, zaxis = [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]
     
