@@ -8,10 +8,12 @@ import numpy as np
 import cv2
 
 path = r'C:\Users\simon\Dropbox\Rift\Royal Society Scripted\Panorama_grabs'
+path = r'C:\Users\simon\Dropbox\VRgrabs\VRflight'
 ofile = r'C:\Users\simon\Dropbox\output.mp4'
 
-nloop = 10 # number of loops
-rf = 2 #None # size sclaing factor
+nloop = 1 # number of loops
+rf = 1 #None # size sclaing factor
+reverse = False
 
 import os
 imFiles = []
@@ -22,6 +24,9 @@ for file in os.listdir(path):
         if testSize:
             frame0 = cv2.imread(os.path.join(imFiles[0]))
             testSize = False
+            
+import pdb
+pdb.set_trace()
 
 orSize = np.asarray(frame0.shape)
 newSize = orSize.copy()
@@ -40,6 +45,15 @@ for j in range(nloop):
         if rf is not None:
             frame = cv2.resize(frame, (newSize[0],newSize[1]))#, interpolation = inter)
         out.write(frame)
+        
+    if reverse:
+        for i in range(nfile-1,-1,-1):
+            imFile = imFiles[i]
+            print('Reversed loop {} of {}, reading/writing image {} of {} (size {}x{})'.format(j+1,nloop,i+1,nfile,newSize[0],newSize[1]))
+            frame = cv2.imread(os.path.join(imFile))
+            if rf is not None:
+                frame = cv2.resize(frame, (newSize[0],newSize[1]))#, interpolation = inter)
+            out.write(frame)
 
 print('Written to {}'.format(ofile))
 out.release()
