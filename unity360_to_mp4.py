@@ -11,9 +11,9 @@ path = r'C:\Users\simon\Dropbox\Rift\Royal Society Scripted\Panorama_grabs'
 path = r'C:\Users\simon\Dropbox\VRgrabs\VRflight'
 ofile = r'C:\Users\simon\Dropbox\output.mp4'
 
-nloop = 1 # number of loops
+nloop = 3 # number of loops
 rf = 1 #None # size sclaing factor
-reverse = False
+reverse = True
 
 import os
 imFiles = []
@@ -24,9 +24,6 @@ for file in os.listdir(path):
         if testSize:
             frame0 = cv2.imread(os.path.join(imFiles[0]))
             testSize = False
-            
-import pdb
-pdb.set_trace()
 
 orSize = np.asarray(frame0.shape)
 newSize = orSize.copy()
