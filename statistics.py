@@ -13,7 +13,7 @@ import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 import pickle
 import nibabel as nib
-from tqdm import tqdm # progress bar
+from tqdm import tqdm, trange # progress bar
 import os
 
 class Statistics(object):
@@ -23,26 +23,43 @@ class Statistics(object):
         self.graph = graph
         self.nodes = None
         self.edges = None
-        
-        if self.nodes is None:
-            print('Generating node list...')
-            self.nodes = self.graph.node_list(path=path)
-            print('Node list complete')
-            print('Generating node geometry...')
-            self.node_geometry(self.nodes)
-            print('Node geometry complete')
-        if self.edges is None:
-            print('Generating edge list...')
-            self.edges = self.graph.edges_from_node_list(self.nodes)
-            print('Edge list complete')
-            print('Generating edge geometry...')
-            self.edge_geometry(self.edges)
-            print('Edge geometry complete')
-        
+        rad_names = ['Radii','thickness','Radius']
+        self.radius_field_name = None
+        for rad_name in rad_names:
+            radii = self.graph.get_data(rad_name)
+            if radii is not None:
+                self.radius_field_name = rad_name
+                
         self.radii = None
         self.nconn = None
-        self.branching_angle = None
-        self.lengths = None
+        self.branching_angles = None
+        self.node_connections = None
+        
+        self.edge_intervessel_distance = None
+        self.edge_length = None
+        self.edge_volume = None
+        self.edge_radii = None
+        self.edge_euclidean = None      
+        self.edge_tortuosity = None                   
+        
+        #if self.nodes is None:
+        #    print('Generating node list...')
+        #    self.nodes = self.graph.node_list(path=path)
+        #    print('Node list complete')
+        #    print('Generating node geometry...')
+        #    self.node_geometry(self.nodes)
+        #    print('Node geometry complete')
+        #if False: #self.edges is None:
+        #    print('Generating edge list...')
+        #    #self.edges = self.graph.edges_from_node_list(self.nodes)
+        #    print('Edge list complete')
+            
+        print('Generating node geometry...')
+        self.node_geometry()
+        print('Generating edge geometry...')
+        self.edge_geometry()
+        print('Edge geometry complete')
+        
         
     def coords_in_cube(self,coords,cube):
         
@@ -134,51 +151,92 @@ class Statistics(object):
         ofile = output_path+'flow.nii'
         nib.save(img,ofile)
         
-    def edge_geometry(self,edges):
+    def edge_geometry(self): #,edges):
         
-        pbar = tqdm(total=len(edges))
+        #pbar = tqdm(total=len(edges))
 
-        edgeInds = self.graph.edgepoint_edge_indices()
-        points = self.graph.get_data('EdgePointCoordinates')
-        radii = self.graph.get_data('Radii')
+        #edgeInds = self.graph.edgepoint_edge_indices()
+        #points = self.graph.get_data('EdgePointCoordinates')
+        #radii = self.graph.get_data(self.radius_field_name)
         
-        #import pdb
-        #pdb.set_trace()
-        for edge in edges:
-            pbar.update(1)
-            pts = edge.coordinates
-            rads = edge.get_scalar('Radii')
-            rng = [np.min(pts,axis=0),np.max(pts,axis=0)]
-            lim = 100. #um
-            #curPoints = [p for p in points if p[0]>(rng[0][0]-lim) and p[0]>(rng[1][0]-lim) and p[1]>(rng[0][1]-lim) and p[1]>(rng[1][1]-lim) and p[2]>(rng[0][2]-lim) and p[2]>(rng[1][2]-lim) ]
-            #curPoints = points[(points >= 6) & (a <= 10)]
-            inds = [(points[:,0]>rng[0][0]-lim) & (points[:,0]<rng[1][0]+lim) & (points[:,1]>rng[0][1]-lim) & (points[:,1]<rng[1][1]+lim) & (points[:,2]>rng[0][2]-lim) & (points[:,2]<rng[1][2]+lim) & (edgeInds!=edge.index)]
-            if len(inds)>0:
-                curPoints = points[inds[0]]
-                curRadii = radii[inds[0]]
-            #curInds = edgeInds[inds]
-            length = np.zeros(edge.npoints-1)
-            dist = np.zeros(edge.npoints-1)
+        graph = self.graph
+        nodecoords = graph.get_data('VertexCoordinates')
+        edgeconn = graph.get_data('EdgeConnectivity')
+        edgepoints = graph.get_data('EdgePointCoordinates')
+        nedgepoints = graph.get_data('NumEdgePoints')
+        radii = self.graph.get_data(self.radius_field_name)
+        
+        nedges = edgeconn.shape[0]
+        
+        edgeInds = np.zeros(edgepoints.shape[0],dtype='int')
+        for edge_ind in range(nedges):
+            nep = nedgepoints[edge_ind]
+            x0 = np.sum(nedgepoints[:edge_ind])
+            x1 = x0 + nep
+            edgeInds[x0:x1] = edge_ind
+ 
+        self.edge_intervessel_distance = np.zeros(nedges)   
+        self.edge_length = np.zeros(nedges)
+        self.edge_radii = np.zeros(nedges)
+        self.edge_volume = np.zeros(nedges)
+        self.edge_euclidean = np.zeros(nedges)      
+        self.edge_tortuosity = np.zeros(nedges)   
+
+        for edge_ind in trange(nedges):
+            #try:
+            if True:
+                nep = nedgepoints[edge_ind]
+                x0 = np.sum(nedgepoints[:edge_ind])
+                x1 = x0 + nep
+                pts = edgepoints[x0:x1]
+                rads = radii[x0:x1]
             
-            for i in range(0,edge.npoints-1):
-                length[i] = np.linalg.norm(pts[i+1]-pts[i]) # Length (um)
+                #pts = edge.coordinates
+                #rads = edge.get_scalar(self.radius_field_name)
+                
+                # Define search range
+                rng = [np.min(pts,axis=0),np.max(pts,axis=0)]
+                #if rng[0]<0.:
+                #   rng[0] *= 1.2*np.max(rads)
+                #else:
+                #   rng[0] *= 0.8*np.max(rads)
+                #if rng[1]<0.:
+                #   rng[1] *= 0.8*np.max(rads)
+                #else:
+                #   rng[1] *= 1.2*np.max(rads)
+                   
+                lim = 10. #100. #um
+                # Get nearby points
+                #inds = [(edgepoints[:,0]>rng[0][0]-lim) & (edgepoints[:,0]<rng[1][0]+lim) & (edgepoints[:,1]>rng[0][1]-lim) & (edgepoints[:,1]<rng[1][1]+lim) & (edgepoints[:,2]>rng[0][2]-lim) & (edgepoints[:,2]<rng[1][2]+lim) & (edgeInds!=edge_ind)]
+                inds = []
+                if len(inds)>0:
+                    curPoints = edgepoints[inds[0]]
+                    curRadii = radii[inds[0]]
+                else:
+                    curPoints,curRadii = [],[]
+
+                dist = np.zeros(pts.shape[0]-1)
+                
+                length = np.sum([np.linalg.norm(pts[i]-pts[i-1]) for i,x in enumerate(pts[1:])])
+                volume = np.sum([np.linalg.norm(pts[i]-pts[i-1])*np.square(rads[i]) for i,x in enumerate(pts[1:])])
+                
+                for i in range(pts.shape[0]-1):
+                    if len(curPoints)>0:
+                        dist[i] = np.min([np.linalg.norm(pts[i]-p)-rads[i]-curRadii[j] for j,p in enumerate(curPoints)])
+                        
                 if len(curPoints)>0:
-                    dist[i] = np.min([np.linalg.norm(pts[i]-p)-rads[i]-curRadii[j] for j,p in enumerate(curPoints)])
-                    
-            if len(curPoints)>0:
-                edge.intervessel_distance = np.max(dist)
-            else:
-                edge.intervessel_distance = -1.
-            edge.length = length
-            edge.euclidean = np.linalg.norm(pts[-1]-pts[0])
+                    self.edge_intervessel_distance[edge_ind] = np.max(dist)
+                else:
+                    self.edge_intervessel_distance[edge_ind] = -1.
+                self.edge_length[edge_ind] = length
+                self.edge_volume[edge_ind] = volume
+                self.edge_radii[edge_ind] = np.mean(rads)
+                self.edge_euclidean[edge_ind] = np.linalg.norm(pts[-1]-pts[0])
 
-            totLen = np.sum(length)
-            if totLen>0:
-                edge.tortuosity = edge.euclidean / totLen
-            else:
-                edge.tortuosity = 0.
-
-        pbar.close()
+                self.edge_tortuosity[edge_ind] = self.edge_euclidean[edge_ind] / length
+                
+            #except Exception as e:
+            #    print('Error, edge {}: {}'.format(edge,e))
 
             
     def _branching_angle(self,vec1,vec2):
@@ -193,29 +251,66 @@ class Statistics(object):
         from scipy.spatial import ConvexHull
         return ConvexHull(coords).volume
             
-    def node_geometry(self,nodes):
-
-        pbar = tqdm(total=len(nodes))
-        for node in nodes:
-            pbar.update(1)
-            ba = []
-            for i in range(0,len(node.edges)):
-                for j in range(0,len(node.edges)):
-                    if i!=j:
-                        ci = node.edges[i].coordinates
-                        if node.edges[i].at_start_node(node.index) is False:
-                            ci = ci[::-1]
-                        veci = ci[0]-ci[1]
-                        cj = node.edges[j].coordinates
-                        if node.edges[j].at_start_node(node.index) is False:
-                            cj = cj[::-1]
-                        vecj = cj[0]-cj[1]
-                        if not all(x==y for x,y in zip(veci,vecj)):
-                            ba.append(self._branching_angle(veci,vecj))
-            node.branching_angle = np.unique(ba)
-        pbar.close()
+    def node_geometry(self): #,nodes):
+    
+        graph = self.graph
+        nodecoords = graph.get_data('VertexCoordinates')
+        edgeconn = graph.get_data('EdgeConnectivity')
+        edgepoints = graph.get_data('EdgePointCoordinates')
+        nedgepoints = graph.get_data('NumEdgePoints')
+        radii = self.graph.get_data(self.radius_field_name)
         
-    def histogram(self,v,range=None,xlabel=None,nbins=50):
+        nnodes = nodecoords.shape[0]
+        
+        self.branching_angles = []
+        self.node_connections = []
+
+        for node_ind in trange(nnodes):
+            sind = np.where((edgeconn[:,0]==node_ind) | (edgeconn[:,1]==node_ind))
+
+            if len(sind[0])>0:
+                if len(sind[0])>1:
+                    self.node_connections.append(len(sind[0]))
+                    
+                for edge_ind in sind[0]:
+                
+                    # Edge direction
+                    if edgeconn[edge_ind,0]==node_ind:
+                        direction = 1
+                    else:
+                        direction = -1
+                        
+                    nep = nedgepoints[edge_ind]
+                    x0 = np.sum(nedgepoints[:edge_ind])
+                    x1 = x0 + nep
+                    pts = edgepoints[x0:x1]
+                    
+                    if direction==-1:
+                        pts = pts[::-1]
+                        
+                    for edge_ind2 in sind[0]:
+                        if edge_ind!=edge_ind2:
+                            
+                            # Edge direction
+                            if edgeconn[edge_ind2,0]==node_ind:
+                                direction2 = 1
+                            else:
+                                direction2 = -1
+                                
+                            nep2 = nedgepoints[edge_ind2]
+                            x02 = np.sum(nedgepoints[:edge_ind2])
+                            x12 = x02 + nep2
+                            pts2 = edgepoints[x02:x12]
+                            
+                            if direction2==-1:
+                                pts2 = pts2[::-1]
+
+                            veci = pts[0]-pts[1]
+                            vecj = pts2[0]-pts2[1]
+                            if not all(x==y for x,y in zip(veci,vecj)):
+                                self.branching_angles.append(self._branching_angle(veci,vecj))
+        
+    def histogram(self,v,range=None,xlabel=None,nbins=50,show=False):
         
         # the histogram of the data
         n, bins, patches = plt.hist(v, nbins, range=range, normed=1, facecolor='green', alpha=0.75)
@@ -231,7 +326,8 @@ class Statistics(object):
         #plt.axis([40, 160, 0, 0.03])
         #plt.grid(True)
         
-        plt.show()
+        if show:
+            plt.show()
         
     def boxplot(self,v):
         
@@ -257,7 +353,7 @@ class Statistics(object):
         for ei,edge in enumerate(edges):
             pbar.update(1)
             npoints = edge.npoints
-            rad = edge.get_scalar('Radii')
+            rad = edge.get_scalar(self.radius_field_name)
             radii[ei] = rad
             lengths[ei] = np.append(edge.length,0)
             curVol = np.pi*np.square(rad[0:-1])*edge.length
@@ -278,100 +374,100 @@ class Statistics(object):
         
     def do_stats(self,path=None):
         
-        print('Calculating statistics...')
-        print('Estimating network parameters...')
+        #print('Calculating statistics...')
+        #print('Estimating network parameters...')
         #import pdb
         #pdb.set_trace()
-        radii,lengths,volumes,coords,flow = self.blood_volume(self.edges)
-        print('Finished estimating network parameters...')
+        #radii,lengths,volumes,coords,flow = self.blood_volume(self.edges)
+        #print('Finished estimating network parameters...')
 
         print('Calculating stats...')
-        nconn = np.asarray([node.nconn for node in self.nodes])
-        ba = [n.branching_angle[np.isfinite(n.branching_angle)] for n in self.nodes]
+        nconn = np.asarray(self.node_connections)
+        ba = np.asarray(self.branching_angles)
+        ba = ba[np.isfinite(ba)]
+        ivd = self.edge_intervessel_distance[self.edge_intervessel_distance>0.]
 
-        #ivd = [e.intervessel_distance[e.intervessel_distance>0.] for e in self.edges]]
-        ivd = [e.intervessel_distance for e in self.edges if e.intervessel_distance>0.]
-            
-        self.radii = radii
-        self.nconn = nconn
-        self.branching_angle = ba
-        self.lengths = lengths
-        self.volumes = volumes
-        self.ivd = ivd
+        self.histogram(ba,range=[0,180],nbins=50,xlabel='Vessel branching angle (deg)')
+        if path is not None:
+            plotfile = os.path.join(path,'branching_angle_histogram.png')
+            plt.savefig(plotfile) #,transparent=True)
 
-        plt.figure()
-        baFlat = [item for sublist in ba for item in sublist]
-        self.histogram(baFlat,range=[0,180],nbins=50,xlabel='Vessel branching angle (deg)')
+        self.histogram(self.edge_radii,nbins=30,xlabel='Vessel radius (um)')
         if path is not None:
-            plotfile = os.path.join(path,'branching_angle_histogram.pdf')
-            plt.savefig(plotfile,transparent=True)
-        plt.figure()
-        radiiFlat = [item for sublist in radii for item in sublist]
-        self.histogram(radiiFlat,range=[0,30],nbins=30,xlabel='Vessel radius (um)')
-        if path is not None:
-            plotfile = os.path.join(path,'radius_histogram.pdf')
-            plt.savefig(plotfile,transparent=True)
-        plt.figure()
+            plotfile = os.path.join(path,'radius_histogram.png')
+            plt.savefig(plotfile) #,transparent=True)
 
         #lengthsFlat = [item for sublist in lengths for item in sublist]
-        self.histogram(lengths,range=[0,80],nbins=50,xlabel='Vessel length (um)')
+        self.histogram(self.edge_length,nbins=50,xlabel='Vessel length (um)')
         if path is not None:
-            plotfile = os.path.join(path,'vessel_length_histogram.pdf')
-            plt.savefig(plotfile,transparent=True)
-        plt.figure()
-        #volumesFlat = [item for sublist in volumes for item in sublist]
-        self.histogram(volumes,range=[0,80],nbins=50,xlabel='Vessel volume (um3)')
-        if path is not None:
-            plotfile = os.path.join(path,'vessel_volume_histogram.pdf')
-            plt.savefig(plotfile,transparent=True)
+            plotfile = os.path.join(path,'vessel_length_histogram.png')
+            plt.savefig(plotfile) #,transparent=True)
 
-        blood_volume = np.sum(volumes)
-        coords = self.graph.get_data('VertexCoordinates')
-        try:
-            total_volume = self.volume(coords)
-        except Exception as e:
-            print(e)
-            total_volume = -1.
-        blood_fraction = blood_volume / total_volume
-        print(('TUMOUR VOLUME (um3): {}'.format(total_volume)))
-        print(('BLOOD VOLUME (um3): {}'.format(blood_volume)))
-        print(('BLOOD VOLUME FRACTION: {}'.format(blood_fraction)))
+        self.histogram(self.edge_volume,nbins=50,xlabel='Vessel volume (um3)')
+        if path is not None:
+            plotfile = os.path.join(path,'vessel_volume_histogram.png')
+            plt.savefig(plotfile) #,transparent=True)
+            
+        self.histogram(self.edge_tortuosity,nbins=50,xlabel='Vessel volume (um3)')
+        if path is not None:
+            plotfile = os.path.join(path,'vessel_volume_histogram.png')
+            plt.savefig(plotfile) #,transparent=True)
+            
+        self.histogram(ivd,nbins=50,xlabel='Intervessel distance (um)')
+        if path is not None:
+            plotfile = os.path.join(path,'intervessel_distance_histogram.png')
+            plt.savefig(plotfile) #,transparent=True)
+
+        #blood_volume = np.sum(volumes)
+        #coords = self.graph.get_data('VertexCoordinates')
+        #try:
+        #    total_volume = self.volume(coords)
+        #except Exception as e:
+        #    print(e)
+        #    total_volume = -1.
+        #blood_fraction = blood_volume / total_volume
+        #print(('TUMOUR VOLUME (um3): {}'.format(total_volume)))
+        #print(('BLOOD VOLUME (um3): {}'.format(blood_volume)))
+        #print(('BLOOD VOLUME FRACTION: {}'.format(blood_fraction)))
         
         if path is not None:
-            with open(os.path.join(path,'volume.txt'),'wb') as fo:
-                fo.write('TUMOUR VOLUME (um3) \t{}\n'.format(total_volume))
-                fo.write('BLOOD VOLUME (um3) \t{}\n'.format(blood_volume))
-                fo.write('BLOOD VOLUME FRACTION \t{}\n'.format(blood_fraction))
+            #with open(os.path.join(path,'volume.txt'),'w') as fo:
+            #    fo.write('TUMOUR VOLUME (um3) \t{}\n'.format(total_volume))
+            #    fo.write('BLOOD VOLUME (um3) \t{}\n'.format(blood_volume))
+            #    fo.write('BLOOD VOLUME FRACTION \t{}\n'.format(blood_fraction))
                 
-            with open(os.path.join(path,'stats.txt'),'wb') as fo:
+            with open(os.path.join(path,'stats.txt'),'w') as fo:
                 
                 # Write header
                 hdr = ['PARAM','Mean','SD','median','min','max']
                 hdr = '\t'.join(hdr)+'\n'
                 fo.write(hdr)
                 
-                params = [radiiFlat,lengths,ivd,nconn,baFlat,volumes]
+                params = [self.edge_radii,self.edge_length,ivd,nconn,ba,self.edge_volume]
                 paramNames = ['Radius (um)','Vessel length (um)','Intervessel distance( um)','Number of connections','Branching angle (deg)','Vessel volume (um3)']
                 
                 for v,n in zip(params,paramNames):
-                    cur = [n,np.mean(v),np.std(v),np.median(v),np.min(v),np.max(v)]
+                    print(n)
+                    try:
+                        cur = [n,np.mean(v),np.std(v),np.median(v),np.min(v),np.max(v)]
+                    except:
+                        cur = [n,-1.,-1.,-1.,-1.,-1.]
                     cur = ['{}'.format(c) for c in cur]
                     cur = '\t'.join(cur)+'\n'
                     fo.write(cur)
                     
             with open(os.path.join(path,'radii.p'),'wb') as fo:
-                pickle.dump(radii,fo)
+                pickle.dump(self.edge_radii,fo)
             with open(os.path.join(path,'branching_angle.p'),'wb') as fo:
                 pickle.dump(ba,fo)
             with open(os.path.join(path,'vessel_length.p'),'wb') as fo:
-                pickle.dump(lengths,fo)
+                pickle.dump(self.edge_length,fo)
             with open(os.path.join(path,'nconn.p'),'wb') as fo:
                 pickle.dump(nconn,fo)
             with open(os.path.join(path,'vessel_volume.p'),'wb') as fo:
-                pickle.dump(volumes,fo)
+                pickle.dump(self.edge_volume,fo)
             with open(os.path.join(path,'intervessel_distance.p'),'wb') as fo:
                 pickle.dump(ivd,fo)
-        
 
 def main():
     #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
@@ -397,28 +493,39 @@ def main():
     #        r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\SW#3"]
     #fs = [r'\SW2_spatialGraph_scaled.am',
     #      r'\SW3_spatialGraph_scaled.am']
-    dirs = [r'C:\Users\simon\Dropbox\VDA_1_lectin\Treated\LS#1']
-    fs = [r'\LS1t_vessel_seg_frangi_response_skel_with_radius.am']
-    pixsize = [4.78]
+    #dirs = [r'C:\Users\simon\Dropbox\VDA_1_lectin\Treated\LS#1']
+    #fs = [r'\LS1t_vessel_seg_frangi_response_skel_with_radius.am']
+    #pixsize = [4.78]
+    
+    dirs = '/mnt/data2/Sahai/export/nifti'
+    #fs = 'HET7_proc.SptGraph.am'
+    fs = 'HET7_proc.SptGraph.am'
+    odir = os.path.join(dirs,'HET7')
+    if not os.path.exists(odir):
+        os.mkdir(odir)
+    pixsize = 1.
           
-    for i,dir_ in enumerate(dirs):
+    #for i,dir_ in enumerate(dirs):
+    i = 0
+    if True:
         
-        f = fs[i]
-        pix = pixsize[i]
+        f = fs #[i]
+        pix = pixsize #[i]
+        dir_ = dirs
           
         from pymira import spatialgraph
         graph = spatialgraph.SpatialGraph()
         print('Reading graph...')
-        graph.read(dir_+f)
+        graph.read(os.path.join(dir_,f))
         print('Graph read')
        
-        if pix is not None:
-            ofile = dir_+'\spatialGraph_scaled.am'
+        if pix is not None and pix!=1.:
+            ofile = os.path.join(dir_,'spatialGraph_scaled.am')
             graph.rescale_coordinates(pix,pix,pix)
             graph.rescale_radius(pix,ofile=ofile)
         
-        stats = Statistics(graph,path=dir_)    
-        stats.do_stats(path=dir_)
+        stats = Statistics(graph,path=dir_)  
+        stats.do_stats(path=odir)
     
     # ofile = dir_+'\spatialGraph_scaled.am'
     # graph.rescale_coordinates(pixsize,pixsize,pixsize)
