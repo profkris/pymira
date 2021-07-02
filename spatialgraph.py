@@ -685,14 +685,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
         ax.scatter(nc[::skip,0],nc[::skip,1],nc[::skip,2], c='r', marker='o',s=1)
 
 class Editor(object):
+
+    def _del_nodes(self,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=None):
     
-    def delete_nodes(self,graph,nodes_to_delete):
-        
-        nodeCoords = graph.get_data('VertexCoordinates')
-        edgeConn = graph.get_data('EdgeConnectivity')
-        nedgepoints = graph.get_data('NumEdgePoints')
-        edgeCoords = graph.get_data('EdgePointCoordinates')
-        
         nnode = len(nodeCoords)
         nedge = len(edgeConn)
         nedgepoint = len(edgeCoords)
@@ -734,16 +729,40 @@ class Editor(object):
 
         # Modify edgepoint coordinates
         edgeCoords_ed = edgeCoords[keepEdgePoint==True] #np.asarray([edgeCoords[x] for x in edgepoints_to_keep)
+        
+        #Check for any other scalar fields
+        if nedgepoint!=len(edgeCoords_ed):
+            for i,data in enumerate(scalars):
+                scalars[i] = data[keepEdgePoint==True]
+        
+        return nodeCoords_ed,edgeConn_ed,nedgepoints_ed,edgeCoords_ed,scalars
+    
+    def delete_nodes(self,graph,nodes_to_delete):
+        
+        nodeCoords = graph.get_data('VertexCoordinates')
+        edgeConn = graph.get_data('EdgeConnectivity')
+        nedgepoints = graph.get_data('NumEdgePoints')
+        edgeCoords = graph.get_data('EdgePointCoordinates')
+        
+        scalars, scalar_names = [],[]
+        for f in graph.fields:
+            if f['definition'].lower()=='point' and len(f['shape'])==1:
+                scalars.append(f['data'])
+                scalar_names.append(f['name'])
+        if len(scalars)==0:
+            scalars = None
+        
+        nodeCoords_ed,edgeConn_ed,nedgepoints_ed,edgeCoords_ed,scalars = self._del_nodes(nodes_to_delete,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=scalars)
 
         # Update VERTEX definition
         vertex_def = graph.get_definition('VERTEX')
-        vertex_def['size'] = [len(nodes_to_keep)]
+        vertex_def['size'] = [nodeCoords_ed.shape[0]]
         # Update EDGE definition
         edge_def = graph.get_definition('EDGE')
-        edge_def['size'] = [len(edges_to_keep)]
+        edge_def['size'] = [edgeCoords_ed.shape[0]]
         # Update POINT definition
         edgepoint_def = graph.get_definition('POINT')
-        edgepoint_def['size'] = [len(edgeCoords_ed)]
+        edgepoint_def['size'] = [edgeCoords_ed.shape[0]]
         
         graph.set_data(nodeCoords_ed,name='VertexCoordinates')
         graph.set_data(edgeConn_ed,name='EdgeConnectivity')
@@ -752,12 +771,8 @@ class Editor(object):
         
         #Check for any other scalar fields
         if nedgepoint!=len(edgeCoords_ed):
-            scalars = [f for f in graph.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
-            for sc in scalars:
-                #data_ed = np.delete(sc['data'],edgepoints_to_delete[0],axis=0)
-                data = sc['data']
-                data_ed = data[keepEdgePoint==True]
-                graph.set_data(data_ed,name=sc['name'])
+            for i,data in enumerate(scalars):
+                graph.set_data(data,name=scalar_names[i])
             
         graph.set_graph_sizes()
         return graph

@@ -311,6 +311,8 @@ class Statistics(object):
                                 self.branching_angles.append(self._branching_angle(veci,vecj))
         
     def histogram(self,v,range=None,xlabel=None,nbins=50,show=False):
+    
+        plt.clf()
         
         # the histogram of the data
         n, bins, patches = plt.hist(v, nbins, range=range, normed=1, facecolor='green', alpha=0.75)
@@ -392,28 +394,28 @@ class Statistics(object):
             plotfile = os.path.join(path,'branching_angle_histogram.png')
             plt.savefig(plotfile) #,transparent=True)
 
-        self.histogram(self.edge_radii,nbins=30,xlabel='Vessel radius (um)')
+        self.histogram(self.edge_radii*2,range=[0,120],nbins=30,xlabel='Vessel diameter (um)')
         if path is not None:
-            plotfile = os.path.join(path,'radius_histogram.png')
+            plotfile = os.path.join(path,'diameter_histogram.png')
             plt.savefig(plotfile) #,transparent=True)
 
         #lengthsFlat = [item for sublist in lengths for item in sublist]
-        self.histogram(self.edge_length,nbins=50,xlabel='Vessel length (um)')
+        self.histogram(self.edge_length,range=[0,200],nbins=50,xlabel='Vessel length (um)')
         if path is not None:
             plotfile = os.path.join(path,'vessel_length_histogram.png')
             plt.savefig(plotfile) #,transparent=True)
 
-        self.histogram(self.edge_volume,nbins=50,xlabel='Vessel volume (um3)')
+        self.histogram(self.edge_volume,range=[0,np.max(self.edge_volume)],nbins=50,xlabel='Vessel volume (um3)')
         if path is not None:
             plotfile = os.path.join(path,'vessel_volume_histogram.png')
             plt.savefig(plotfile) #,transparent=True)
             
-        self.histogram(self.edge_tortuosity,nbins=50,xlabel='Vessel volume (um3)')
+        self.histogram(self.edge_tortuosity,range=[0,np.max(self.edge_tortuosity)],nbins=50,xlabel='Vessel tortuosity')
         if path is not None:
-            plotfile = os.path.join(path,'vessel_volume_histogram.png')
+            plotfile = os.path.join(path,'vessel_tortuosity_histogram.png')
             plt.savefig(plotfile) #,transparent=True)
             
-        self.histogram(ivd,nbins=50,xlabel='Intervessel distance (um)')
+        self.histogram(ivd,nbins=50,range=[0,100],xlabel='Intervessel distance (um)')
         if path is not None:
             plotfile = os.path.join(path,'intervessel_distance_histogram.png')
             plt.savefig(plotfile) #,transparent=True)
@@ -498,9 +500,9 @@ def main():
     #pixsize = [4.78]
     
     dirs = '/mnt/data2/Sahai/export/nifti'
-    #fs = 'HET7_proc.SptGraph.am'
-    fs = 'HET7_proc.SptGraph.am'
-    odir = os.path.join(dirs,'HET7')
+    pref = 'KO9' # KO7
+    fs = '{}_proc.SptGraph.am'.format(pref)
+    odir = os.path.join(dirs,pref)
     if not os.path.exists(odir):
         os.mkdir(odir)
     pixsize = 1.
