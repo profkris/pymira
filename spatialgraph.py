@@ -686,7 +686,62 @@ class SpatialGraph(amiramesh.AmiraMesh):
 
 class Editor(object):
 
-    def _del_nodes(self,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=None):
+    def _insert_node_in_edge(self, edge_index,edgepoint_index,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=None):
+    
+        # Returns the new node index and the two new edges (if any are made)
+    
+        nnode = len(nodeCoords)
+        nedge = len(edgeConn)
+        nedgepoint = len(edgeCoords)
+        
+        x0 = int(np.sum(nedgepoints[:int(edge_index)]))
+        x1 = x0 + int(nedgepoints[int(edge_index)])
+        edge = edgeCoords[x0:x1]
+        npoints = edge.shape[0]
+        
+        new_node_coords = edge[int(edgepoint_index)]
+        
+        start_node = edgeConn[edge_index,0]
+        end_node = edgeConn[edge_index,1]
+        
+        if int(edgepoint_index)<npoints-1 and int(edgepoint_index)>0:
+            new_edge0 = edgeCoords[:int(edgepoint_index)+1]
+            new_edge1 = edgeCoords[int(edgepoint_index):]
+        elif int(edgepoint_index)>0:
+            return start_node, [edge_index,None]
+        elif int(edgepoint_index)==npoints-1:
+            return end_node, [edge_index,None]
+        else:
+            return None, [None,None]
+            
+        # Assign the first new edge to the location of the supplied edge
+        # Create a new location for the second new edge
+        nnew0 = new_edge.shape[0]
+        nedgepoints[int(edge_index)] = nnew0
+        nedgepoints = np.concatenate([nedgepoints,nedge+1])
+        
+        # Squeeze in new edges into storage array
+        edgeCoords_0 = edgeCoords[:edgepoint_index]
+        edgeCoords_1 = edgeCoords[edgepoint_index+npoints+1:]
+        edgeCoords = np.concatenate([edgeCoords_0,new_edge0,edgeCoords_1,new_edge1])
+        new_conn = np.asarray([edgepoint_index,nedge])
+        edgeConns = np.concatenate([edgeConns,new_conn])
+        new_edge_index = nedge
+        # Add in new node coords
+        nodeCoords = np.concatenate([nodeCoords,new_node_coords])
+        new_node_index = nodeCoords.shape[0]-1
+        
+        # Sort out scalars
+        for i,data in enumerate(scalars):
+            sc_0 = data[:edgepoint_index]
+            sc_1 = data[edgepoint_index+npoints+1:]
+            new_sc0 = data[:int(edgepoint_index)+1]
+            new_sc1 = data[int(edgepoint_index):]
+            scalars[i] = np.concatenate([sc_0,new_sc0,sc_1,new_sc1])
+            
+        return new_node_index,new_conn,edge_index,edgepoint_index,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars
+
+    def _del_nodes(self,nodes_to_delete,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=None):
     
         nnode = len(nodeCoords)
         nedge = len(edgeConn)
@@ -734,8 +789,10 @@ class Editor(object):
         if nedgepoint!=len(edgeCoords_ed):
             for i,data in enumerate(scalars):
                 scalars[i] = data[keepEdgePoint==True]
+                
+        info = {'edges_deleted':edges_to_delete,'edges_kept':edges_to_keep,'points_kept':keepEdgePoint,'nodes_deleted':nodes_to_delete,'nodes_kept':nodes_to_keep}
         
-        return nodeCoords_ed,edgeConn_ed,nedgepoints_ed,edgeCoords_ed,scalars
+        return nodeCoords_ed,edgeConn_ed,nedgepoints_ed,edgeCoords_ed,scalars,info
     
     def delete_nodes(self,graph,nodes_to_delete):
         
@@ -744,6 +801,7 @@ class Editor(object):
         nedgepoints = graph.get_data('NumEdgePoints')
         edgeCoords = graph.get_data('EdgePointCoordinates')
         
+        # Look for scalars that need updating (must be POINT type)
         scalars, scalar_names = [],[]
         for f in graph.fields:
             if f['definition'].lower()=='point' and len(f['shape'])==1:
@@ -752,7 +810,7 @@ class Editor(object):
         if len(scalars)==0:
             scalars = None
         
-        nodeCoords_ed,edgeConn_ed,nedgepoints_ed,edgeCoords_ed,scalars = self._del_nodes(nodes_to_delete,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=scalars)
+        nodeCoords_ed,edgeConn_ed,nedgepoints_ed,edgeCoords_ed,scalars,info = self._del_nodes(nodes_to_delete,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=scalars)
 
         # Update VERTEX definition
         vertex_def = graph.get_definition('VERTEX')
