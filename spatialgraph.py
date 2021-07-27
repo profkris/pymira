@@ -699,47 +699,66 @@ class Editor(object):
         edge = edgeCoords[x0:x1]
         npoints = edge.shape[0]
         
-        new_node_coords = edge[int(edgepoint_index)]
+        xp = int(edgepoint_index)
+        new_node_coords = edge[xp]
         
         start_node = edgeConn[edge_index,0]
         end_node = edgeConn[edge_index,1]
         
         if int(edgepoint_index)<npoints-1 and int(edgepoint_index)>0:
-            new_edge0 = edgeCoords[:int(edgepoint_index)+1]
-            new_edge1 = edgeCoords[int(edgepoint_index):]
+            new_edge0 = edge[:xp+1]
+            new_edge1 = edge[xp:]
         elif int(edgepoint_index)>0:
-            return start_node, [edge_index,None]
+            return start_node, None
         elif int(edgepoint_index)==npoints-1:
-            return end_node, [edge_index,None]
+            return end_node, None
         else:
-            return None, [None,None]
+            return None, None
             
         # Assign the first new edge to the location of the supplied edge
         # Create a new location for the second new edge
-        nnew0 = new_edge.shape[0]
-        nedgepoints[int(edge_index)] = nnew0
-        nedgepoints = np.concatenate([nedgepoints,nedge+1])
+        nedgepoints[int(edge_index)] = new_edge0.shape[0]
+        nedgepoints = np.concatenate([nedgepoints,[new_edge1.shape[0]]])
         
         # Squeeze in new edges into storage array
-        edgeCoords_0 = edgeCoords[:edgepoint_index]
-        edgeCoords_1 = edgeCoords[edgepoint_index+npoints+1:]
-        edgeCoords = np.concatenate([edgeCoords_0,new_edge0,edgeCoords_1,new_edge1])
-        new_conn = np.asarray([edgepoint_index,nedge])
-        edgeConns = np.concatenate([edgeConns,new_conn])
+        # Grab all edge coordinates prior to edge to be bisected
+        if x0>0:
+            edgeCoords_0 = edgeCoords[:x0]
+        else:
+            edgeCoords_0 = []
+        # Edge coordinates listed after the bisected edge
+        if edgeCoords.shape[0]>x0+npoints:
+            edgeCoords_1 = edgeCoords[x1:]
+        else:
+            edgeCoords_1 = []
+
+        edgeCoords = np.concatenate([x for x in [edgeCoords_0,new_edge0.copy(),edgeCoords_1,new_edge1.copy()] if len(x)>0 and not np.all(x)==-1])
+        
+        # Amend original connection
+        new_node_index = nodeCoords.shape[0]
+        edgeConn[edge_index] = [start_node,new_node_index]
+        new_conn = np.asarray([new_node_index,end_node])
+        edgeConn = np.concatenate([edgeConn,[new_conn]])
         new_edge_index = nedge
         # Add in new node coords
-        nodeCoords = np.concatenate([nodeCoords,new_node_coords])
-        new_node_index = nodeCoords.shape[0]-1
+        nodeCoords = np.concatenate([nodeCoords,[new_node_coords]])
         
         # Sort out scalars
         for i,data in enumerate(scalars):
-            sc_0 = data[:edgepoint_index]
-            sc_1 = data[edgepoint_index+npoints+1:]
-            new_sc0 = data[:int(edgepoint_index)+1]
-            new_sc1 = data[int(edgepoint_index):]
-            scalars[i] = np.concatenate([sc_0,new_sc0,sc_1,new_sc1])
-            
-        return new_node_index,new_conn,edge_index,edgepoint_index,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars
+            if x0>0:
+                sc_0 = data[:x0]
+            else:
+                sc_0 = []
+            if data.shape[0]>x0+npoints:
+                sc_1 = data[x1:]
+            else:
+                sc_1 = []
+            new_sc0 = data[x0:x0+xp+1]
+            new_sc1 = data[x0+xp:x1]
+            #scalars[i] = np.concatenate([sc_0,new_sc0,sc_1,new_sc1])
+            scalars[i] = np.concatenate([x for x in [sc_0,new_sc0.copy(),sc_1,new_sc1.copy()] if len(x)>0 and not np.all(x)==-1])
+           
+        return new_edge0.copy(), new_edge1.copy(), new_node_index,new_conn,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars
 
     def _del_nodes(self,nodes_to_delete,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=None):
     
