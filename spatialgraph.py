@@ -686,6 +686,21 @@ class SpatialGraph(amiramesh.AmiraMesh):
 
 class Editor(object):
 
+    def _remove_intermediate_nodes(self, nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=None):
+    
+        # Returns an edited graph where nodes with exactly two connections are replaced by edgepoints
+        # TBC
+    
+        nnode = len(nodeCoords)
+        nedge = len(edgeConn)
+        nedgepoint = len(edgeCoords)
+        
+        for i,node in nodeCoords:
+            conns_with_node = [j for j,c in enumerate(edgeConn) if np.any(c==i)]
+            if len(conns_with_node)==2:
+                pass
+            
+
     def _insert_node_in_edge(self, edge_index,edgepoint_index,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=None):
     
         # Returns the new node index and the two new edges (if any are made)
@@ -709,11 +724,11 @@ class Editor(object):
             new_edge0 = edge[:xp+1]
             new_edge1 = edge[xp:]
         elif int(edgepoint_index)>0:
-            return start_node, None
+            return edge, None, start_node, None, nodeCoords, edgeConn, nedgepoints, edgeCoords, scalars
         elif int(edgepoint_index)==npoints-1:
-            return end_node, None
+            return edge, None, end_node, None, nodeCoords, edgeConn, nedgepoints, edgeCoords, scalars
         else:
-            return None, None
+            return [None]*9
             
         # Assign the first new edge to the location of the supplied edge
         # Create a new location for the second new edge
@@ -939,6 +954,8 @@ class Editor(object):
         print('Removing {} self-connected edges...'.format(len(selfconn)))
         self.delete_edges(graph,selfconn,remove_disconnected_nodes=False)
         return graph
+        
+    
     
     def remove_intermediate_nodes(self,graph,file=None,nodeList=None,path=None):
         
