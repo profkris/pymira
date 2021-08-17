@@ -446,7 +446,9 @@ class AmiraMesh(object):
     def add_field(self,**kwargs):
         if self.fields is None:
             self.fields = []
-        self.fields.append(self._field_generator(**kwargs))
+        field = self._field_generator(**kwargs)
+        self.fields.append(field)
+        return field
         
     def write(self,filename):
         with open(filename, 'w') as f:
