@@ -11,7 +11,7 @@ class Graph(object):
 
     def __init__(self, graph_file):
     
-        self.init_size = 10000
+        self.init_size = 20000
         
         self.coords = np.zeros([self.init_size,3]) - 1
         self.conns = np.zeros([self.init_size,2],dtype='int') - 1

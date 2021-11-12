@@ -16,6 +16,8 @@ import nibabel as nib
 from tqdm import tqdm, trange # progress bar
 import os
 
+from pymira import spatialgraph
+
 class Statistics(object):
     
     def __init__(self, graph, path=None):
@@ -23,9 +25,9 @@ class Statistics(object):
         self.graph = graph
         self.nodes = None
         self.edges = None
-        rad_names = ['Radii','thickness','Radius']
+        rad_names = ['radii','thickness','radius']
         self.radius_field_name = None
-        for rad_name in rad_names:
+        for rad_name.lower() in rad_names:
             radii = self.graph.get_data(rad_name)
             if radii is not None:
                 self.radius_field_name = rad_name
@@ -472,105 +474,32 @@ class Statistics(object):
                 pickle.dump(ivd,fo)
 
 def main():
-    #dir_ = 'C:\\Users\\simon\\Dropbox\\Mesentery\\'
-    #f = dir_ + 'Flow2AmiraPressure.am'
-    # dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T\\1\\'
-    # #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\LS147T - Post-VDA\\1\\'
     
-    # #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
-    
-    # #dir_ = 'C:\\Users\\simon\\Dropbox\\160113_paul_simulation_results\\SW1222\\1\\'
-    # #f = dir_+'spatialGraph_RIN.am'
-    
-    #dir_ = r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\SW#1"
-    #f = dir_+r'\SW1_spatialGraph_scaled.am'
-    # pixsize = 6.98
-    # dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#2"
-    # f = dir_+r'\LS2_bg_removed_frangi_response_skeletonised_with_radius.SptGraph.am'
-    # pixsize = 8.21
-    # #dir_ = r"G:\OPT\2015.11.VDA_1 study\VDA Colorectal cancer\Control\LS\LS#4"
-    # #pixsize = 8.21
-    
-    #dirs = [r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\SW#2",
-    #        r"C:\Users\simon\Dropbox\VDA_1_lectin\Control\SW#3"]
-    #fs = [r'\SW2_spatialGraph_scaled.am',
-    #      r'\SW3_spatialGraph_scaled.am']
-    #dirs = [r'C:\Users\simon\Dropbox\VDA_1_lectin\Treated\LS#1']
-    #fs = [r'\LS1t_vessel_seg_frangi_response_skel_with_radius.am']
-    #pixsize = [4.78]
-    
+    # Define directory and filename of Amira graph file
     dirs = '/mnt/data2/Sahai/export/nifti'
     pref = 'KO9' # KO7
     fs = '{}_proc.SptGraph.am'.format(pref)
+    
+    # Define output directory for stats and histograms
     odir = os.path.join(dirs,pref)
     if not os.path.exists(odir):
         os.mkdir(odir)
+        
+    # Set pixel size (if not equal to 1 or None, will rescale the data)
     pixsize = 1.
-          
-    #for i,dir_ in enumerate(dirs):
-    i = 0
-    if True:
-        
-        f = fs #[i]
-        pix = pixsize #[i]
-        dir_ = dirs
-          
-        from pymira import spatialgraph
-        graph = spatialgraph.SpatialGraph()
-        print('Reading graph...')
-        graph.read(os.path.join(dir_,f))
-        print('Graph read')
-       
-        if pix is not None and pix!=1.:
-            ofile = os.path.join(dir_,'spatialGraph_scaled.am')
-            graph.rescale_coordinates(pix,pix,pix)
-            graph.rescale_radius(pix,ofile=ofile)
-        
-        stats = Statistics(graph,path=dir_)  
-        stats.do_stats(path=odir)
+      
+    graph = spatialgraph.SpatialGraph()
+    print('Reading graph...')
+    graph.read(os.path.join(dirs,fs))
+    print('Graph read')
+   
+    if pixsize is not None and pixsize!=1.:
+        ofile = os.path.join(dirs,'spatialGraph_scaled.am')
+        graph.rescale_coordinates(pixsize,pixsize,pixsize)
+        graph.rescale_radius(pixsize,ofile=ofile)
     
-    # ofile = dir_+'\spatialGraph_scaled.am'
-    # graph.rescale_coordinates(pixsize,pixsize,pixsize)
-    # graph.rescale_radius(pixsize,ofile=ofile)
-    
-    # #epi = graph.edge_point_index()
-    # #edgeCoords = graph.get_data('EdgePointCoordinates')
-    # #nodes = graph.node_list()
-    # #edges = graph.edges_from_node_list(nodes)
-    # #testInd = 1000
-    # #testCoords = edgeCoords[testInd]
-    # #testEdge = [e for e in edges if e.index==epi[testInd]]
-    # #testCoords in testEdge[0].coordinates
-    # #import pdb
-    # #pdb.set_trace()
-    
-    # #import pdb
-    # #pdb.set_trace()
-    #stats = Statistics(graph,path=dir_)
-    
-    #stats.do_stats(path=dir_)
-    # #stats.do_stats(output_directory=None)
-    # #stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
-    # stats.do_stats(output_directory=dir_)
-    # #stats.do_stats(output_directory=None)
-    # #stats.summary_image(voxel_size=[250.,250.,250.])
-    # #stats.do_stats(output_directory=dir_)
-    # stats.do_stats(output_directory=None)
-    # stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
-    
-    # #stats.do_stats(output_directory=dir_)
-    # stats.do_stats(output_directory=None)
-    # #stats.summary_image(voxel_size=[250.,250.,250.])
-    # #stats.do_stats(output_directory=dir_)
-    # #stats.do_stats(output_directory=None)
-    # stats.summary_image(voxel_size=[125.,125.,125.],output_path=dir_)
+    stats = Statistics(graph,path=dirs)  
+    stats.do_stats(path=odir)
 
 if __name__=='__main__':
-#    try:
-#        #import cProfile
-#        #cProfile.run('main()')
-#    except:
-#        pass
-#    #import pdb
-#    #pdb.set_trace()
     main()
