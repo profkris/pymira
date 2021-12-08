@@ -495,6 +495,8 @@ class AmiraMesh(object):
                 data = d['data']
                 if data.ndim==1:
                     for j in range(data.shape[0]):
+                        if data[j] is None:
+                            breakpoint()
                         data[j].tofile(f, sep=" ", format="%s")
                         f.write('\n')
                 elif data.ndim==2:
