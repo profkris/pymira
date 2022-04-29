@@ -835,6 +835,10 @@ class Editor(object):
         nedgepoints = graph.get_data('NumEdgePoints')
         edgeCoords = graph.get_data('EdgePointCoordinates')
         
+        nnode = len(nodeCoords)
+        nedge = len(edgeConn)
+        nedgepoint = len(edgeCoords)
+        
         # Look for scalars that need updating (must be POINT type)
         scalars, scalar_names = [],[]
         for f in graph.fields:
@@ -851,7 +855,7 @@ class Editor(object):
         vertex_def['size'] = [nodeCoords_ed.shape[0]]
         # Update EDGE definition
         edge_def = graph.get_definition('EDGE')
-        edge_def['size'] = [edgeCoords_ed.shape[0]]
+        edge_def['size'] = [edgeConn_ed.shape[0]]
         # Update POINT definition
         edgepoint_def = graph.get_definition('POINT')
         edgepoint_def['size'] = [edgeCoords_ed.shape[0]]
@@ -1271,7 +1275,11 @@ class Editor(object):
             
         #node_indices = np.arange(graph.nnode)
         #nodes_to_delete = node_indices[graphNodeIndex!=largest_graph_index]
+
+        #breakpoint()
         graph = self.delete_nodes(graph,nodes_to_delete)
+        graph.set_graph_sizes()
+        
         return graph
 
 class Node(object):

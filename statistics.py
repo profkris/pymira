@@ -27,8 +27,8 @@ class Statistics(object):
         self.edges = None
         rad_names = ['radii','thickness','radius']
         self.radius_field_name = None
-        for rad_name.lower() in rad_names:
-            radii = self.graph.get_data(rad_name)
+        for rad_name in rad_names:
+            radii = self.graph.get_data(rad_name.lower())
             if radii is not None:
                 self.radius_field_name = rad_name
                 
@@ -209,8 +209,8 @@ class Statistics(object):
                    
                 lim = 10. #100. #um
                 # Get nearby points
-                #inds = [(edgepoints[:,0]>rng[0][0]-lim) & (edgepoints[:,0]<rng[1][0]+lim) & (edgepoints[:,1]>rng[0][1]-lim) & (edgepoints[:,1]<rng[1][1]+lim) & (edgepoints[:,2]>rng[0][2]-lim) & (edgepoints[:,2]<rng[1][2]+lim) & (edgeInds!=edge_ind)]
-                inds = []
+                inds = [(edgepoints[:,0]>rng[0][0]-lim) & (edgepoints[:,0]<rng[1][0]+lim) & (edgepoints[:,1]>rng[0][1]-lim) & (edgepoints[:,1]<rng[1][1]+lim) & (edgepoints[:,2]>rng[0][2]-lim) & (edgepoints[:,2]<rng[1][2]+lim) & (edgeInds!=edge_ind)]
+                #inds = []
                 if len(inds)>0:
                     curPoints = edgepoints[inds[0]]
                     curRadii = radii[inds[0]]
@@ -225,7 +225,8 @@ class Statistics(object):
                 for i in range(pts.shape[0]-1):
                     if len(curPoints)>0:
                         dist[i] = np.min([np.linalg.norm(pts[i]-p)-rads[i]-curRadii[j] for j,p in enumerate(curPoints)])
-                        
+                      
+                #breakpoint()  
                 if len(curPoints)>0:
                     self.edge_intervessel_distance[edge_ind] = np.max(dist)
                 else:
@@ -235,6 +236,7 @@ class Statistics(object):
                 self.edge_radii[edge_ind] = np.mean(rads)
                 self.edge_euclidean[edge_ind] = np.linalg.norm(pts[-1]-pts[0])
 
+                #breakpoint()
                 self.edge_tortuosity[edge_ind] = self.edge_euclidean[edge_ind] / length
                 
             #except Exception as e:
@@ -317,7 +319,7 @@ class Statistics(object):
         plt.clf()
         
         # the histogram of the data
-        n, bins, patches = plt.hist(v, nbins, range=range, normed=1, facecolor='green', alpha=0.75)
+        n, bins, patches = plt.hist(v, nbins, range=range, density=1, facecolor='green', alpha=0.75)
         
         # add a 'best fit' line
         #y = mlab.normpdf( bins, mu, sigma)
@@ -376,7 +378,7 @@ class Statistics(object):
             
         return radii,lengths,volumes,coords,flow
         
-    def do_stats(self,path=None):
+    def do_stats(self,path=None,prefix='',pix_scale=None):
         
         #print('Calculating statistics...')
         #print('Estimating network parameters...')
@@ -389,38 +391,68 @@ class Statistics(object):
         nconn = np.asarray(self.node_connections)
         ba = np.asarray(self.branching_angles)
         ba = ba[np.isfinite(ba)]
+        #breakpoint()
         ivd = self.edge_intervessel_distance[self.edge_intervessel_distance>0.]
+        
+        try:
+            self.histogram(ba,range=[0,180],nbins=50,xlabel='Vessel branching angle (deg)')
+            if path is not None:
+                plotfile = os.path.join(path,prefix+'branching_angle_histogram.png')
+                plt.savefig(plotfile) #,transparent=True)
+        except Exception as e:
+            print(e)
 
-        self.histogram(ba,range=[0,180],nbins=50,xlabel='Vessel branching angle (deg)')
-        if path is not None:
-            plotfile = os.path.join(path,'branching_angle_histogram.png')
-            plt.savefig(plotfile) #,transparent=True)
-
-        self.histogram(self.edge_radii*2,range=[0,120],nbins=30,xlabel='Vessel diameter (um)')
-        if path is not None:
-            plotfile = os.path.join(path,'diameter_histogram.png')
-            plt.savefig(plotfile) #,transparent=True)
-
-        #lengthsFlat = [item for sublist in lengths for item in sublist]
-        self.histogram(self.edge_length,range=[0,200],nbins=50,xlabel='Vessel length (um)')
-        if path is not None:
-            plotfile = os.path.join(path,'vessel_length_histogram.png')
-            plt.savefig(plotfile) #,transparent=True)
-
-        self.histogram(self.edge_volume,range=[0,np.max(self.edge_volume)],nbins=50,xlabel='Vessel volume (um3)')
-        if path is not None:
-            plotfile = os.path.join(path,'vessel_volume_histogram.png')
-            plt.savefig(plotfile) #,transparent=True)
+        try:
+            diameters = self.edge_radii*2
+            if pix_scale is not None:
+                diameters *= pix_scale
+            self.histogram(diameters,range=[0,np.max(diameters)],nbins=30,xlabel='Vessel diameter (um)')
+            if path is not None:
+                plotfile = os.path.join(path,prefix+'diameter_histogram.png')
+                plt.savefig(plotfile) #,transparent=True)
+        except Exception as e:
+            print(e)
             
-        self.histogram(self.edge_tortuosity,range=[0,np.max(self.edge_tortuosity)],nbins=50,xlabel='Vessel tortuosity')
-        if path is not None:
-            plotfile = os.path.join(path,'vessel_tortuosity_histogram.png')
-            plt.savefig(plotfile) #,transparent=True)
+        try:
+            #lengthsFlat = [item for sublist in lengths for item in sublist]
+            lengths = self.edge_length
+            if pix_scale is not None:
+                lengths *= pix_scale
+            self.histogram(lengths,range=[0,np.max(lengths)],nbins=50,xlabel='Vessel length (um)')
+            if path is not None:
+                plotfile = os.path.join(path,prefix+'vessel_length_histogram.png')
+                plt.savefig(plotfile) #,transparent=True)
+        except Exception as e:
+            print(e)
             
-        self.histogram(ivd,nbins=50,range=[0,100],xlabel='Intervessel distance (um)')
-        if path is not None:
-            plotfile = os.path.join(path,'intervessel_distance_histogram.png')
-            plt.savefig(plotfile) #,transparent=True)
+        try:
+            volumes = self.edge_volume
+            if pix_scale is not None:
+                lengths *= np.power(pix_scale,3)
+            self.histogram(volumes,range=[0,np.max(volumes)],nbins=50,xlabel='Vessel volume (um3)')
+            if path is not None:
+                plotfile = os.path.join(path,prefix+'vessel_volume_histogram.png')
+                plt.savefig(plotfile) #,transparent=True)
+        except Exception as e:
+            print(e)
+            
+        try:                
+            self.histogram(self.edge_tortuosity,range=[0,np.max(self.edge_tortuosity)],nbins=50,xlabel='Vessel tortuosity')
+            if path is not None:
+                plotfile = os.path.join(path,prefix+'vessel_tortuosity_histogram.png')
+                plt.savefig(plotfile) #,transparent=True)
+        except Exception as e:
+            print(e)
+            
+        try: 
+            if pix_scale is not None:
+                ivd *= pix_scale       
+            self.histogram(ivd,nbins=50,range=[0,np.max(ivd)],xlabel='Intervessel distance (um)') # range=[0,100]
+            if path is not None:
+                plotfile = os.path.join(path,prefix+'intervessel_distance_histogram.png')
+                plt.savefig(plotfile) #,transparent=True)
+        except Exception as e:
+            print(e)                
 
         #blood_volume = np.sum(volumes)
         #coords = self.graph.get_data('VertexCoordinates')
@@ -440,7 +472,8 @@ class Statistics(object):
             #    fo.write('BLOOD VOLUME (um3) \t{}\n'.format(blood_volume))
             #    fo.write('BLOOD VOLUME FRACTION \t{}\n'.format(blood_fraction))
                 
-            with open(os.path.join(path,'stats.txt'),'w') as fo:
+            filename = prefix+'stats.txt'
+            with open(os.path.join(path,filename),'w') as fo:
                 
                 # Write header
                 hdr = ['PARAM','Mean','SD','median','min','max']
@@ -460,17 +493,17 @@ class Statistics(object):
                     cur = '\t'.join(cur)+'\n'
                     fo.write(cur)
                     
-            with open(os.path.join(path,'radii.p'),'wb') as fo:
+            with open(os.path.join(path,prefix+'radii.p'),'wb') as fo:
                 pickle.dump(self.edge_radii,fo)
-            with open(os.path.join(path,'branching_angle.p'),'wb') as fo:
+            with open(os.path.join(path,prefix+'branching_angle.p'),'wb') as fo:
                 pickle.dump(ba,fo)
-            with open(os.path.join(path,'vessel_length.p'),'wb') as fo:
+            with open(os.path.join(path,prefix+'vessel_length.p'),'wb') as fo:
                 pickle.dump(self.edge_length,fo)
-            with open(os.path.join(path,'nconn.p'),'wb') as fo:
+            with open(os.path.join(path,prefix+'nconn.p'),'wb') as fo:
                 pickle.dump(nconn,fo)
-            with open(os.path.join(path,'vessel_volume.p'),'wb') as fo:
+            with open(os.path.join(path,prefix+'vessel_volume.p'),'wb') as fo:
                 pickle.dump(self.edge_volume,fo)
-            with open(os.path.join(path,'intervessel_distance.p'),'wb') as fo:
+            with open(os.path.join(path,prefix+'intervessel_distance.p'),'wb') as fo:
                 pickle.dump(ivd,fo)
 
 def main():
