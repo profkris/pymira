@@ -1,6 +1,6 @@
 import csv
 import numpy as np
-import spatialgraph
+from pymira import spatialgraph
 
 def csv2amira(filepath, ofile='', sanity_check=True):
     start_coords, end_coords, radii = [], [], []
@@ -42,12 +42,15 @@ def csv2amira(filepath, ofile='', sanity_check=True):
     
     conns = np.zeros([nseg,2],dtype='int')
     points = np.zeros([nseg*2,3],dtype=start_coords.dtype)
+    # Radii are defined by edge points rather than segments
     point_radii = np.zeros(nseg*2)
     npoints = np.zeros(nseg,dtype='int') + 2
     for i in range(nseg):
         conns[i] = [start_node_inds[i],end_node_inds[i]]
         points[2*i] = node_coords[start_node_inds[i]]
         points[2*i+1] = node_coords[end_node_inds[i]]
+        point_radii[2*i] = radii[i]
+        point_radii[2*i+1] = radii[i]
     
     graph = spatialgraph.SpatialGraph(initialise=True,scalars=['Radii'])
     graph.set_definition_size('VERTEX',node_count)
@@ -62,9 +65,13 @@ def csv2amira(filepath, ofile='', sanity_check=True):
     if sanity_check:
         graph.sanity_check(deep=True)
 
+    if ofile=='':
+        ofile = filepath+'.am'
     graph.write(ofile)
+    print('Converted {} to {}'.format(filepath,ofile))
             
 if __name__=='__main__':
-    filepath = 'tests/test.csv'
-    opath = 'tests/test.am'
-    csv2amira(filepath, ofile=opath)
+
+    for v in ['artery','vein']:
+        filepath = r"C:\Users\simon\vascular_networks\vascular-ucl-collab\Retina\data\retina_{}.csv".format(v)
+        csv2amira(filepath)#, ofile=opath)
