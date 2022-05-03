@@ -2,14 +2,20 @@ import csv
 import numpy as np
 import spatialgraph
 
-def csv2amira(filepath, ofile=''):
+def csv2amira(filepath, ofile='', sanity_check=True):
     start_coords, end_coords, radii = [], [], []
     with open(filepath, 'r') as fh:
         reader = csv.reader(fh)
         for row in reader:
-            start_coords.append(np.asarray([float(x) for x in row[0:3]]))
-            end_coords.append(np.asarray([float(x) for x in row[3:6]]))
-            radii.append(float(row[-1]))
+            if len(row)==7:
+                try:
+                    start_coords.append(np.asarray([float(x) for x in row[0:3]]))
+                    end_coords.append(np.asarray([float(x) for x in row[3:6]]))
+                    radii.append(float(row[-1]))
+                except Exception as e: # Any error, jump ship!
+                    print(e)
+                    print('Aborting...!')
+                    return
             
     start_coords = np.asarray(start_coords)
     end_coords = np.asarray(end_coords)
@@ -53,7 +59,7 @@ def csv2amira(filepath, ofile=''):
     graph.set_data(points,name='EdgePointCoordinates')
     graph.set_data(point_radii,name='Radii')
 
-    if True:
+    if sanity_check:
         graph.sanity_check(deep=True)
 
     graph.write(ofile)
