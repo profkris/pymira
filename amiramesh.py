@@ -59,7 +59,7 @@ class AmiraMesh(object):
                     return chk,marker,markerIndex
         return chk,marker,markerIndex
         
-    def _read_file_data(self,content,strt,fin,curDataMarker):
+    def _read_file_data(self,content,strt,fin,curDataMarker,quiet=False):
         
         # Get corresponding field and definition entries
         curField = [x for x in self.fields if x['marker']==curDataMarker][0]
@@ -110,7 +110,8 @@ class AmiraMesh(object):
                 curData = np.reshape(curData,curField['shape'])
                 curField['data'] = curData
             except Exception as e:
-                print(('Error, {}.Line: {} '.format(e,curData)))
+                if not quiet:
+                    print(('Error, {}.Line: {} '.format(e,curData)))
                 #import pdb
                 #pdb.set_trace()
 
@@ -169,7 +170,7 @@ class AmiraMesh(object):
 #    def add_field(self,**kwargs):
 #        self.fields.append(self._field_generator(**kwargs))
         
-    def read(self,filename):
+    def read(self,filename,quiet=False):
         
         self.fileRead = False
         self.filename = filename
@@ -402,7 +403,7 @@ class AmiraMesh(object):
         self.fieldRange.append(len(self.data))
 
         for i,curField in enumerate(self.fields):
-            self._read_file_data(self.data,self.fieldRange[i],self.fieldRange[i+1],curField['marker'])
+            self._read_file_data(self.data,self.fieldRange[i],self.fieldRange[i+1],curField['marker'],quiet=quiet)
         self.fieldNames = [x['name'] for x in self.fields]
                         
 #                else:

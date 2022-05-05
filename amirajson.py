@@ -5,7 +5,7 @@ import json
 
 def convert(filepath):
     a = am.AmiraMesh()
-    a.read(filepath)
+    a.read(filepath,quiet=True)
     o = dict()
     # AmiraMesh object data held in fields by name:
     # 'VertexCoordinates', 'EdgeConnectivity', 'NumEdgePoints', 'EdgePointCoordinates', 'thickness'
@@ -14,7 +14,8 @@ def convert(filepath):
     for field in a.fields:
         name = field['name']
         name = name[0].upper() + name[1:]
-        o[name] = field['data'].tolist()
+        if field['data'] is not None:
+            o[name] = field['data'].tolist()
     f = open(filepath + '.json', 'w')
     json.dump(o, f)
     f.close()
