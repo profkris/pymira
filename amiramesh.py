@@ -161,11 +161,11 @@ class AmiraMesh(object):
     def _field_generator(self,name='',marker='', 
                          definition='',type='',
                          encoding='',encoding_length=0,
-                         nelements=0,nentries=0,data=None):
+                         nelements=0,nentries=0,data=None,shape=None):
         return {'name':name,'marker':marker,
                 'definition':definition,'type':type,
                 'encoding':encoding,'encoding_length':encoding_length,
-                'nelements':nelements,'nentries':nentries,'data':data}
+                'nelements':nelements,'nentries':nentries,'data':data,'shape':shape}
                 
 #    def add_field(self,**kwargs):
 #        self.fields.append(self._field_generator(**kwargs))
@@ -449,6 +449,11 @@ class AmiraMesh(object):
             self.fields = []
         field = self._field_generator(**kwargs)
         self.fields.append(field)
+        self.fieldNames.append(field['name'])
+        
+        if 'data' in kwargs.keys() and kwargs['data'] is not None:
+            self.set_data(kwargs['data'],name=field['name'])
+        
         return field
         
     def write(self,filename):

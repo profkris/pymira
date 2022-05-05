@@ -63,15 +63,14 @@ def combine_graphs(graph1,graph2):
         else:
             data = np.concatenate([f1['data'],f2['data']])
         
+        print('Combining {}'.format(fName))
         graph1.set_data(data,name=fName)
         
     graph.set_definition_size('VERTEX',nnode1+nnode2)
     graph.set_definition_size('EDGE',nconn1+nconn2)
     graph.set_definition_size('POINT',npoints1+npoints2)
-
-
-if __name__=='__main__':
     
+def combine_cco():
     path = '/mnt/data2/retinasim/cco/graph'
     opath = path
 
@@ -86,15 +85,40 @@ if __name__=='__main__':
     
     print(('Reading source graph: {}'.format(mFiles[0])))
     graph.read(join(path,mFiles[0]))
-    marker = graph1.generate_next_marker()
-    breakpoint()
-    graph.add_field(name='VesselType',marker=marker,definition='POINT',type='float',nelements=1,nentries=[0],data=np.zeros(npoints))
+    
+    # Add vessel type field
+    vesselType = np.zeros(graph.nedgepoint)
+    midLinePos = np.zeros(graph.nedgepoint)
+    marker = graph.generate_next_marker()
+    graph.add_field(name='VesselType',marker=marker,definition='POINT',type='float',nelements=1,data=vesselType)
+    marker = graph.generate_next_marker()
+    graph.add_field(name='midLinePos',marker=marker,definition='POINT',type='float',nelements=1,data=midLinePos)
 
     for f in mFiles[1:]:
         graph_to_add = sp.SpatialGraph()
         print('Merging with {}'.format(f))
         graph_to_add.read(join(path,f))
+        
+        marker = graph_to_add.generate_next_marker()
+        if 'artery' in f:
+            vesselType = np.zeros(graph_to_add.nedgepoint)
+        elif 'vein' in f:
+            vesselType = np.zeros(graph_to_add.nedgepoint) + 1
+        if 'upper' in f:
+            midLinePos = np.zeros(graph_to_add.nedgepoint)
+        elif 'lower' in f:
+            midLinePos = np.zeros(graph_to_add.nedgepoint) + 1
+        marker = graph.generate_next_marker()
+        graph_to_add.add_field(name='VesselType',marker=marker,definition='POINT',type='float',nelements=1,data=vesselType)
+        marker = graph.generate_next_marker()
+        graph_to_add.add_field(name='midLinePos',marker=marker,definition='POINT',type='float',nelements=1,data=midLinePos)
+        
         combine_graphs(graph,graph_to_add)
 
+    breakpoint()
     graph.sanity_check()
     graph.write(join(opath,ofile))
+
+if __name__=='__main__':
+    combine_cco()
+
