@@ -70,33 +70,12 @@ def combine_graphs(graph1,graph2):
     graph.set_definition_size('EDGE',nconn1+nconn2)
     graph.set_definition_size('POINT',npoints1+npoints2)
     
-def combine_cco():
-    path = '/mnt/data2/retinasim/cco/graph'
-    opath = path
-
-    graph = sp.SpatialGraph()
+def combine_cco(path,mFiles,ofile):
     
-    mFiles = [  'retina_artery_upper_cco.csv.am',
-                'retina_vein_upper_cco.csv.am',
-                'retina_artery_lower_cco.csv.am',
-                'retina_vein_lower_cco.csv.am',
-             ]
-    ofile = 'retina_cco.am'
-    
-    print(('Reading source graph: {}'.format(mFiles[0])))
-    graph.read(join(path,mFiles[0]))
-    
-    # Add vessel type field
-    vesselType = np.zeros(graph.nedgepoint)
-    midLinePos = np.zeros(graph.nedgepoint)
-    marker = graph.generate_next_marker()
-    graph.add_field(name='VesselType',marker=marker,definition='POINT',type='float',nelements=1,data=vesselType)
-    marker = graph.generate_next_marker()
-    graph.add_field(name='midLinePos',marker=marker,definition='POINT',type='float',nelements=1,data=midLinePos)
-
-    for f in mFiles[1:]:
+    for i,f in enumerate(mFiles):
+ 
         graph_to_add = sp.SpatialGraph()
-        print('Merging with {}'.format(f))
+        print('Merging {}'.format(f))
         graph_to_add.read(join(path,f))
         
         marker = graph_to_add.generate_next_marker()
@@ -113,9 +92,11 @@ def combine_cco():
         marker = graph.generate_next_marker()
         graph_to_add.add_field(name='midLinePos',marker=marker,definition='POINT',type='float',nelements=1,data=midLinePos)
         
-        combine_graphs(graph,graph_to_add)
+        if i>0:
+            combine_graphs(graph,graph_to_add)
+        else:
+            graph = graph_to_add
 
-    breakpoint()
     graph.sanity_check()
     graph.write(join(opath,ofile))
 
