@@ -101,5 +101,12 @@ def combine_cco(path,mFiles,ofile):
     graph.write(join(opath,ofile))
 
 if __name__=='__main__':
+    path = '/mnt/data2/retinasim/cco/graph'
+    mFiles = [  'retina_artery_upper_cco.csv.am',
+                'retina_vein_upper_cco.csv.am',
+                'retina_artery_lower_cco.csv.am',
+                'retina_vein_lower_cco.csv.am',
+             ]
+    ofile = 'retina_cco.am'
+    combine_graphs.combine_cco(path,mFiles,ofile)
     combine_cco()
-
