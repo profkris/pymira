@@ -86,6 +86,9 @@ if __name__=='__main__':
     
     print(('Reading source graph: {}'.format(mFiles[0])))
     graph.read(join(path,mFiles[0]))
+    marker = graph1.generate_next_marker()
+    breakpoint()
+    graph.add_field(name='VesselType',marker=marker,definition='POINT',type='float',nelements=1,nentries=[0],data=np.zeros(npoints))
 
     for f in mFiles[1:]:
         graph_to_add = sp.SpatialGraph()
