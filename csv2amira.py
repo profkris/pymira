@@ -52,6 +52,7 @@ def csv2amira(filepath, ofile='', sanity_check=True):
         point_radii[2*i] = radii[i]
         point_radii[2*i+1] = radii[i]
     
+    breakpoint()
     graph = spatialgraph.SpatialGraph(initialise=True,scalars=['Radii'])
     graph.set_definition_size('VERTEX',node_count)
     graph.set_definition_size('EDGE',nseg)
