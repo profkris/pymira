@@ -181,14 +181,14 @@ class SpatialGraph(amiramesh.AmiraMesh):
         self.set_data(newData,name='EdgePointCoordinates')
 
     def number_of_node_connections(self,file=None):
-    
+
        #Identify terminal nodes
        #nodeCoords = self.fields[0]['data']
        #nnode = nodeCoords.shape[0]
        #nConn = np.asarray([0]*nnode)
        conn = self.fields[1]['data']
-       
-       nConn = np.asarray([len([j for j,x in enumerate(conn) if i in x]) for i in range(self.nnode)])
+       nConn = np.asarray([len(np.where((conn[:,0]==i) | (conn[:,1]==i))[0]) for i in range(self.nnode)])
+       #nConn = np.asarray([len([j for j,x in enumerate(conn) if i in x]) for i in range(self.nnode)])
        return nConn
        
        #for i in range(nnode):
