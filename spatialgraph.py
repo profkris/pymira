@@ -304,7 +304,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         else:
             graph = self
 
-        nodeCoords = self.get_data('VertexCoordinates')
+        nodeCoords = graph.get_data('VertexCoordinates')
         nnode = len(nodeCoords)
         #nedge = len(edgeConn)
         #nedgepoint = len(edgeCoords)
@@ -338,6 +338,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         editor = Editor()
         return editor.delete_nodes(self,nodes_to_delete[0])
+        
+    def crop(self,*args,**kwargs):
+        return self.constrain_nodes(*args,**kwargs)
         
     def remove_field(self,fieldName):
         f = [(i,f) for (i,f) in enumerate(self.fields) if f['name']==fieldName]

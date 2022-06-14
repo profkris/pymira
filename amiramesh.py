@@ -449,7 +449,8 @@ class AmiraMesh(object):
             self.fields = []
         field = self._field_generator(**kwargs)
         self.fields.append(field)
-        self.fieldNames.append(field['name'])
+        if self.fieldNames is not None:
+            self.fieldNames.append(field['name'])
         
         if 'data' in kwargs.keys() and kwargs['data'] is not None:
             self.set_data(kwargs['data'],name=field['name'])
