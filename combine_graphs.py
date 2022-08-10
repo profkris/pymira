@@ -77,7 +77,15 @@ def combine_graphs(graph1,graph2):
     
 def combine_cco(path,mFiles,ofile):
     
+    # Flag inlet / outlet nodes that shouldn't be connected
+    ignore_node = np.zeros(len(mFiles),dtype='int')
+    
     for i,f in enumerate(mFiles):
+    
+        if i==0:
+            ignore_node[i] = 0
+        else:
+            ignore_node[i] = graph.nnode
  
         graph_to_add = sp.SpatialGraph()
         print('Merging {}'.format(f))
@@ -110,6 +118,7 @@ def combine_cco(path,mFiles,ofile):
     npoints = graph.get_data('NumEdgePoints')
     vType = graph.get_data('VesselType')
     mlp = graph.get_data('midLinePos') 
+    radii = graph.get_data('Radii') 
     nnodeconn = graph.number_of_node_connections()
     a_endnodes = np.where(nnodeconn==1)
     def node_vtype(verts,nodeIndex,conns,npoints,vtype_points,edgeId=None):
@@ -126,20 +135,65 @@ def combine_cco(path,mFiles,ofile):
         else:
             return vtype[-1]
     vType_nodes = np.asarray([node_vtype(verts,i,conn,npoints,vType) for i in range(graph.nnode)])
-    a_endpoints = np.asarray([i for i in range(graph.nnode) if vType_nodes[i]==0 and nnodeconn[i]==1])
-    v_endpoints = np.asarray([i for i in range(graph.nnode) if vType_nodes[i]==1 and nnodeconn[i]==1])
+    #mlp_nodes = np.asarray([node_vtype(verts,i,conn,npoints,mlp) for i in range(graph.nnode)])
+    a_endpoints = np.asarray([i for i in range(graph.nnode) if vType_nodes[i]==0 and nnodeconn[i]==1 and i not in ignore_node])
+    v_endpoints = np.asarray([i for i in range(graph.nnode) if vType_nodes[i]==1 and nnodeconn[i]==1 and i not in ignore_node])
     
     # Find closest endpoints and join them together
     from scipy.spatial.distance import cdist
     a_v = verts[a_endpoints]
     v_v = verts[v_endpoints]
     dists = cdist(a_v,v_v)
+    
+    # Find closest venous endpoint to each artery endpoint
+    mn = np.argmin(dists,axis=1)
+    mn_v = np.argmin(dists,axis=0)
 
-    breakpoint()   
+    # Record where veins have been connected
+    v_conn = np.zeros(v_v.shape[0])
+    for ai in range(a_v.shape[0]):
+        new_conn = np.asarray([a_endpoints[ai],v_endpoints[mn[ai]]])
+        v_conn[mn[ai]] += 1
+        conn = np.concatenate([conn,np.reshape(new_conn,[1,2])])
+        new_edge = np.asarray([a_v[ai],v_v[mn[ai]]])
+        points = np.concatenate([points,new_edge])
+        npoints = np.concatenate([npoints,[2]])
+        vType = np.concatenate([vType,[2,2]])
+        radii = np.concatenate([radii,[2.5,2.5]])
+        mlp = np.concatenate([mlp,[-1,-1]])
+        
+    for vi in range(v_v.shape[0]):
+        if v_conn[vi]==0:
+            new_conn = np.asarray([v_endpoints[vi],a_endpoints[mn_v[vi]]])
+            v_conn[mn_v[vi]] += 1
+            conn = np.concatenate([conn,np.reshape(new_conn,[1,2])])
+            new_edge = np.asarray([v_v[vi],a_v[mn_v[vi]]])
+            points = np.concatenate([points,new_edge])
+            npoints = np.concatenate([npoints,[2]])
+            vType = np.concatenate([vType,[2,2]])
+            radii = np.concatenate([radii,[2.5,2.5]])
+            mlp = np.concatenate([mlp,[-1,-1]])
+        
+    # Add new connections to graph
+    graph.set_data(points,name='EdgePointCoordinates')
+    graph.set_data(npoints,name='NumEdgePoints')
+    graph.set_data(conn,name='EdgeConnectivity')
+    graph.set_data(vType,name='VesselType')
+    graph.set_data(radii,name='Radii')
+    graph.set_data(mlp,name='midLinePos')
+    graph.set_definition_size('POINT',points.shape[0])
+    graph.set_definition_size('EDGE',conn.shape[0])
 
     graph.sanity_check()
     print('Combined graph written to {}'.format(join(path,ofile)))
     graph.write(join(path,ofile))
+    
+def test_plot_cco():
+    path = '/mnt/data2/retinasim/cco/graph'
+    f = 'retina_cco.am'
+    graph = sp.SpatialGraph()
+    graph.read(join(path,f))
+    graph.plot_graph()
 
 if __name__=='__main__':
     path = '/mnt/data2/retinasim/cco/graph'
@@ -149,6 +203,5 @@ if __name__=='__main__':
                 'retina_vein_lower_cco.csv.am',
              ]
     ofile = 'retina_cco.am'
-    #combine_graphs.
     combine_cco(path,mFiles,ofile)
-    #combine_cco()
+    test_plot_cco()

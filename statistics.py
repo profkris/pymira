@@ -31,6 +31,7 @@ class Statistics(object):
             radii = self.graph.get_data(rad_name.lower())
             if radii is not None:
                 self.radius_field_name = rad_name
+                print(rad_name)
                 
         self.radii = None
         self.nconn = None
@@ -218,7 +219,7 @@ class Statistics(object):
                     curPoints,curRadii = [],[]
 
                 dist = np.zeros(pts.shape[0]-1)
-                
+
                 length = np.sum([np.linalg.norm(pts[i]-pts[i-1]) for i,x in enumerate(pts[1:])])
                 volume = np.sum([np.linalg.norm(pts[i]-pts[i-1])*np.square(rads[i]) for i,x in enumerate(pts[1:])])
                 
@@ -243,12 +244,16 @@ class Statistics(object):
             #    print('Error, edge {}: {}'.format(edge,e))
 
             
-    def _branching_angle(self,vec1,vec2):
+    def _branching_angle(self,vec1,vec2,acute=False):
 
         if np.linalg.norm(vec1)*np.linalg.norm(vec2)==0.:
             return 0.
         rad = np.arccos(np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2)))
         deg = np.rad2deg(rad)
+        
+        if acute:
+            deg = deg % 90.
+        
         return deg
         
     def volume(self,coords):
@@ -509,30 +514,99 @@ class Statistics(object):
 def main():
     
     # Define directory and filename of Amira graph file
-    dirs = '/mnt/data2/Sahai/export/nifti'
-    pref = 'KO9' # KO7
-    fs = '{}_proc.SptGraph.am'.format(pref)
+    #dirs = '/mnt/data2/Sahai/export/nifti'
+    #fs = '{}_proc.SptGraph.am'.format(pref)
     
-    # Define output directory for stats and histograms
-    odir = os.path.join(dirs,pref)
-    if not os.path.exists(odir):
-        os.mkdir(odir)
+    dirs = '/mnt/data2/retinas - GIULIA'
+    group = 'control'
+    pref = 'control_2.1' # KO7
+    pref = 'control_2.2'
+    pref = 'control_2.3'
+    pref = 'control_3.1'
+    pref = 'control_3.2' 
+    pref = 'control_4.1'
+    pref = 'control_4.2'
+    pref = 'control_4.3'
+    pref = 'control_5.1'
+    pref = 'control_5.2'
+    pref = 'control_5.3' 
+    group = 'diabetic'
+    pref = 'diabetic_6.1'
+    pref = 'diabetic_6.2'
+    pref = 'diabetic_6.3' 
+    pref = 'diabetic_7.1' 
+    pref = 'diabetic_7.2'
+    pref = 'diabetic_7.3'  
+    pref = 'diabetic_8.1' 
+    pref = 'diabetic_8.2'
+    pref = 'diabetic_8.3'
+    pref = 'diabetic_9.1' 
+    pref = 'diabetic_9.2'
+    pref = 'diabetic_9.3'
+    #pref = 'diabetic_10.1' 
+    #pref = 'diabetic_10.2' 
+    #pref = 'diabetic_10.3'
+    #pref = 'diabetic_11.1'
+    #pref = 'diabetic_11.2'
+    #pref = 'diabetic_11.3'
+    
+    prefv =   ['control_2.1',
+              'control_2.2',
+              'control_2.3',
+              'control_3.1',
+              'control_3.2',
+              'control_4.1',
+              'control_4.2',
+              'control_4.3',
+              'control_5.1',
+              'control_5.2',
+              'control_5.3',
+              'diabetic_6.1',
+              'diabetic_6.2',
+              'diabetic_6.3', 
+              'diabetic_7.1', 
+              'diabetic_7.2',
+              'diabetic_7.3',  
+              'diabetic_8.1', 
+              'diabetic_8.2',
+              'diabetic_8.3',
+              'diabetic_9.1',
+              'diabetic_9.2',
+              'diabetic_9.3',
+              'diabetic_10.1', 
+              'diabetic_10.2',
+              'diabetic_10.3',
+              'diabetic_11.1',
+              'diabetic_11.2',
+              'diabetic_11.3' ]
+              
+    groupv = ['control' if 'control' in x else 'diabetic' for x in pref]
+    
+    for pref,group in zip(prefv,groupv):
+        print(pref,group)
+        fs = f'{pref}.am'
         
-    # Set pixel size (if not equal to 1 or None, will rescale the data)
-    pixsize = 1.
-      
-    graph = spatialgraph.SpatialGraph()
-    print('Reading graph...')
-    graph.read(os.path.join(dirs,fs))
-    print('Graph read')
-   
-    if pixsize is not None and pixsize!=1.:
-        ofile = os.path.join(dirs,'spatialGraph_scaled.am')
-        graph.rescale_coordinates(pixsize,pixsize,pixsize)
-        graph.rescale_radius(pixsize,ofile=ofile)
-    
-    stats = Statistics(graph,path=dirs)  
-    stats.do_stats(path=odir)
+        # Define output directory for stats and histograms
+        odir = os.path.join(dirs,'vessel_stats',group,pref)
+        if not os.path.exists(odir):
+            os.mkdir(odir)
+            
+        # Set pixel size (if not equal to 1 or None, will rescale the data)
+        pixsize = 0.57
+          
+        graph = spatialgraph.SpatialGraph()
+        print('Reading graph...')
+        graph.read(os.path.join(dirs,fs))
+        print('Graph read')
+       
+        if pixsize is not None and pixsize!=1.:
+            ofile = os.path.join(dirs,'spatialGraph_scaled.am')
+            graph.rescale_coordinates(pixsize,pixsize,pixsize)
+            graph.rescale_radius(pixsize,ofile=ofile)
+        
+        stats = Statistics(graph,path=dirs)  
+        stats.do_stats(path=odir)
 
 if __name__=='__main__':
     main()
+    

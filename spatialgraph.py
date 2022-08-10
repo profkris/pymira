@@ -10,8 +10,110 @@ Amira SpatialGraph loader and writer
 
 from pymira import amiramesh
 import numpy as np
+arr = np.asarray
 import os
-from tqdm import tqdm # progress bar
+from tqdm import tqdm, trange # progress bar
+import open3d as o3d
+
+
+def update_array_index(vals,inds,keep):
+    # Updates/offets indices for an array (vals) to exclude values in a flag array (keep)
+    # inds: array indices for vals.
+    
+    # Vertex coords (mx3), connections (nx2), vertex indices to keep (boolean, m)
+    
+    # Index vertices to be deleted
+    del_inds = np.where(keep==False)[0]
+    # Total number of vertices, prior to deletion
+    npoints = vals.shape[0]
+    # Indices of all vertices, prior to deletion
+    old_inds = np.linspace(0,npoints-1,npoints,dtype='int')
+    # Lookup for vertices, post deletion (-1 corresponds to a deletion)
+    new_inds_lookup = np.zeros(npoints,dtype='int')-1
+    new_inds_lookup[~np.in1d(old_inds,del_inds)] = np.linspace(0,npoints-del_inds.shape[0]-1,npoints-del_inds.shape[0])
+    # Create a new index array using updated index lookup table
+    new_inds = new_inds_lookup[inds] 
+    # Remove -1 values that reference deleted nodes
+    new_inds = new_inds[(new_inds[:,0]>=0) & (new_inds[:,1]>=0)]
+    return vals[keep],new_inds,new_inds_lookup
+    
+def delete_vertices(graph,keep_nodes,return_lookup=False): # #verts,edges,keep_nodes):
+
+    """
+    Efficiently delete vertices as flagged by a boolean array (keep_nodes) and update the indexing of an
+    edge (index) array that potentially references those vertices
+    """
+    
+    nodecoords,edgeconn,edgepoints,nedgepoints = graph.get_standard_fields()
+    
+    # Find which edges must be deleted
+    del_node_inds = np.where(keep_nodes==False)[0]
+    del_edges = [np.where((edgeconn[:,0]==i) | (edgeconn[:,1]==i))[0] for i in del_node_inds]
+    # Remove empties (i.e. where the node doesn't appear in any edges)
+    del_edges = [x for x in del_edges if len(x)>0]
+    # Flatten
+    del_edges = [item for sublist in del_edges for item in sublist]
+    # Convert to numpy
+    del_edges = arr(del_edges)
+    # List all edge indices
+    inds = np.linspace(0,edgeconn.shape[0]-1,edgeconn.shape[0],dtype='int')
+    # Define which edge each edgepoint belongs to
+    edge_inds = np.repeat(inds,nedgepoints)
+    # Create a mask of points to keep for edgepoint variables
+    keep_edgepoints = ~np.in1d(edge_inds,del_edges)
+    # Apply mask to edgepoint array
+    edgepoints = edgepoints[keep_edgepoints]
+    # Apply mask to scalars
+    scalars = graph.get_scalars()
+    for scalar in scalars:
+        graph.set_data(scalar['data'][keep_edgepoints],name=scalar['name'])
+    
+    # Create a mask for removing edge connections and apply to the nedgepoint array
+    keep_edges = np.ones(edgeconn.shape[0],dtype='bool')
+    if len(del_edges)>0:
+        keep_edges[del_edges] = False
+        nedgepoints = nedgepoints[keep_edges]
+    
+    # Remove nodes and update indices
+    nodecoords, edgeconn, edge_lookup = update_array_index(nodecoords,edgeconn,keep_nodes)
+    
+    # Update VERTEX definition
+    vertex_def = graph.get_definition('VERTEX')
+    vertex_def['size'] = [nodecoords.shape[0]]
+    # Update EDGE definition
+    edge_def = graph.get_definition('EDGE')
+    edge_def['size'] = [edgeconn.shape[0]]
+    # Update POINT definition
+    edgepoint_def = graph.get_definition('POINT')
+    edgepoint_def['size'] = [edgepoints.shape[0]]
+    
+    graph.set_data(nodecoords,name='VertexCoordinates')
+    graph.set_data(edgeconn,name='EdgeConnectivity')
+    graph.set_data(nedgepoints,name='NumEdgePoints')
+    graph.set_data(edgepoints,name='EdgePointCoordinates')
+            
+    graph.set_graph_sizes()
+
+    if return_lookup:
+        return graph, edge_lookup
+    else:
+        return graph
+
+def align_vector_to_another(a=np.array([0, 0, 1]), b=np.array([1, 0, 0])):
+    """
+    Aligns vector a to vector b with axis angle rotation
+    """
+    if np.array_equal(a, b):
+        return None, 0.
+    axis_ = np.cross(a, b)
+    l = np.linalg.norm(axis_)
+    if l>0.:
+        axis_ = axis_ / np.linalg.norm(axis_)
+        angle = np.arccos(np.dot(a, b))
+    else:
+        angle = 0.
+
+    return axis_, angle
 
 class SpatialGraph(amiramesh.AmiraMesh):
     
@@ -99,6 +201,16 @@ class SpatialGraph(amiramesh.AmiraMesh):
             self.nedgepoint = self.get_definition('POINT')['size'][0]
         except:
             pass
+            
+    def get_standard_fields(self):
+
+        res = []
+        nodecoords = self.get_data('VertexCoordinates')
+        edgeconn = self.get_data('EdgeConnectivity')
+        edgepoints = self.get_data('EdgePointCoordinates')
+        nedgepoints = self.get_data('NumEdgePoints')
+        
+        return nodecoords,edgeconn,edgepoints,nedgepoints
         
     def rescale_coordinates(self,xscale,yscale,zscale,ofile=None):
         nodeCoords = self.get_data('VertexCoordinates')
@@ -113,7 +225,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
             self.write(ofile)
             
     def rescale_radius(self,rscale,ofile=None):
-        radii = self.get_data('Radii')
+        radf = self.get_radius_field()
+        radii = radf['data']
+        #radii = self.get_data('Radii')
         mnR = np.min(radii)
         for i,r in enumerate(radii):
             radii[i] = r * rscale / mnR
@@ -392,7 +506,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
         return edgePointIndex
         
     def get_scalars(self):
-        return [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
+        return [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1 and f['name']!='EdgePointCoordinates']
+        
+    def get_radius_field(self):
+        names = ['radius','radii','diameter','diameters','thickness']
+        for name in names:
+            match = [self.fields[i] for i,field in enumerate(self.fieldNames) if field.lower()==name.lower()]
+            if len(match)>0:
+                return match[0]
+        return None
         
     def edgepoint_indices(self,edgeIndex):
         nedgepoints = self.get_data('NumEdgePoints')
@@ -665,6 +787,35 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 e.add_scalar('Graph',np.repeat(indS,e.npoints))
             
         return graphIndex, graph_size
+        
+    def edge_scalar_to_node_scalar(self,name):
+
+        scalar_points = self.get_data(name)
+        if scalar_points is None:
+            return None
+    
+        verts = self.get_data('VertexCoordinates')
+        conns = self.get_data('EdgeConnectivity')
+        npoints = self.get_data('NumEdgePoints')
+        points = self.get_data('EdgePointCoordinates')
+        
+        scalar_nodes = np.zeros(verts.shape[0],dtype=scalar_points.dtype)
+    
+        for nodeIndex in range(self.nnode):
+            edgeIds = np.where((conns[:,0]==nodeIndex) | (conns[:,1]==nodeIndex))
+            if len(edgeIds[0])>0:
+                edgeId = edgeIds[0][0]
+                    
+                npts = int(npoints[edgeId])
+                x0 = int(np.sum(npoints[0:edgeId]))
+                vtype = scalar_points[x0:x0+npts]
+                pts = points[x0:x0+npts,:]
+                node = verts[nodeIndex]
+                if np.all(pts[0,:]==node):
+                    scalar_nodes[nodeIndex] = scalar_points[0]
+                else:
+                    scalar_nodes[nodeIndex] = scalar_points[-1]
+        return scalar_nodes
  
     def plot_histogram(self,field_name,*args,**kwargs):
         data = self.get_data(field_name)
@@ -678,14 +829,101 @@ class SpatialGraph(amiramesh.AmiraMesh):
         plt.show()
         return fig
         
-    def plot_graph(self):
+    def plot_graph(self, cylinders=None, vessel_type=None, color=None, plot=True, min_radius=0., domain_radius=None, domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,use_edges=True):
         nc = self.get_data('VertexCoordinates')
-        import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection = '3d')
-        skip = 1
-        ax.scatter(nc[::skip,0],nc[::skip,1],nc[::skip,2], c='r', marker='o',s=1)
+        points = self.get_data('EdgePointCoordinates')
+        npoints = self.get_data('NumEdgePoints')
+        conns = self.get_data('EdgeConnectivity')
+        radField = self.get_radius_field()
+        if radField is None:
+            print('Could not locate vessel radius data!')
+            radii = np.ones(points.shape[0])
+        else:
+            radii = radField['data']
+        vType = self.get_data('VesselType')
+        if use_edges:
+
+            if cylinders is None:
+                try:
+                    print('Preparing graph...')
+                    edge_def = self.get_definition('EDGE')
+                    for i in trange(edge_def['size'][0]):
+                        i0 = np.sum(npoints[:i])
+                        i1 = i0+npoints[i]
+                        coords = points[i0:i1]
+                        rads = radii[i0:i1]
+                        if vType is None:
+                            vt = np.zeros(coords.shape[0],dtype='int')
+                        else:
+                            vt = vType[i0:i1]
+                        
+                        if vessel_type is None or vessel_type==vt[0]:
+                            if color is not None:
+                                col = color
+                            elif vt[0]==0: # artery
+                                col = [1.,0.,0.]
+                            elif vt[1]==1:
+                                col = [0.,0.,1.]
+                            else:
+                                col = [0.,1.,0.]
+                            
+                            if np.any(rads>=min_radius) and (domain_radius is None or np.any(np.linalg.norm(coords-domain_centre)<=domain_radius)):
+                                for j in range(1,coords.shape[0]):
+                                    if rads[j]>=min_radius:
+                                        x0,x1 = coords[j-1],coords[j]
+                                        vec = x1-x0
+                                        height = np.linalg.norm(x1-x0)
+                                        
+                                        if height>0. and (domain_radius is None or (np.linalg.norm(x0-domain_centre<=domain_radius) and np.linalg.norm(x1-domain_centre<=domain_radius))):
+                                            vec = vec / height
+                                            if rads[j]<20. and radius_based_resolution:
+                                                resolution = 4
+                                            else:
+                                                resolution = cyl_res
+                                            cyl = o3d.geometry.TriangleMesh.create_cylinder(height=height,radius=rads[j], resolution=resolution)
+                                            translation = x0 + vec*height*0.5
+                                            cyl = cyl.translate(translation, relative=False)
+                                            axis, angle = align_vector_to_another(np.asarray([0.,0.,1.]), vec)
+                                            if angle!=0.:
+                                                axis_a = axis * angle
+                                                cyl = cyl.rotate(R=o3d.geometry.get_rotation_matrix_from_axis_angle(axis_a), center=cyl.get_center()) 
+                                            
+                                            cyl.paint_uniform_color(col)
+                                            if cylinders is not None:
+                                                cylinders += cyl
+                                            else:
+                                                cylinders = cyl
+                except Exception as e:
+                    #breakpoint()
+                    print(e)
+  
+            #else:
+            #    diameters = rads * 2
+            #    nbins = 20
+            #    r_bins = np.linspace(0.,np.max(diameters),nbins)
+            #    for i in range(1,nbins):
+            #        inds = np.where((diameters>r_bins[i-1]) & (diameters<=r_bins[i-1]))
+            #        if len(inds[0])>0:
+            #            line_set = o3d.geometry.LineSet()
+            #            line_set.points = o3d.utility.Vector3dVector(points[inds,:])
+            #            line_set.lines = o3d.utility.Vector2iVector(conns)
+            #    #colors = np.zeros([conns.shape[0],3],dtype='int')
+            #    #line_set.colors = o3d.utility.Vector3dVector(colors)
+            #    #o3d.visualization.draw_geometries([line_set])
+                        
+            #breakpoint()
+            if plot:
+                o3d.visualization.draw_geometries([cylinders],mesh_show_wireframe=False)
+                #o3d.visualization.draw_geometries([pcd_a,pcd_v],mesh_show_wireframe=True)
+            return cylinders    
+        else:
+            # Legacy
+            import matplotlib.pyplot as plt
+            from mpl_toolkits.mplot3d import Axes3D
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection = '3d')
+            skip = 1
+            ax.scatter(nc[::skip,0],nc[::skip,1],nc[::skip,2], c='r', marker='o',s=1)
 
 class Editor(object):
 
@@ -726,9 +964,10 @@ class Editor(object):
         if int(edgepoint_index)<npoints-1 and int(edgepoint_index)>0:
             new_edge0 = edge[:xp+1]
             new_edge1 = edge[xp:]
-        elif int(edgepoint_index)>0:
+        elif int(edgepoint_index)<0:
             return edge, None, start_node, None, nodeCoords, edgeConn, nedgepoints, edgeCoords, scalars
         elif int(edgepoint_index)==npoints-1:
+            print('ERROR: _insert_node_in_edge: Edgepoint index>number of edgepoints!')
             return edge, None, end_node, None, nodeCoords, edgeConn, nedgepoints, edgeCoords, scalars
         else:
             return [None]*9
@@ -961,9 +1200,7 @@ class Editor(object):
         print('Removing {} self-connected edges...'.format(len(selfconn)))
         self.delete_edges(graph,selfconn,remove_disconnected_nodes=False)
         return graph
-        
-    
-    
+
     def remove_intermediate_nodes(self,graph,file=None,nodeList=None,path=None):
         
         import pickle
@@ -1284,6 +1521,64 @@ class Editor(object):
         graph.set_graph_sizes()
         
         return graph
+        
+        
+    def interpolate_edges(self,graph,iterp_resolution=5.,filter=None):
+        
+        """
+        Linear interpolation of edge points, to a fixed minimum resolution
+        """
+        
+        coords = graph.get_data('VertexCoordinates')
+        points = graph.get_data('EdgePointCoordinates')
+        npoints = graph.get_data('NumEdgePoints')
+        conns = graph.get_data('EdgeConnectivity')
+        
+        scalars = graph.get_scalars()
+        scalar_data = [x['data'] for x in scalars]
+        scalar_data_interp = [[] for x in scalars]
+        
+        if filter is None:
+            filter = np.ones(conns.shape[0],dtype='bool')
+        
+        pts_interp,npoints_interp = [],[]
+        for i,conn in enumerate(conns):
+            if npoints[i]==2:
+                if not filter[i]:
+                    pts_interp.extend(points[i0:i1])
+                    npoints_interp.append(2)
+                    for j,sd in enumerate(scalar_data):
+                        scalar_data_interp[j].extend(sd[i0:i1])
+                else:
+                    i0 = np.sum(npoints[:i])
+                    i1 = i0 + npoints[i]
+                    pts = points[i0:i1]
+                        
+                    length = np.linalg.norm(pts[1]-pts[0])
+                    if length>iterp_resolution:
+                        ninterp = np.clip(int(np.ceil(length / iterp_resolution)+1),2,None)
+                    else:
+                        ninterp = 2
+                        
+                    pts_interp.extend(np.linspace(pts[0],pts[1],ninterp))
+                    
+                    for j,sd in enumerate(scalar_data):
+                        sdc = sd[i0:i1]
+                        scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],ninterp))
+                    
+                    npoints_interp.append(ninterp)
+            else:
+                breakpoint()
+
+        pts_interp = arr(pts_interp)
+        npoints_interp = arr(npoints_interp)
+        graph.set_data(pts_interp,name='EdgePointCoordinates')
+        graph.set_data(npoints_interp,name='NumEdgePoints')
+       
+        for j,sd in enumerate(scalar_data_interp):
+            graph.set_data(arr(sd),name=scalars[j]['name'])
+        
+        graph.set_definition_size('POINT',pts_interp.shape[0])        
 
 class Node(object):
     
