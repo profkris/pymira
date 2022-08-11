@@ -14,7 +14,7 @@ arr = np.asarray
 import os
 from tqdm import tqdm, trange # progress bar
 import open3d as o3d
-
+import matplotlib as mpl
 
 def update_array_index(vals,inds,keep):
     # Updates/offets indices for an array (vals) to exclude values in a flag array (keep)
@@ -829,7 +829,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
         plt.show()
         return fig
         
-    def plot_graph(self, cylinders=None, vessel_type=None, color=None, plot=True, min_radius=0., domain_radius=None, domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,use_edges=True):
+    def plot_graph(self, cylinders=None, vessel_type=None, color=None, edge_color=None, plot=True, min_radius=0., \
+                         domain_radius=None, domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,use_edges=True,\
+                         cmap_range=[None,None],bgcolor=[1,1,1],cmap=None):
         nc = self.get_data('VertexCoordinates')
         points = self.get_data('EdgePointCoordinates')
         npoints = self.get_data('NumEdgePoints')
@@ -841,6 +843,23 @@ class SpatialGraph(amiramesh.AmiraMesh):
         else:
             radii = radField['data']
         vType = self.get_data('VesselType')
+        
+        cols = None
+        if edge_color is not None:
+            cmap_range = arr(cmap_range)
+            if cmap_range[0] is None:
+                cmap_range[0] = edge_color.min()
+            if cmap_range[1] is None:
+                cmap_range[1] = edge_color.max()
+            if cmap is None or cmap=='':
+                from pymira.turbo_colormap import turbo_colormap_data
+                cmap_data = turbo_colormap_data
+                cols = turbo_colormap_data[(np.clip((edge_color-cmap_range[0]) / (cmap_range[1]-cmap_range[0]),0.,1.)*(turbo_colormap_data.shape[0]-1)).astype('int')]
+            else:
+                cmapObj = mpl.cm.get_cmap(cmap)
+                col_inds = np.clip((edge_color-cmap_range[0]) / (cmap_range[1]-cmap_range[0]),0.,1.)
+                cols = cmapObj(col_inds)[:,0:3]
+        
         if use_edges:
 
             if cylinders is None:
@@ -860,6 +879,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         if vessel_type is None or vessel_type==vt[0]:
                             if color is not None:
                                 col = color
+                            elif edge_color is not None:
+                                col = cols[i]
                             elif vt[0]==0: # artery
                                 col = [1.,0.,0.]
                             elif vt[1]==1:
@@ -897,6 +918,12 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     #breakpoint()
                     print(e)
   
+            else:
+                #if cols is not None:
+                #    for i,cyl in enumerate(cylinders):
+                #        cyl.paint_uniform_color(cols[i])
+                pass
+                
             #else:
             #    diameters = rads * 2
             #    nbins = 20
@@ -913,7 +940,14 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         
             #breakpoint()
             if plot:
-                o3d.visualization.draw_geometries([cylinders],mesh_show_wireframe=False)
+                vis = o3d.visualization.Visualizer()
+                vis.create_window()
+                vis.add_geometry(cylinders)
+                opt = vis.get_render_option()
+                opt.background_color = np.asarray(bgcolor)
+                vis.run()
+                vis.destroy_window()
+                #o3d.visualization.draw_geometries([cylinders],mesh_show_wireframe=False)
                 #o3d.visualization.draw_geometries([pcd_a,pcd_v],mesh_show_wireframe=True)
             return cylinders    
         else:
