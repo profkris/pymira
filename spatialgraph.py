@@ -816,6 +816,34 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 else:
                     scalar_nodes[nodeIndex] = scalar_points[-1]
         return scalar_nodes
+        
+    def point_scalars_to_edge_scalars(self,func=np.mean,name=None):
+
+        scalars = self.get_scalars()
+        if name is not None:
+            scalars = [x for x in scalars if x['name']==name]
+            if len(scalars)==0:
+                return None
+    
+        verts = self.get_data('VertexCoordinates')
+        conns = self.get_data('EdgeConnectivity')
+        npoints = self.get_data('NumEdgePoints')
+        points = self.get_data('EdgePointCoordinates')
+        
+        nsc = len(scalars)
+        scalar_edges = np.zeros([nsc,conns.shape[0]])
+    
+        for i,conn in enumerate(tqdm(conns)):
+            npts = int(npoints[i])
+            x0 = int(np.sum(npoints[0:i]))
+            x1 = x0+npts
+
+            for j,scalar in enumerate(scalars):
+                if scalar['type']=='float':
+                    scalar_edges[j,i] = func(scalar['data'][x0:x1])
+                elif scalar['type']=='int':
+                    scalar_edges[j,i] = scalar['data'][x0]
+        return scalar_edges
  
     def plot_histogram(self,field_name,*args,**kwargs):
         data = self.get_data(field_name)
@@ -957,7 +985,22 @@ class SpatialGraph(amiramesh.AmiraMesh):
             fig = plt.figure()
             ax = fig.add_subplot(111, projection = '3d')
             skip = 1
-            ax.scatter(nc[::skip,0],nc[::skip,1],nc[::skip,2], c='r', marker='o',s=1)
+            ax.scatter(nc[::skip,0],nc[::skip,1],nc[::skip,2], c='r', marker='o',s=1)       
+            
+    def get_node_count(self,edge_node_lookup=None,restore=False,tmpfile=None,graph_params=None):
+
+        nodecoords = self.get_data('VertexCoordinates')
+        edgeconn = self.get_data('EdgeConnectivity')
+        
+        # Which edge each node appears in
+        if edge_node_lookup is not None:
+            node_count = arr([len(edge_node_lookup[i]) for i in range(nodecoords.shape[0])])
+        else:
+            unq,count = np.unique(edgeconn,return_counts=True)
+            all_nodes = np.linspace(0,nodecoords.shape[0]-1,nodecoords.shape[0],dtype='int')
+            node_count = np.zeros(nodecoords.shape[0],dtype='int') 
+            node_count[np.in1d(all_nodes,unq)] = count
+        return node_count                    
 
 class Editor(object):
 
@@ -973,8 +1016,7 @@ class Editor(object):
         for i,node in nodeCoords:
             conns_with_node = [j for j,c in enumerate(edgeConn) if np.any(c==i)]
             if len(conns_with_node)==2:
-                pass
-            
+                pass           
 
     def _insert_node_in_edge(self, edge_index,edgepoint_index,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=None):
     
@@ -1234,8 +1276,149 @@ class Editor(object):
         print('Removing {} self-connected edges...'.format(len(selfconn)))
         self.delete_edges(graph,selfconn,remove_disconnected_nodes=False)
         return graph
+        
+    def remove_intermediate_nodes(self,graph):
+        
+        nodecoords = graph.get_data('VertexCoordinates')
+        edgeconn = graph.get_data('EdgeConnectivity')
+        points = graph.get_data('EdgePointCoordinates')
+        nedge = graph.get_data('NumEdgePoints')
+        scalars = graph.get_scalars()
+        
+        nedges = edgeconn.shape[0]
+        nnode = nodecoords.shape[0]
+        
+        node_count = graph.get_node_count()
+        inline_nodes = np.where(node_count==2)
+        
+        edge_del_flag = np.zeros(nedges,dtype='bool')
+        node_del_flag = np.zeros(nnode,dtype='bool')
+        
+        consol_edge = []
+        # Loop through each of the inline nodes (i.e. nodes with exactly 2 connections)
+        for i,_node_inds in enumerate(tqdm(inline_nodes[0])):
+            consolodated_edges = []
+            start_or_end_node = []
+            node_inds = [_node_inds]
+            
+            # Track which nodes are connected to inline nodes, and aggregate chains of inline nodes        
+            count = 0
+            while True:
+                next_nodes = []
+                for node_ind in node_inds:
+                    if node_del_flag[node_ind]==False and node_count[node_ind]==2:
+                        node_del_flag[node_ind] = True
+                        cur_conn = np.where(((edgeconn[:,0]==node_ind) | (edgeconn[:,1]==node_ind)) & (edge_del_flag==False))
+                        
+                        # Mark the edges as needing to be consolodated 
+                        consolodated_edges.append(cur_conn[0])
+                        edge_del_flag[cur_conn[0]] = True
+                        conn_nodes = np.unique(edgeconn[cur_conn].flatten())
+                        conn_nodes = conn_nodes[conn_nodes!=node_ind]
+                        conn_count = node_count[conn_nodes]
+                    
+                        # Look for endpoints or branching points
+                        edge_or_branch = np.where((conn_count==1) | (conn_count>2))
+                        if len(edge_or_branch[0])>0:
+                            start_or_end_node.append(conn_nodes[edge_or_branch[0]])
+                            
+                        if len(start_or_end_node)>=2:
+                            break
+                           
+                        if len(conn_nodes)>0: 
+                            next_nodes.append(conn_nodes)
+                        count += 1
+                        #print(next_nodes)
+                    
+                if len(start_or_end_node)>=2:
+                    break
+                else:
+                    # Next iteration prep.
+                    if len(next_nodes)==0:
+                        break
+                    node_inds = np.concatenate(next_nodes)
 
-    def remove_intermediate_nodes(self,graph,file=None,nodeList=None,path=None):
+            # Aggregate identified edges containing inline nodes
+            if count>0:
+                consolodated_edges = np.concatenate(consolodated_edges)
+                start_or_end_node = np.concatenate(start_or_end_node)
+                
+                # Merge the edges into one
+                cur_conns = edgeconn[consolodated_edges]
+                start_node, end_node = start_or_end_node[0],start_or_end_node[1]
+                cur_node = start_node
+                
+                consol_points = []
+                consol_scalars = [[] for _ in range(len(scalars))]
+                visited = np.zeros(len(consolodated_edges),dtype='bool')
+                count1 = 0
+                while True:
+                    cur_edge_ind = consolodated_edges[np.where(((cur_conns[:,0]==cur_node) | (cur_conns[:,1]==cur_node)) & (visited==False))][0]
+                    visited[np.where(consolodated_edges==cur_edge_ind)] = True
+                    
+                    cur_edge = edgeconn[cur_edge_ind]
+                    x0 = np.sum(nedge[:cur_edge_ind])
+                    x1 = x0 + nedge[cur_edge_ind]
+                    cur_pts = points[x0:x1]
+                    
+                    if cur_edge[0]==cur_node:
+                        # Correct way round
+                        consol_points.append(cur_pts)
+                        next_node = cur_edge[1]
+                        for j,sc in enumerate(scalars):
+                            consol_scalars[j].append(sc['data'][x0:x1])
+                    else:
+                        consol_points.append(np.flip(cur_pts,axis=1))
+                        next_node = cur_edge[0]
+                        for j,sc in enumerate(scalars):
+                            consol_scalars[j].append(np.flip(sc['data'][x0:x1]))
+                        
+                    if next_node==end_node:
+                        break
+                    else:
+                        cur_node = next_node
+                    count1 += 1
+                        
+                consol_points = np.concatenate(consol_points)
+                consol_edge.append({'start_node':start_node,'end_node':end_node,'points':consol_points,'scalars':consol_scalars})
+                
+        # Delete inline edges
+        #edgeconn = edgeconn[~edge_del_flag]
+        
+        # Add new edges to graph
+        for edge in tqdm(consol_edge):
+            new_conn = arr([edge['start_node'],edge['end_node']])
+            new_pts = edge['points']
+            # Create indices defining the first, last and every second index in between
+            skip_inds = np.arange(0,len(new_pts),2)
+            if new_pts.shape[0]%2==0:
+                skip_inds = np.concatenate([skip_inds,[new_pts.shape[0]-1]])
+            new_pts = new_pts[skip_inds]
+            
+            if not np.all(new_pts[0]==nodecoords[new_conn[0]]) or not np.all(new_pts[-1]==nodecoords[new_conn[1]]):
+                breakpoint()
+            
+            new_npts = new_pts.shape[0]
+            edgeconn = np.vstack((edgeconn,new_conn))
+            nedge = np.concatenate((nedge,[new_npts]))
+            points = np.vstack((points,new_pts))
+            for j,sc in enumerate(scalars):
+                new_data = np.concatenate(edge['scalars'][j])[skip_inds]
+                sc['data'] = np.concatenate((sc['data'],new_data))
+        
+        graph.set_data(edgeconn,name='EdgeConnectivity')
+        graph.set_data(points,name='EdgePointCoordinates')
+        graph.set_data(nedge,name='NumEdgePoints')
+        graph.set_definition_size('EDGE',edgeconn.shape[0])
+        graph.set_definition_size('POINT',points.shape[0])
+
+        # Delete inline nodes and edges connecting them
+        node_del_flag[node_count==0] = True
+        graph = delete_vertices(graph,~node_del_flag,return_lookup=False)
+        
+        return graph        
+
+    def remove_intermediate_nodesOLD(self,graph,file=None,nodeList=None,path=None):
         
         import pickle
         import os
