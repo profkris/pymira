@@ -505,6 +505,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
             offset += npCur
         return edgePointIndex
         
+    def get_edges_containing_node(self,node_index):
+        nodecoords = self.get_data('VertexCoordinates')
+        edgeconn = self.get_data('EdgeConnectivity')
+        edgepoints = self.get_data('EdgePointCoordinates')
+        nedgepoints = self.get_data('NumEdgePoints')
+        
+        sind = np.where((edgeconn[:,0]==node_index) | (edgeconn[:,1]==node_index))
+        return sind[0]
+        
     def get_scalars(self):
         return [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1 and f['name']!='EdgePointCoordinates']
         
@@ -843,7 +852,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     scalar_edges[j,i] = func(scalar['data'][x0:x1])
                 elif scalar['type']=='int':
                     scalar_edges[j,i] = scalar['data'][x0]
-        return scalar_edges
+        return scalar_edges.squeeze()
  
     def plot_histogram(self,field_name,*args,**kwargs):
         data = self.get_data(field_name)
@@ -1368,10 +1377,11 @@ class Editor(object):
                         for j,sc in enumerate(scalars):
                             consol_scalars[j].append(sc['data'][x0:x1])
                     else:
-                        consol_points.append(np.flip(cur_pts,axis=1))
+                        #breakpoint()
+                        consol_points.append(np.flip(cur_pts,axis=0))
                         next_node = cur_edge[0]
                         for j,sc in enumerate(scalars):
-                            consol_scalars[j].append(np.flip(sc['data'][x0:x1]))
+                            consol_scalars[j].append(np.flip(sc['data'][x0:x1],axis=0))
                         
                     if next_node==end_node:
                         break
