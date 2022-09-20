@@ -229,3 +229,4 @@ graph.sanity_check(deep=True)
 ofile = '/mnt/data2/retinasim/data/cco_circ_domain/graph/test_network.am'
 graph.plot_graph()
 graph.write(ofile)
+print(f'Saved as {ofile}')

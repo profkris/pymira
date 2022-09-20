@@ -15,6 +15,7 @@ import os
 from tqdm import tqdm, trange # progress bar
 import open3d as o3d
 import matplotlib as mpl
+from matplotlib import pyplot as plt
 
 def update_array_index(vals,inds,keep):
     # Updates/offets indices for an array (vals) to exclude values in a flag array (keep)
@@ -116,6 +117,10 @@ def align_vector_to_another(a=np.array([0, 0, 1]), b=np.array([1, 0, 0])):
     return axis_, angle
 
 class SpatialGraph(amiramesh.AmiraMesh):
+
+    """
+    Spatial graph class
+    """
     
     def __init__(self,header_from=None,initialise=False,scalars=[],node_scalars=[],path=None):
         amiramesh.AmiraMesh.__init__(self)
@@ -131,9 +136,26 @@ class SpatialGraph(amiramesh.AmiraMesh):
             self.header = copy.deepcopy(header_from.header)
             self.fieldNames = copy.deepcopy(header_from.fieldNames)
         if initialise:
-            self.initialise(scalars=scalars,node_scalars=node_scalars)
+            self.initialise(scalars=scalars,node_scalars=node_scalars)        
+            
+    def __repr__(self):
+        """
+        Print to cli for debugging
+        """
+        print('GRAPH')
+        print(('Fields: {}'.format(self.fieldNames)))
+        for f in self.fields:
+            print(f)
+            
+    def print(self):
+        self.__str__()
             
     def initialise(self,scalars=None,node_scalars=None):
+    
+        """
+        Set default fields 
+        """
+    
         self.fileType = '3D ASCII 2.0'
         self.filename = ''
         
@@ -179,6 +201,10 @@ class SpatialGraph(amiramesh.AmiraMesh):
         self.fieldNames = [x['name'] for x in self.fields]
         
     def read(self,*args,**kwargs):
+        """
+        Read spatial graph from .am Amira file
+        """
+    
         if not amiramesh.AmiraMesh.read(self,*args,**kwargs):
             return False
         if self.get_parameter_value("ContentType")!="HxSpatialGraph":
@@ -189,6 +215,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
         return True
         
     def set_graph_sizes(self):
+        """
+        Ensure consistency between data size fields and the data itself
+        """
         try:
             self.nnode = self.get_definition('VERTEX')['size'][0]
         except:
@@ -203,6 +232,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
             pass
             
     def get_standard_fields(self):
+        """
+        Convenience method for retrieving fields that are always present
+        """
 
         res = []
         nodecoords = self.get_data('VertexCoordinates')
@@ -213,6 +245,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
         return nodecoords,edgeconn,edgepoints,nedgepoints
         
     def rescale_coordinates(self,xscale,yscale,zscale,ofile=None):
+        """
+        Scale spatial coordinates by a fixed factor
+        """
         nodeCoords = self.get_data('VertexCoordinates')
         edgeCoords = self.get_data('EdgePointCoordinates')
         
@@ -225,6 +260,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
             self.write(ofile)
             
     def rescale_radius(self,rscale,ofile=None):
+        """
+        Scale radii by a fixed factor
+        """
         radf = self.get_radius_field()
         radii = radf['data']
         #radii = self.get_data('Radii')
@@ -236,6 +274,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
             self.write(ofile)
     
     def reset_data(self):
+        """
+        Set all data to None
+        """
         for x in self.fields:
             x['data'] = None
         for x in self.definitions:
@@ -245,6 +286,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
             x['nentries'] = [0]
             
     def add_node(self,node=None,index=0,coordinates=[0.,0.,0.]):
+        """
+        Append a node onto the VertexCoordinates field
+        """
         nodeCoords = self.get_field('VertexCoordinates')['data']
         if node is not None:
             coordinates = node.coords
@@ -260,6 +304,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
         nodeCoords = None # free memory (necessary?)
     
     def add_node_connection(self,startNode,endNode,edge):
+        """
+        Add a new edge into the graph
+        """
         edgeConn = self.get_field('EdgeConnectivity')['data']
         nedgepoints = self.get_field('NumEdgePoints')['data']
         edgeCoords = self.get_field('EdgePointCoordinates')['data']
@@ -295,49 +342,26 @@ class SpatialGraph(amiramesh.AmiraMesh):
         self.set_data(newData,name='EdgePointCoordinates')
 
     def number_of_node_connections(self,file=None):
+    
+       """
+       DEPRECATED: Use get_node_count method
+       Returns the number of edge connections for each node
+       """
 
        #Identify terminal nodes
-       #nodeCoords = self.fields[0]['data']
-       #nnode = nodeCoords.shape[0]
-       #nConn = np.asarray([0]*nnode)
        conn = self.fields[1]['data']
        nConn = np.asarray([len(np.where((conn[:,0]==i) | (conn[:,1]==i))[0]) for i in range(self.nnode)])
-       #nConn = np.asarray([len([j for j,x in enumerate(conn) if i in x]) for i in range(self.nnode)])
        return nConn
+               
+    def clone(self):
+        """
+        Create a deep copy of the graph object
+        """
+        import copy
+        return copy.deepcopy(self)
        
-       #for i in range(nnode):
-       #    #ntmp1 = len(np.where(conn[:,0]==i)[0])
-       #    #ntmp2 = len(np.where(conn[:,1]==i)[0])
-       #    ntmp1 = len([j for j,x in enumerate(conn) if i in x])
-       #    nConn[i] = ntmp1 #+ ntmp2
+# NODE LIST: Converts the flat data structure into a list of node class objects, with connectivity data included
            
-       #return nConn
-       
-    def write_node_list(self,path=None):
-        
-        if path is not None:
-            self.path = path
-            import dill as pickle
-            ofile = os.path.join(path,'nodeList.dill')
-            with open(ofile,'wb') as fo:
-                pickle.dump(self.nodeList,fo)
-            
-    def load_node_list(self,path=None):
-        
-        if path is not None:
-            self.path = path
-            try:
-                nfile = os.path.join(path,'nodeList.dill')
-                if os.path.isfile(nfile):
-                    print(('Loading node list from file: {}'.format(nfile)))
-                    import dill as pickle
-                    with open(nfile,'rb') as fo:
-                        nodeList = pickle.load(fo)
-                    return nodeList
-            except Exception as e:
-                print(e)
-        return None
-       
     def node_list(self,path=None):
         
         # Try and load from pickle file
@@ -362,227 +386,32 @@ class SpatialGraph(amiramesh.AmiraMesh):
             self.write_node_list(path=path)
             
         return self.nodeList
+           
+    def write_node_list(self,path=None):
         
-    def clone(self):
-        import copy
-        return copy.deepcopy(self)
+        if path is not None:
+            self.path = path
+            import dill as pickle
+            ofile = os.path.join(path,'nodeList.dill')
+            with open(ofile,'wb') as fo:
+                pickle.dump(self.nodeList,fo)
+            
+    def load_node_list(self,path=None):
         
-    def node_spatial_extent(self):
-        
-        nodecoords = self.get_data('VertexCoordinates')
-        rx = [np.min(nodecoords[:,0]),np.max(nodecoords[:,0])]
-        ry = [np.min(nodecoords[:,1]),np.max(nodecoords[:,1])]
-        rz = [np.min(nodecoords[:,2]),np.max(nodecoords[:,2])]
-        return [rx,ry,rz]
-        
-    def edge_spatial_extent(self):
-        
-        coords = self.get_data('EdgePointCoordinates')
-        rx = [np.min(coords[:,0]),np.max(coords[:,0])]
-        ry = [np.min(coords[:,1]),np.max(coords[:,1])]
-        rz = [np.min(coords[:,2]),np.max(coords[:,2])]
-        return [rx,ry,rz]
-        
-    def edge_point_index(self):
-        
-        coords = self.get_data('EdgePointCoordinates')
-        nedgepoint = self.get_data('NumEdgePoints')
-        npoint = coords.shape[0]
-        edgeInd = np.zeros(npoint,dtype='int') - 1
-
-        cntr = 0
-        curN = nedgepoint[0]
-        j = 0
-        for i in range(npoint):
-            edgeInd[i] = j
-            cntr += 1
-            if cntr>=curN:
-                cntr = 0
-                j += 1
-                if j<nedgepoint.shape[0]:
-                    curN = nedgepoint[j]
-                elif i!=npoint-1:
-                    import pdb
-                    pdb.set_trace()
-                
-        return edgeInd
-        
-    def constrain_nodes(self,xrange=[None,None],yrange=[None,None],zrange=[None,None],no_copy=True):
-        
-        assert len(xrange)==2
-        assert len(yrange)==2
-        assert len(zrange)==2
-
-        if not no_copy:        
-            graph = self.clone()
-        else:
-            graph = self
-
-        nodeCoords = graph.get_data('VertexCoordinates')
-        nnode = len(nodeCoords)
-        #nedge = len(edgeConn)
-        #nedgepoint = len(edgeCoords)
-        
-        # Spatial extent of nodes
-        r = self.node_spatial_extent()
-
-        # Locate nodes outside of ranges
-        if xrange[1] is None:
-            xrange[1] = r[0][1]
-        if yrange[1] is None:
-            yrange[1] = r[1][1]
-        if zrange[1] is None:
-            zrange[1] = r[2][1]
-        xrange = [np.max([r[0][0],xrange[0]]),np.min([r[0][1],xrange[1]])]
-        yrange = [np.max([r[1][0],yrange[0]]),np.min([r[1][1],yrange[1]])]
-        zrange = [np.max([r[2][0],zrange[0]]),np.min([r[2][1],zrange[1]])]
-        
-        # Mark which nodes to keep / delete
-        keepNode = np.zeros(nnode,dtype='bool') + True
-        for i in range(nnode):
-            x,y,z = nodeCoords[i,:]
-            if x<xrange[0] or x>xrange[1] or y<yrange[0] or y>yrange[1] or z<zrange[0] or z>zrange[1]:
-                keepNode[i] = False
-                
-        nodes_to_delete = np.where(keepNode==False)
-        nodes_to_keep = np.where(keepNode==True)
-        if len(nodes_to_keep[0])==0:
-            print('No nodes left!')
-            return
-        
-        editor = Editor()
-        return editor.delete_nodes(self,nodes_to_delete[0])
-        
-    def crop(self,*args,**kwargs):
-        return self.constrain_nodes(*args,**kwargs)
-        
-    def remove_field(self,fieldName):
-        f = [(i,f) for (i,f) in enumerate(self.fields) if f['name']==fieldName]
-        if f[0][1] is None:
-            print(('Could not locate requested field: {}'.format(fieldName)))
-            return
-        _  = self.fields.pop(f[0][0])
-        
-#    def remove_edges(self,indices):
-#        pass
-#        for ind in indices:
-#            pass
-        
-    def get_node(self,index):
-        return Node(graph=self,index=index)
-        
-    def get_edge(self,index):
-        return Edge(graph=self,index=index)
-        
-    def edge_index_from_point(self,pointIndex):
-        """
-        Given the index of an edge point, returns the edge index that it is part of
-        """
-        nEdgePoint = self.get_data('NumEdgePoints')
-        nEdgePointCum = np.cumsum(nEdgePoint)
-        wh = np.where(nEdgePointCum<=pointIndex)
-        try:
-            if wh[0].shape==(0,):
-                return 0
-            else:
-                return np.max(wh)
-        except Exception as e:
-            print(e)
-            import pdb
-            pdb.set_trace()
-        
-    def edgepoint_edge_indices(self):
-        # Get array relating edgepoints to the index of the edge that they're from
-        points = self.get_data('EdgePointCoordinates')
-        npoints = points.shape[0]
-        nEdgePoint = self.get_data('NumEdgePoints')
-        edgePointIndex = np.zeros(npoints,dtype='int')
-        offset = 0
-        edgeCount = 0
-        for npCur in nEdgePoint:
-            edgePointIndex[offset:offset+npCur] = edgeCount
-            edgeCount += 1
-            offset += npCur
-        return edgePointIndex
-        
-    def get_edges_containing_node(self,node_index):
-        nodecoords = self.get_data('VertexCoordinates')
-        edgeconn = self.get_data('EdgeConnectivity')
-        edgepoints = self.get_data('EdgePointCoordinates')
-        nedgepoints = self.get_data('NumEdgePoints')
-        
-        sind = np.where((edgeconn[:,0]==node_index) | (edgeconn[:,1]==node_index))
-        return sind[0]
-        
-    def get_scalars(self):
-        return [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1 and f['name']!='EdgePointCoordinates']
-        
-    def get_radius_field(self):
-        names = ['radius','radii','diameter','diameters','thickness']
-        for name in names:
-            match = [self.fields[i] for i,field in enumerate(self.fieldNames) if field.lower()==name.lower()]
-            if len(match)>0:
-                return match[0]
+        if path is not None:
+            self.path = path
+            try:
+                nfile = os.path.join(path,'nodeList.dill')
+                if os.path.isfile(nfile):
+                    print(('Loading node list from file: {}'.format(nfile)))
+                    import dill as pickle
+                    with open(nfile,'rb') as fo:
+                        nodeList = pickle.load(fo)
+                    return nodeList
+            except Exception as e:
+                print(e)
         return None
         
-    def edgepoint_indices(self,edgeIndex):
-        nedgepoints = self.get_data('NumEdgePoints')
-        edgeCoords = self.get_data('EdgePointCoordinates')
-        nedge = len(nedgepoints)
-        
-        assert edgeIndex>=0
-        assert edgeIndex<nedge
-        
-        npoints = nedgepoints[edgeIndex]
-        if edgeIndex==0:
-            start_index = 0
-        else:
-            start_index = np.sum(nedgepoints[0:edgeIndex])
-        end_index = start_index + npoints
-        
-        return [start_index,end_index]
-        
-    def _print(self):
-        print('GRAPH')
-        print(('Fields: {}'.format(self.fieldNames)))
-        for f in self.fields:
-            print(f)
-            
-    def sanity_check(self,deep=False):
-        
-        self.set_graph_sizes()
-        
-        for d in self.definitions:
-            defName = d['name']
-            defSize = d['size'][0]
-            fields = [f for f in self.fields if f['definition']==defName]
-            for f in fields:
-                if f['nentries'][0]!=defSize:
-                    print(('{} field size does not match {} definition size!'.format(f['name'],defName)))
-                if f['shape'][0]!=defSize:
-                    print(('{} shape size does not match {} definition size!'.format(f['name'],defName)))
-                if not all(x==y for x,y in zip(f['data'].shape,f['shape'])):
-                    print(('{} data shape does not match shape field!'.format(f['name'])))
-
-        if deep:
-            for nodeInd in range(self.nnode):
-                node = self.get_node(nodeInd)
-                for i,e in enumerate(node.edges):
-                    if not node.edge_indices_rev[i]:
-                        if not all(x==y for x,y in zip(e.start_node_coords,node.coords)):
-                            print(('Node coordinates ({}) do not match start of edge ({}) coordinates: {} {}'.format(node.index,e.index,e.start_node_coords,node.coords)))
-                        if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
-                            print(('Edge start point does not match edge/node start ({}) coordinates'.format(e.index)))
-                        if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
-                            print(('Edge end point does not match edge/node end ({}) coordinates'.format(e.index)))
-                    else:
-                        if not all(x==y for x,y in zip(e.end_node_coords,node.coords)):
-                            print(('Node coordinates ({}) do not match end of edge ({}) coordinates'.format(node.index,e.index)))
-                        if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
-                            print(('Edge end point does not match edge start (REVERSE) ({}) coordinates'.format(e.index)))
-                        if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
-                            print(('Edge start point does not match edge end (REVERSE) ({}) coordinates'.format(e.index)))        
-
     def edges_from_node_list(self,nodeList):
         
         #import pdb
@@ -647,10 +476,266 @@ class SpatialGraph(amiramesh.AmiraMesh):
         for i,s in enumerate(nodeScalars):
             graph.set_data(s,name=nodeScalarNames[i])
         
-        return graph
+        return graph        
+        
+# Spatial methods
+        
+    def node_spatial_extent(self):
+        
+        """
+        Calculates the rectangular boundary box containing all nodes in the graph
+        Returns [[x_min,x_max], [y_min,y_max],[z_min,z_max]]
+        """
+        nodecoords = self.get_data('VertexCoordinates')
+        rx = [np.min(nodecoords[:,0]),np.max(nodecoords[:,0])]
+        ry = [np.min(nodecoords[:,1]),np.max(nodecoords[:,1])]
+        rz = [np.min(nodecoords[:,2]),np.max(nodecoords[:,2])]
+        return [rx,ry,rz]
+        
+    def edge_spatial_extent(self):
+    
+        """
+        Calculates the rectangular boundary box containing all edgepoints in the graph
+        Returns [[x_min,x_max], [y_min,y_max],[z_min,z_max]]
+        """
+        
+        coords = self.get_data('EdgePointCoordinates')
+        rx = [np.min(coords[:,0]),np.max(coords[:,0])]
+        ry = [np.min(coords[:,1]),np.max(coords[:,1])]
+        rz = [np.min(coords[:,2]),np.max(coords[:,2])]
+        return [rx,ry,rz]
+        
+    def edge_point_index(self):
+        
+        coords = self.get_data('EdgePointCoordinates')
+        nedgepoint = self.get_data('NumEdgePoints')
+        npoint = coords.shape[0]
+        edgeInd = np.zeros(npoint,dtype='int') - 1
+
+        cntr = 0
+        curN = nedgepoint[0]
+        j = 0
+        for i in range(npoint):
+            edgeInd[i] = j
+            cntr += 1
+            if cntr>=curN:
+                cntr = 0
+                j += 1
+                if j<nedgepoint.shape[0]:
+                    curN = nedgepoint[j]
+                elif i!=npoint-1:
+                    import pdb
+                    pdb.set_trace()
+                
+        return edgeInd
+        
+    def constrain_nodes(self,xrange=[None,None],yrange=[None,None],zrange=[None,None],no_copy=True):
+    
+        """
+        Delete all nodes outside a rectangular region
+        """
+        
+        assert len(xrange)==2
+        assert len(yrange)==2
+        assert len(zrange)==2
+
+        if not no_copy:        
+            graph = self.clone()
+        else:
+            graph = self
+
+        nodeCoords = graph.get_data('VertexCoordinates')
+        nnode = len(nodeCoords)
+        
+        # Spatial extent of nodes
+        r = self.node_spatial_extent()
+
+        # Locate nodes outside of ranges
+        if xrange[1] is None:
+            xrange[1] = r[0][1]
+        if yrange[1] is None:
+            yrange[1] = r[1][1]
+        if zrange[1] is None:
+            zrange[1] = r[2][1]
+        xrange = [np.max([r[0][0],xrange[0]]),np.min([r[0][1],xrange[1]])]
+        yrange = [np.max([r[1][0],yrange[0]]),np.min([r[1][1],yrange[1]])]
+        zrange = [np.max([r[2][0],zrange[0]]),np.min([r[2][1],zrange[1]])]
+        
+        # Mark which nodes to keep / delete
+        keepNode = np.zeros(nnode,dtype='bool') + True
+        for i in range(nnode):
+            x,y,z = nodeCoords[i,:]
+            if x<xrange[0] or x>xrange[1] or y<yrange[0] or y>yrange[1] or z<zrange[0] or z>zrange[1]:
+                keepNode[i] = False
+                
+        nodes_to_delete = np.where(keepNode==False)
+        nodes_to_keep = np.where(keepNode==True)
+        if len(nodes_to_keep[0])==0:
+            print('No nodes left!')
+            return
+        
+        editor = Editor()
+        return editor.delete_nodes(self,nodes_to_delete[0])
+        
+    def crop(self,*args,**kwargs):
+        """
+        Rectangular cropping of the graph spatial extent
+        Just a wrapper for constrain_nodes
+        """
+        return self.constrain_nodes(*args,**kwargs)
+        
+    def remove_field(self,fieldName):
+        """
+        Remove a data field from the graph
+        """
+        f = [(i,f) for (i,f) in enumerate(self.fields) if f['name']==fieldName]
+        if f[0][1] is None:
+            print(('Could not locate requested field: {}'.format(fieldName)))
+            return
+        _  = self.fields.pop(f[0][0])
+        
+    def get_node(self,index):
+        """
+        Create a node class instance for the node index supplied
+        """
+        return Node(graph=self,index=index)
+        
+    def get_edge(self,index):
+        """
+        Create an edge class instance for the edge index supplied
+        """
+        return Edge(graph=self,index=index)
+        
+    def edge_index_from_point(self,pointIndex):
+        """
+        Given the index of an edge point, returns the edge index that it is part of
+        """
+        nEdgePoint = self.get_data('NumEdgePoints')
+        nEdgePointCum = np.cumsum(nEdgePoint)
+        wh = np.where(nEdgePointCum<=pointIndex)
+        try:
+            if wh[0].shape==(0,):
+                return 0
+            else:
+                return np.max(wh)
+        except Exception as e:
+            print(e)
+            import pdb
+            pdb.set_trace()
+        
+    def edgepoint_edge_indices(self):
+        """
+        Creates an array relating edgepoints to the index of the edge that they're from
+        """
+        points = self.get_data('EdgePointCoordinates')
+        npoints = points.shape[0]
+        nEdgePoint = self.get_data('NumEdgePoints')
+        edgePointIndex = np.zeros(npoints,dtype='int')
+        offset = 0
+        edgeCount = 0
+        for npCur in nEdgePoint:
+            edgePointIndex[offset:offset+npCur] = edgeCount
+            edgeCount += 1
+            offset += npCur
+        return edgePointIndex
+        
+    def get_edges_containing_node(self,node_index):
+        """
+        Return which edges contain a supplied node index
+        """
+        nodecoords = self.get_data('VertexCoordinates')
+        edgeconn = self.get_data('EdgeConnectivity')
+        edgepoints = self.get_data('EdgePointCoordinates')
+        nedgepoints = self.get_data('NumEdgePoints')
+        
+        sind = np.where((edgeconn[:,0]==node_index) | (edgeconn[:,1]==node_index))
+        return sind[0]
+        
+    def get_scalars(self):
+        """
+        Return scalar edge fields
+        """
+        return [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1 and f['name']!='EdgePointCoordinates']
+        
+    def get_node_scalars(self):
+        """
+        Return scalar edge fields
+        """
+        return [f for f in self.fields if f['definition'].lower()=='vertex' and len(f['shape'])==1 and f['name']!='VertexCoordinates']
+        
+    def get_radius_field(self):
+        """
+        Edge radius is given several names ('thickness' by Amira, fo example!)
+        This helper function looks through several common options and returns the first that matches (all converted to lower case)
+        NOTE: Diameter is also in the lookup list!
+        """
+        names = ['radius','radii','diameter','diameters','thickness']
+        for name in names:
+            match = [self.fields[i] for i,field in enumerate(self.fieldNames) if field.lower()==name.lower()]
+            if len(match)>0:
+                return match[0]
+        return None
+        
+    def edgepoint_indices(self,edgeIndex):
+        """
+        For a given edge index, return the start and end indices corresponding to edgepoints and scalars
+        """
+        nedgepoints = self.get_data('NumEdgePoints')
+        edgeCoords = self.get_data('EdgePointCoordinates')
+        nedge = len(nedgepoints)
+        
+        assert edgeIndex>=0
+        assert edgeIndex<nedge
+        
+        npoints = nedgepoints[edgeIndex]
+        start_index = np.sum(nedgepoints[:edgeIndex])
+        end_index = start_index + npoints
+        
+        return [start_index,end_index]
+            
+    def sanity_check(self,deep=False):
+        """
+        Check that all fields have the correct size, plus other checks and tests
+        """ 
+        self.set_graph_sizes()
+        
+        for d in self.definitions:
+            defName = d['name']
+            defSize = d['size'][0]
+            fields = [f for f in self.fields if f['definition']==defName]
+            for f in fields:
+                if f['nentries'][0]!=defSize:
+                    print(('{} field size does not match {} definition size!'.format(f['name'],defName)))
+                if f['shape'][0]!=defSize:
+                    print(('{} shape size does not match {} definition size!'.format(f['name'],defName)))
+                if not all(x==y for x,y in zip(f['data'].shape,f['shape'])):
+                    print(('{} data shape does not match shape field!'.format(f['name'])))
+
+        if deep:
+            for nodeInd in range(self.nnode):
+                node = self.get_node(nodeInd)
+                for i,e in enumerate(node.edges):
+                    if not node.edge_indices_rev[i]:
+                        if not all(x==y for x,y in zip(e.start_node_coords,node.coords)):
+                            print(('Node coordinates ({}) do not match start of edge ({}) coordinates: {} {}'.format(node.index,e.index,e.start_node_coords,node.coords)))
+                        if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
+                            print(('Edge start point does not match edge/node start ({}) coordinates'.format(e.index)))
+                        if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
+                            print(('Edge end point does not match edge/node end ({}) coordinates'.format(e.index)))
+                    else:
+                        if not all(x==y for x,y in zip(e.end_node_coords,node.coords)):
+                            print(('Node coordinates ({}) do not match end of edge ({}) coordinates'.format(node.index,e.index)))
+                        if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
+                            print(('Edge end point does not match edge start (REVERSE) ({}) coordinates'.format(e.index)))
+                        if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
+                            print(('Edge start point does not match edge end (REVERSE) ({}) coordinates'.format(e.index)))        
+
+
         
     def nodes_connected_to(self,nodes,path=None):
-        
+        """
+        DEPRECATED(?)
+        """
         import pymira.front as frontPKG
         
         nodeCoords = graph.get_data('VertexCoordinates')
@@ -697,6 +782,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
         connecting_node[0:ns0] = edgeConn[s0[0],1]
         connecting_node[ns0:ns0+ns1] = edgeConn[s1[0],0]
         return connecting_node, edge_inds
+        
+    def get_node_to_node_lengths(self):
+        """
+        Calculate the distance between connected nodes (not following edges)
+        """
+        vertexCoordinates = self.get_data('VertexCoordinates')
+        edgeConnectivity = self.get_data('EdgeConnectivity') 
+        lengths = np.linalg.norm(vertexCoordinates[edgeConnectivity[:,1]]-vertexCoordinates[edgeConnectivity[:,0]],axis=1)
+        return lengths
         
     def identify_graphs(self,progBar=False,ignore_node=None,ignore_edge=None,verbose=False,add_scalar=True):
         
@@ -866,9 +960,12 @@ class SpatialGraph(amiramesh.AmiraMesh):
         plt.show()
         return fig
         
-    def plot_graph(self, cylinders=None, vessel_type=None, color=None, edge_color=None, plot=True, min_radius=0., \
+    def plot_pv(self,cylinders=None, vessel_type=None, color=None, edge_color=None, plot=True, grab=False, min_radius=0., \
                          domain_radius=None, domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,use_edges=True,\
-                         cmap_range=[None,None],bgcolor=[1,1,1],cmap=None):
+                         cmap_range=[None,None],bgcolor=[1,1,1],cmap=None,win_width=1920,win_height=1080,radius_scale=1.):
+    
+        import pyvista as pv
+    
         nc = self.get_data('VertexCoordinates')
         points = self.get_data('EdgePointCoordinates')
         npoints = self.get_data('NumEdgePoints')
@@ -893,7 +990,92 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 cmap_data = turbo_colormap_data
                 cols = turbo_colormap_data[(np.clip((edge_color-cmap_range[0]) / (cmap_range[1]-cmap_range[0]),0.,1.)*(turbo_colormap_data.shape[0]-1)).astype('int')]
             else:
-                cmapObj = mpl.cm.get_cmap(cmap)
+                import matplotlib.pyplot as plt
+                cmapObj = plt.cm.get_cmap(cmap)
+                col_inds = np.clip((edge_color-cmap_range[0]) / (cmap_range[1]-cmap_range[0]),0.,1.)
+                cols = cmapObj(col_inds)[:,0:3]
+
+        network = pv.MultiBlock()        
+
+        print('Preparing graph...')
+        edge_def = self.get_definition('EDGE')
+        tubes = []
+        for i in trange(edge_def['size'][0]):
+            i0 = np.sum(npoints[:i])
+            i1 = i0+npoints[i]
+            coords = points[i0:i1]
+            rads = radii[i0:i1]
+            if vType is None:
+                vt = np.zeros(coords.shape[0],dtype='int')
+            else:
+                vt = vType[i0:i1]
+            
+            if vessel_type is None or vessel_type==vt[0]:
+                if color is not None:
+                    col = color
+                elif edge_color is not None:
+                    col = cols[i]
+                elif vt[0]==0: # artery
+                    col = [1.,0.,0.]
+                elif vt[1]==1:
+                    col = [0.,0.,1.]
+                else:
+                    col = [0.,1.,0.]
+                    
+                poly = pv.PolyData()
+                poly.points = coords
+                the_cell = np.arange(0, len(coords), dtype=np.int_)
+                the_cell = np.insert(the_cell, 0, len(coords))
+                poly.lines = the_cell
+                poly['radius'] = rads
+                tube = poly.tube(radius=rads[0],n_sides=3) # scalars='stuff', 
+                
+                #tube = pv.Spline(coords, coords.shape[0]).tube(radius=rads[0])
+                #breakpoint()
+                tube['color'] = np.linspace(rads[0],rads[1],tube.n_points)
+                tubes.append(tube)
+                
+        blocks = pv.MultiBlock(tubes)
+        merged = blocks.combine()
+        p = pv.Plotter()
+        p.add_mesh(merged, smooth_shading=True) # scalars='length', 
+        p.show()
+
+        
+    def plot_graph(self, cylinders=None, vessel_type=None, color=None, edge_color=None, plot=True, grab=False, min_radius=0., \
+                         domain_radius=None, domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,use_edges=True,\
+                         cmap_range=[None,None],bgcolor=[1,1,1],cmap=None,win_width=1920,win_height=1080,radius_scale=1.):
+                         
+        """
+        Plot the graph using Open3d
+        """
+                         
+        nc = self.get_data('VertexCoordinates')
+        points = self.get_data('EdgePointCoordinates')
+        npoints = self.get_data('NumEdgePoints')
+        conns = self.get_data('EdgeConnectivity')
+        radField = self.get_radius_field()
+        if radField is None:
+            print('Could not locate vessel radius data!')
+            radii = np.ones(points.shape[0])
+        else:
+            radii = radField['data']
+        vType = self.get_data('VesselType')
+        
+        cols = None
+        if edge_color is not None:
+            cmap_range = arr(cmap_range)
+            if cmap_range[0] is None:
+                cmap_range[0] = edge_color.min()
+            if cmap_range[1] is None:
+                cmap_range[1] = edge_color.max()
+            if cmap is None or cmap=='':
+                from pymira.turbo_colormap import turbo_colormap_data
+                cmap_data = turbo_colormap_data
+                cols = turbo_colormap_data[(np.clip((edge_color-cmap_range[0]) / (cmap_range[1]-cmap_range[0]),0.,1.)*(turbo_colormap_data.shape[0]-1)).astype('int')]
+            else:
+                import matplotlib.pyplot as plt
+                cmapObj = plt.cm.get_cmap(cmap)
                 col_inds = np.clip((edge_color-cmap_range[0]) / (cmap_range[1]-cmap_range[0]),0.,1.)
                 cols = cmapObj(col_inds)[:,0:3]
         
@@ -932,13 +1114,18 @@ class SpatialGraph(amiramesh.AmiraMesh):
                                         vec = x1-x0
                                         height = np.linalg.norm(x1-x0)
                                         
-                                        if height>0. and (domain_radius is None or (np.linalg.norm(x0-domain_centre<=domain_radius) and np.linalg.norm(x1-domain_centre<=domain_radius))):
+                                        if height>0. and np.isfinite(height) and (domain_radius is None or (np.linalg.norm(x0-domain_centre<=domain_radius) and np.linalg.norm(x1-domain_centre<=domain_radius))):
                                             vec = vec / height
                                             if rads[j]<20. and radius_based_resolution:
                                                 resolution = 4
                                             else:
                                                 resolution = cyl_res
-                                            cyl = o3d.geometry.TriangleMesh.create_cylinder(height=height,radius=rads[j], resolution=resolution)
+                                                
+                                            if radius_scale!=1.:
+                                                rad_cur = rads[j] * radius_scale
+                                            else:
+                                                rad_cur = rads[j]
+                                            cyl = o3d.geometry.TriangleMesh.create_cylinder(height=height,radius=rad_cur, resolution=resolution)
                                             translation = x0 + vec*height*0.5
                                             cyl = cyl.translate(translation, relative=False)
                                             axis, angle = align_vector_to_another(np.asarray([0.,0.,1.]), vec)
@@ -960,25 +1147,10 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 #    for i,cyl in enumerate(cylinders):
                 #        cyl.paint_uniform_color(cols[i])
                 pass
-                
-            #else:
-            #    diameters = rads * 2
-            #    nbins = 20
-            #    r_bins = np.linspace(0.,np.max(diameters),nbins)
-            #    for i in range(1,nbins):
-            #        inds = np.where((diameters>r_bins[i-1]) & (diameters<=r_bins[i-1]))
-            #        if len(inds[0])>0:
-            #            line_set = o3d.geometry.LineSet()
-            #            line_set.points = o3d.utility.Vector3dVector(points[inds,:])
-            #            line_set.lines = o3d.utility.Vector2iVector(conns)
-            #    #colors = np.zeros([conns.shape[0],3],dtype='int')
-            #    #line_set.colors = o3d.utility.Vector3dVector(colors)
-            #    #o3d.visualization.draw_geometries([line_set])
-                        
-            #breakpoint()
+
             if plot:
                 vis = o3d.visualization.Visualizer()
-                vis.create_window()
+                vis.create_window(width=win_width,height=win_height)
                 vis.add_geometry(cylinders)
                 opt = vis.get_render_option()
                 opt.background_color = np.asarray(bgcolor)
@@ -986,6 +1158,16 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 vis.destroy_window()
                 #o3d.visualization.draw_geometries([cylinders],mesh_show_wireframe=False)
                 #o3d.visualization.draw_geometries([pcd_a,pcd_v],mesh_show_wireframe=True)
+            if grab:
+                # Grab window
+                vis = o3d.visualization.Visualizer()
+                vis.create_window(width=win_width,height=win_height,visible=True,left=0, top=0)
+                vis.add_geometry(cylinders)
+                opt = vis.get_render_option()
+                opt.background_color = np.asarray(bgcolor)
+                
+                vis.capture_screen_image('/home/simon/Desktop/grab_test.png',do_render=True)
+                vis.destroy_window()
             return cylinders    
         else:
             # Legacy
@@ -1287,6 +1469,9 @@ class Editor(object):
         return graph
         
     def remove_intermediate_nodes(self,graph):
+        """
+        Remove nodes that have exactly two connections, and add them into the edge data
+        """
         
         nodecoords = graph.get_data('VertexCoordinates')
         edgeconn = graph.get_data('EdgeConnectivity')
