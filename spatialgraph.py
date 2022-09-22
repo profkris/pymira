@@ -2164,7 +2164,7 @@ class Edge(object):
             self.npoints = nedgepoints[index]
             #self.coordinates = self.get_coordinates_from_graph(graph,index)
             self.scalars,self.scalarNames = self.get_scalars_from_graph(graph,index)
-            self.complete_edge(nodeCoords[edgeConn[index,1],:],edgeConn[index,1])
+            stat = self.complete_edge(nodeCoords[edgeConn[index,1],:],edgeConn[index,1])
             
         #if self.coordinates is not None:
         #    assert self.npoints==len(self.coordinates[:,0])
@@ -2238,6 +2238,11 @@ class Edge(object):
         self.end_node_coords = np.asarray(end_node_coords)
         self.end_node_index = end_node_index
         self.complete = True
+        
+        if self.coordinates.ndim<2 or self.coordinates.shape[0]<2:
+            print(f'Error, too few points in edge {self.index}')
+            stat = -3
+            return stat
         
         if not all([x==y for x,y in zip(self.end_node_coords,self.coordinates[-1,:])]):
             print('Warning: End node coordinates do not match last edge coordiate!')
