@@ -627,17 +627,23 @@ class SpatialGraph(amiramesh.AmiraMesh):
         """
         Creates an array relating edgepoints to the index of the edge that they're from
         """
-        points = self.get_data('EdgePointCoordinates')
-        npoints = points.shape[0]
+        edgeconn = self.get_data('EdgeConnectivity')
+        nedge = edgeconn.shape[0]
         nEdgePoint = self.get_data('NumEdgePoints')
-        edgePointIndex = np.zeros(npoints,dtype='int')
-        offset = 0
-        edgeCount = 0
-        for npCur in nEdgePoint:
-            edgePointIndex[offset:offset+npCur] = edgeCount
-            edgeCount += 1
-            offset += npCur
-        return edgePointIndex
+        conn_inds = np.linspace(0,nedge-1,nedge,dtype='int')
+        return np.repeat(conn_inds,nEdgePoint)
+        
+        #points = self.get_data('EdgePointCoordinates')
+        #npoints = points.shape[0]
+        #nEdgePoint = self.get_data('NumEdgePoints')
+        #edgePointIndex = np.zeros(npoints,dtype='int')
+        #offset = 0
+        #edgeCount = 0
+        #for npCur in nEdgePoint:
+        #    edgePointIndex[offset:offset+npCur] = edgeCount
+        #    edgeCount += 1
+        #    offset += npCur
+        #return edgePointIndex
         
     def get_edges_containing_node(self,node_index):
         """
@@ -1044,7 +1050,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
     def plot_graph(self, cylinders=None, vessel_type=None, color=None, edge_color=None, plot=True, grab=False, min_radius=0., \
                          domain_radius=None, domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,use_edges=True,\
-                         cmap_range=[None,None],bgcolor=[1,1,1],cmap=None,win_width=1920,win_height=1080,radius_scale=1.):
+                         cmap_range=[None,None],bgcolor=[1,1,1],cmap=None,win_width=1920,win_height=1080,radius_scale=1.,grab_file=None):
                          
         """
         Plot the graph using Open3d
@@ -1161,12 +1167,12 @@ class SpatialGraph(amiramesh.AmiraMesh):
             if grab:
                 # Grab window
                 vis = o3d.visualization.Visualizer()
-                vis.create_window(width=win_width,height=win_height,visible=True,left=0, top=0)
+                vis.create_window(width=win_width,height=win_height,visible=False)
                 vis.add_geometry(cylinders)
                 opt = vis.get_render_option()
                 opt.background_color = np.asarray(bgcolor)
                 
-                vis.capture_screen_image('/home/simon/Desktop/grab_test.png',do_render=True)
+                vis.capture_screen_image(grab_file,do_render=True)
                 vis.destroy_window()
             return cylinders    
         else:
@@ -1935,7 +1941,7 @@ class Editor(object):
         return graph
         
         
-    def interpolate_edges(self,graph,iterp_resolution=5.,filter=None):
+    def interpolate_edges(self,graph,interp_resolution=5.,filter=None,noise_sd=10.):
         
         """
         Linear interpolation of edge points, to a fixed minimum resolution
@@ -1967,12 +1973,16 @@ class Editor(object):
                     pts = points[i0:i1]
                         
                     length = np.linalg.norm(pts[1]-pts[0])
-                    if length>iterp_resolution:
-                        ninterp = np.clip(int(np.ceil(length / iterp_resolution)+1),2,None)
+                    if length>interp_resolution:
+                        ninterp = np.clip(int(np.ceil(length / interp_resolution)+1),2,None)
                     else:
                         ninterp = 2
                         
-                    pts_interp.extend(np.linspace(pts[0],pts[1],ninterp))
+                    pcur = np.linspace(pts[0],pts[1],ninterp)
+                    if noise_sd>0.:
+                        pcur += np.random.normal(0.,noise_sd)
+                        pcur[0],pcur[-1] = pts[0],pts[1]
+                    pts_interp.extend(pcur)
                     
                     for j,sd in enumerate(scalar_data):
                         sdc = sd[i0:i1]

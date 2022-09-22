@@ -256,17 +256,22 @@ if __name__=='__main__':
     conv = 'd2a' #'a2d'
     
     if conv=='a2d': # export
-        fname = '/mnt/data2/retinasim/data/cco_circ_domain/graph/retina_cco_a2v_reanimate_conn.am'
+        #fname = '/mnt/data2/retinasim/data/cco_circ_domain/graph/retina_cco_a2v_reanimate_conn.am'
         #fname = '/mnt/data2/retinasim/data/cco_circ_domain/graph/retina_cco_a2v_datprep.am'
         #fname ='/mnt/data2/retinasim/data/cco_circ_domain/graph/test_network.am'
+        fname ='/mnt/data2/retinasim/cco/graph/retina_cco_a2v.am'
         
-        ofile = '/mnt/data2/retinasim/data/cco_circ_domain/graph/reanimate/retina_cco_datprep.dat'
+        #ofile = '/mnt/data2/retinasim/data/cco_circ_domain/graph/reanimate/retina_cco_datprep.dat'
         #ofile = '/mnt/data2/retinasim/data/cco_circ_domain/graph/reanimate/test_network.dat'
+        ofile = fname.replace('.am','.dat')
         
         amira2dat(fname,ofile=ofile,remove_intermediate=False,nbc=2)
     elif conv=='d2a': # import
         fname ='/mnt/ml/anaconda_envs/vessel_growth_38/lib/python3.8/site-packages/Reanimate/Build_Data/SolvedBloodFlow.txt'
-        ofile = '/mnt/data2/retinasim/data/cco_circ_domain/graph/retina_cco_a2v_reanimate.am'
+        
+        #ofile = '/mnt/data2/retinasim/data/cco_circ_domain/graph/retina_cco_a2v_reanimate.am'
+        ofile = '/mnt/data2/retinasim/cco/graph/retina_cco_a2v_reanimate.am'
         
         dat2amira(fname,ofile=ofile,plot=False)
+
 
