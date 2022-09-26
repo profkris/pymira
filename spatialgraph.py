@@ -1050,7 +1050,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
     def plot_graph(self, cylinders=None, vessel_type=None, color=None, edge_color=None, plot=True, grab=False, min_radius=0., \
                          domain_radius=None, domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,use_edges=True,\
-                         cmap_range=[None,None],bgcolor=[1,1,1],cmap=None,win_width=1920,win_height=1080,radius_scale=1.,grab_file=None):
+                         cmap_range=[None,None],bgcolor=[0,0,0],cmap=None,win_width=1920,win_height=1080,radius_scale=1.,grab_file=None,
+                         edge_filter=None,node_filter=None):
                          
         """
         Plot the graph using Open3d
@@ -1088,62 +1089,68 @@ class SpatialGraph(amiramesh.AmiraMesh):
         if use_edges:
 
             if cylinders is None:
+                edge_def = self.get_definition('EDGE')
+                if edge_filter is None:
+                    edge_filter = np.ones(conns.shape[0],dtype='bool')
+                if node_filter is None:
+                    node_filter = np.ones(nc.shape[0],dtype='bool')
+                    
                 try:
                     print('Preparing graph...')
-                    edge_def = self.get_definition('EDGE')
                     for i in trange(edge_def['size'][0]):
-                        i0 = np.sum(npoints[:i])
-                        i1 = i0+npoints[i]
-                        coords = points[i0:i1]
-                        rads = radii[i0:i1]
-                        if vType is None:
-                            vt = np.zeros(coords.shape[0],dtype='int')
-                        else:
-                            vt = vType[i0:i1]
-                        
-                        if vessel_type is None or vessel_type==vt[0]:
-                            if color is not None:
-                                col = color
-                            elif edge_color is not None:
-                                col = cols[i]
-                            elif vt[0]==0: # artery
-                                col = [1.,0.,0.]
-                            elif vt[1]==1:
-                                col = [0.,0.,1.]
+                        if edge_filter[i] and node_filter[conns[i,0]] and node_filter[conns[i,1]]:
+                            i0 = np.sum(npoints[:i])
+                            i1 = i0+npoints[i]
+                            coords = points[i0:i1]
+                            rads = radii[i0:i1]
+                            if vType is None:
+                                vt = np.zeros(coords.shape[0],dtype='int')
                             else:
-                                col = [0.,1.,0.]
+                                vt = vType[i0:i1]
                             
-                            if np.any(rads>=min_radius) and (domain_radius is None or np.any(np.linalg.norm(coords-domain_centre)<=domain_radius)):
-                                for j in range(1,coords.shape[0]):
-                                    if rads[j]>=min_radius:
-                                        x0,x1 = coords[j-1],coords[j]
-                                        vec = x1-x0
-                                        height = np.linalg.norm(x1-x0)
-                                        
-                                        if height>0. and np.isfinite(height) and (domain_radius is None or (np.linalg.norm(x0-domain_centre<=domain_radius) and np.linalg.norm(x1-domain_centre<=domain_radius))):
-                                            vec = vec / height
-                                            if rads[j]<20. and radius_based_resolution:
-                                                resolution = 4
-                                            else:
-                                                resolution = cyl_res
-                                                
-                                            if radius_scale!=1.:
-                                                rad_cur = rads[j] * radius_scale
-                                            else:
-                                                rad_cur = rads[j]
-                                            cyl = o3d.geometry.TriangleMesh.create_cylinder(height=height,radius=rad_cur, resolution=resolution)
-                                            translation = x0 + vec*height*0.5
-                                            cyl = cyl.translate(translation, relative=False)
-                                            axis, angle = align_vector_to_another(np.asarray([0.,0.,1.]), vec)
-                                            if angle!=0.:
-                                                axis_a = axis * angle
-                                                cyl = cyl.rotate(R=o3d.geometry.get_rotation_matrix_from_axis_angle(axis_a), center=cyl.get_center()) 
+                            if vessel_type is None or vessel_type==vt[0]:
+                                if color is not None:
+                                    col = color
+                                elif edge_color is not None:
+                                    col = cols[i]
+                                elif vt[0]==0: # artery
+                                    col = [1.,0.,0.]
+                                elif vt[1]==1:
+                                    col = [0.,0.,1.]
+                                else:
+                                    col = [0.,1.,0.]
+                                
+                                if np.any(rads>=min_radius) and (domain_radius is None or np.any(np.linalg.norm(coords-domain_centre)<=domain_radius)):
+                                    for j in range(1,coords.shape[0]):
+                                        if rads[j]>=min_radius:
+                                            x0,x1 = coords[j-1],coords[j]
+                                            vec = x1-x0
+                                            height = np.linalg.norm(x1-x0)
                                             
-                                            cyl.paint_uniform_color(col)
-                                            if cylinders is not None:
-                                                cylinders += cyl
-                                            else:
-                                                cylinders = cyl
+                                            if height>0. and np.isfinite(height) and (domain_radius is None or (np.linalg.norm(x0-domain_centre<=domain_radius) and np.linalg.norm(x1-domain_centre<=domain_radius))):
+                                                vec = vec / height
+                                                if rads[j]<20. and radius_based_resolution:
+                                                    resolution = 4
+                                                else:
+                                                    resolution = cyl_res
+                                                    
+                                                if radius_scale!=1.:
+                                                    rad_cur = rads[j] * radius_scale
+                                                else:
+                                                    rad_cur = rads[j]
+                                                cyl = o3d.geometry.TriangleMesh.create_cylinder(height=height,radius=rad_cur, resolution=resolution)
+                                                translation = x0 + vec*height*0.5
+                                                cyl = cyl.translate(translation, relative=False)
+                                                axis, angle = align_vector_to_another(np.asarray([0.,0.,1.]), vec)
+                                                if angle!=0.:
+                                                    axis_a = axis * angle
+                                                    cyl = cyl.rotate(R=o3d.geometry.get_rotation_matrix_from_axis_angle(axis_a), center=cyl.get_center()) 
+                                                
+                                                cyl.paint_uniform_color(col)
+                                                if cylinders is not None:
+                                                    cylinders += cyl
+                                                else:
+                                                    cylinders = cyl
                 except Exception as e:
                     #breakpoint()
                     print(e)
@@ -1945,6 +1952,7 @@ class Editor(object):
         
         """
         Linear interpolation of edge points, to a fixed minimum resolution
+        Filter: bool(m) where m=number of edges in graph. Only edges with filter[i]=True will be interpolated
         """
         
         coords = graph.get_data('VertexCoordinates')
@@ -1972,6 +1980,7 @@ class Editor(object):
                     i1 = i0 + npoints[i]
                     pts = points[i0:i1]
                         
+                    # Find how many additional points to interpolate in (if length>interpolation resolution)
                     length = np.linalg.norm(pts[1]-pts[0])
                     if length>interp_resolution:
                         ninterp = np.clip(int(np.ceil(length / interp_resolution)+1),2,None)
@@ -1989,6 +1998,58 @@ class Editor(object):
                         scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],ninterp))
                     
                     npoints_interp.append(ninterp)
+            elif npoints[i]>2:
+                # Spline interpolate curve at required interval
+                i0 = np.sum(npoints[:i])
+                i1 = i0 + npoints[i]
+                pts = points[i0:i1]
+
+                dists = arr([np.linalg.norm(pts[i]-pts[i-1]) for i,p in enumerate(pts[1:])])
+                length = np.sum(dists)
+                
+                if length>interp_resolution:
+                    ninterp = np.clip(int(np.ceil(length / interp_resolution)+1),2,None)
+                else:
+                    ninterp = 2
+                
+                from scipy import interpolate
+                try:
+                    if npoints[i]<=4:
+                        #k = 1
+                        pcur = np.linspace(pts[0],pts[1],ninterp)
+                        if noise_sd>0.:
+                            pcur += np.random.normal(0.,noise_sd)
+                            pcur[0],pcur[-1] = pts[0],pts[1]
+                    else:
+                        k = 1
+                        tck, u = interpolate.splprep([pts[:,0], pts[:,1], pts[:,2]],k=k,s=2.) #, s=2)
+                        u_fine = np.linspace(0,1,ninterp)
+                        pcur = np.zeros([ninterp,3])
+                        pcur[:,0], pcur[:,1], pcur[:,2] = interpolate.splev(u_fine, tck)
+                except Exception as e:
+                    breakpoint()
+                
+                pcur[0] = pts[0]
+                pcur[-1] = pts[-1]
+                
+                pts_interp.extend(pcur)
+                    
+                for j,sd in enumerate(scalar_data):
+                    sdc = sd[i0:i1]
+                    scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],ninterp))
+                
+                npoints_interp.append(ninterp)
+
+                if False:
+                    import matplotlib.pyplot as plt
+                    from mpl_toolkits.mplot3d import Axes3D
+                    fig2 = plt.figure(2)
+                    ax3d = fig2.add_subplot(111, projection='3d')
+                    ax3d.plot(pcur[:,0], pcur[:,1], pcur[:,2], 'b')
+                    ax3d.plot(pcur[:,0], pcur[:,1], pcur[:,2], 'b*')
+                    ax3d.plot(pts[:,0], pts[:,1], pts[:,2], 'r*')
+                    plt.show()
+                    breakpoint()
             else:
                 breakpoint()
 
