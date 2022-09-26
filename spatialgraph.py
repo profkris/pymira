@@ -1050,7 +1050,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
     def plot_graph(self, cylinders=None, vessel_type=None, color=None, edge_color=None, plot=True, grab=False, min_radius=0., \
                          domain_radius=None, domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,use_edges=True,\
-                         cmap_range=[None,None],bgcolor=[1,1,1],cmap=None,win_width=1920,win_height=1080,radius_scale=1.,grab_file=None):
+                         cmap_range=[None,None],bgcolor=[1,1,1],cmap=None,win_width=1920,win_height=1080,radius_scale=1.,grab_file=None,
+                         node_filter=None):
                          
         """
         Plot the graph using Open3d
@@ -1092,58 +1093,65 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     print('Preparing graph...')
                     edge_def = self.get_definition('EDGE')
                     for i in trange(edge_def['size'][0]):
-                        i0 = np.sum(npoints[:i])
-                        i1 = i0+npoints[i]
-                        coords = points[i0:i1]
-                        rads = radii[i0:i1]
-                        if vType is None:
-                            vt = np.zeros(coords.shape[0],dtype='int')
-                        else:
-                            vt = vType[i0:i1]
-                        
-                        if vessel_type is None or vessel_type==vt[0]:
-                            if color is not None:
-                                col = color
-                            elif edge_color is not None:
-                                col = cols[i]
-                            elif vt[0]==0: # artery
-                                col = [1.,0.,0.]
-                            elif vt[1]==1:
-                                col = [0.,0.,1.]
+                        conn = conns[i]
+                        create_cyl = True
+                        if node_filter is not None:
+                            if conn[0] not in node_filter or conn[1] not in node_filter:
+                                create_cyl = False
+
+                        if create_cyl:
+                            i0 = np.sum(npoints[:i])
+                            i1 = i0+npoints[i]
+                            coords = points[i0:i1]
+                            rads = radii[i0:i1]
+                            if vType is None:
+                                vt = np.zeros(coords.shape[0],dtype='int')
                             else:
-                                col = [0.,1.,0.]
+                                vt = vType[i0:i1]
                             
-                            if np.any(rads>=min_radius) and (domain_radius is None or np.any(np.linalg.norm(coords-domain_centre)<=domain_radius)):
-                                for j in range(1,coords.shape[0]):
-                                    if rads[j]>=min_radius:
-                                        x0,x1 = coords[j-1],coords[j]
-                                        vec = x1-x0
-                                        height = np.linalg.norm(x1-x0)
-                                        
-                                        if height>0. and np.isfinite(height) and (domain_radius is None or (np.linalg.norm(x0-domain_centre<=domain_radius) and np.linalg.norm(x1-domain_centre<=domain_radius))):
-                                            vec = vec / height
-                                            if rads[j]<20. and radius_based_resolution:
-                                                resolution = 4
-                                            else:
-                                                resolution = cyl_res
-                                                
-                                            if radius_scale!=1.:
-                                                rad_cur = rads[j] * radius_scale
-                                            else:
-                                                rad_cur = rads[j]
-                                            cyl = o3d.geometry.TriangleMesh.create_cylinder(height=height,radius=rad_cur, resolution=resolution)
-                                            translation = x0 + vec*height*0.5
-                                            cyl = cyl.translate(translation, relative=False)
-                                            axis, angle = align_vector_to_another(np.asarray([0.,0.,1.]), vec)
-                                            if angle!=0.:
-                                                axis_a = axis * angle
-                                                cyl = cyl.rotate(R=o3d.geometry.get_rotation_matrix_from_axis_angle(axis_a), center=cyl.get_center()) 
+                            if vessel_type is None or vessel_type==vt[0]:
+                                if color is not None:
+                                    col = color
+                                elif edge_color is not None:
+                                    col = cols[i]
+                                elif vt[0]==0: # artery
+                                    col = [1.,0.,0.]
+                                elif vt[1]==1:
+                                    col = [0.,0.,1.]
+                                else:
+                                    col = [0.,1.,0.]
+                                
+                                if np.any(rads>=min_radius) and (domain_radius is None or np.any(np.linalg.norm(coords-domain_centre)<=domain_radius)):
+                                    for j in range(1,coords.shape[0]):
+                                        if rads[j]>=min_radius:
+                                            x0,x1 = coords[j-1],coords[j]
+                                            vec = x1-x0
+                                            height = np.linalg.norm(x1-x0)
                                             
-                                            cyl.paint_uniform_color(col)
-                                            if cylinders is not None:
-                                                cylinders += cyl
-                                            else:
-                                                cylinders = cyl
+                                            if height>0. and np.isfinite(height) and (domain_radius is None or (np.linalg.norm(x0-domain_centre<=domain_radius) and np.linalg.norm(x1-domain_centre<=domain_radius))):
+                                                vec = vec / height
+                                                if rads[j]<20. and radius_based_resolution:
+                                                    resolution = 4
+                                                else:
+                                                    resolution = cyl_res
+                                                    
+                                                if radius_scale!=1.:
+                                                    rad_cur = rads[j] * radius_scale
+                                                else:
+                                                    rad_cur = rads[j]
+                                                cyl = o3d.geometry.TriangleMesh.create_cylinder(height=height,radius=rad_cur, resolution=resolution)
+                                                translation = x0 + vec*height*0.5
+                                                cyl = cyl.translate(translation, relative=False)
+                                                axis, angle = align_vector_to_another(np.asarray([0.,0.,1.]), vec)
+                                                if angle!=0.:
+                                                    axis_a = axis * angle
+                                                    cyl = cyl.rotate(R=o3d.geometry.get_rotation_matrix_from_axis_angle(axis_a), center=cyl.get_center()) 
+                                                
+                                                cyl.paint_uniform_color(col)
+                                                if cylinders is not None:
+                                                    cylinders += cyl
+                                                else:
+                                                    cylinders = cyl
                 except Exception as e:
                     #breakpoint()
                     print(e)
