@@ -1050,13 +1050,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
     def plot_graph(self, cylinders=None, vessel_type=None, color=None, edge_color=None, plot=True, grab=False, min_radius=0., \
                          domain_radius=None, domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,use_edges=True,\
-<<<<<<< HEAD
-                         cmap_range=[None,None],bgcolor=[1,1,1],cmap=None,win_width=1920,win_height=1080,radius_scale=1.,grab_file=None,
-                         node_filter=None):
-=======
                          cmap_range=[None,None],bgcolor=[0,0,0],cmap=None,win_width=1920,win_height=1080,radius_scale=1.,grab_file=None,
                          edge_filter=None,node_filter=None):
->>>>>>> 97bd17f2b99ea6d9ed57a7857919bb9eccdc27eb
                          
         """
         Plot the graph using Open3d
