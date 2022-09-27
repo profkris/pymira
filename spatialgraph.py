@@ -2222,6 +2222,7 @@ class Edge(object):
         self.complete = False
         self.scalars = scalars
         self.scalarNames = scalarNames
+        self.i0,self.i1 = -1,-1
         
         if graph is not None:
             nodeCoords = graph.get_field('VertexCoordinates')['data']
@@ -2236,6 +2237,9 @@ class Edge(object):
             #self.coordinates = self.get_coordinates_from_graph(graph,index)
             self.scalars,self.scalarNames = self.get_scalars_from_graph(graph,index)
             stat = self.complete_edge(nodeCoords[edgeConn[index,1],:],edgeConn[index,1])
+            
+            self.i0 = np.sum(nedgepoints[:index])
+            self.i1 = self.i0 + nedgepoints[index]
             
         #if self.coordinates is not None:
         #    assert self.npoints==len(self.coordinates[:,0])
