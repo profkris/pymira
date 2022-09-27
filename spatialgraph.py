@@ -1051,7 +1051,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
     def plot_graph(self, cylinders=None, vessel_type=None, color=None, edge_color=None, plot=True, grab=False, min_radius=0., \
                          domain_radius=None, domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,use_edges=True,\
                          cmap_range=[None,None],bgcolor=[0,0,0],cmap=None,win_width=1920,win_height=1080,radius_scale=1.,grab_file=None,
-                         edge_filter=None,node_filter=None):
+                         edge_filter=None,node_filter=None,edge_highlight=[],node_highlight=[],highlight_color=[1,1,1]):
                          
         """
         Plot the graph using Open3d
@@ -1119,6 +1119,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
                                     col = [0.,0.,1.]
                                 else:
                                     col = [0.,1.,0.]
+                                if i in edge_highlight:
+                                    col = highlight_color
                                 
                                 if np.any(rads>=min_radius) and (domain_radius is None or np.any(np.linalg.norm(coords-domain_centre)<=domain_radius)):
                                     for j in range(1,coords.shape[0]):
@@ -2384,3 +2386,188 @@ class Edge(object):
             print(('Scalar fields: {}'.format(self.scalarNames)))
         if not self.complete:
             print('Incomplete...')
+            
+# Create a leight-weight object to pass graph variables around with
+# Useful for editing!
+class GVars(object):
+    def __init__(self,graph):
+        self.node_ptr = 0
+        self.edge_ptr = 0
+        self.edgepnt_ptr = 0
+        self.graph = graph
+        
+        self.nodecoords = graph.get_data('VertexCoordinates')
+        self.edgeconn = graph.get_data('EdgeConnectivity').astype('int')
+        self.edgepoints = graph.get_data('EdgePointCoordinates')
+        self.nedgepoints = graph.get_data('NumEdgePoints').astype('int')
+        
+        self.node_ptr = self.nodecoords.shape[0]
+        self.edge_ptr = self.edgeconn.shape[0]
+        self.edgepnt_ptr = self.edgepoints.shape[0]
+        
+        self.nodecoords_allocated = np.ones(self.nodecoords.shape[0],dtype='bool')
+        self.edgeconn_allocated = np.ones(self.edgeconn.shape[0],dtype='bool')
+        self.edgepoints_allocated = np.ones(self.edgepoints.shape[0],dtype='bool')
+        
+        scalars = graph.get_scalars()
+        scalar_values = [x['data'].copy() for x in scalars]
+        self.scalar_values = scalar_values
+        self.scalars = scalars
+        radname = graph.get_radius_field()['name']
+        self.radname = radname
+        
+    def add_node(self,node):
+        # Assign existing node slot to supplied node coordinate
+        if self.node_ptr>=self.nodecoords.shape[0]:
+            self.preallocate_nodes(500,set_pointer_to_start=False)
+        self.nodecoords[self.node_ptr] = node
+        self.nodecoords_allocated[self.node_ptr] = True
+        self.node_ptr += 1
+        if self.node_ptr>=self.nodecoords.shape[0]:
+            self.preallocate_nodes(500,set_pointer_to_start=False)
+    def append_nodes(self,nodes,update_pointer=False):
+        # Create new slots for an array containing multiple node coordinates
+        self.nodecoords = np.vstack([self.nodecoords,nodes])
+        self.nodecoords_allocated = np.concatenate([self.nodecoords_allocated,np.ones(nodes.shape[0],dtype='bool')])
+        if update_pointer:
+            self.node_ptr = self.nodecoords.shape[0]
+    def add_edgeconn(self,conn):
+        if self.edge_ptr>=self.edgeconn.shape[0]:
+            self.preallocate_edges(500,set_pointer_to_start=False)
+        self.edgeconn[self.edge_ptr] = conn
+        self.edgeconn_allocated[self.edge_ptr] = True
+        self.nedgepoints[self.edge_ptr] = 2
+        self.edge_ptr += 1
+        if self.edge_ptr>=self.edgeconn.shape[0]:
+            self.preallocate_edges(500,set_pointer_to_start=False)
+    def add_edgepoints(self,pnt,new_scalar_vals,edgeInd=-1):
+        if self.edgepoints.shape[0]-self.edgepnt_ptr<=pnt.shape[0]:
+            self.preallocate_edgepoints(500,set_pointer_to_start=False)
+        self.edgepoints[self.edgepnt_ptr:self.edgepnt_ptr+pnt.shape[0]] = pnt
+        self.edgepoints_allocated[self.edgepnt_ptr:self.edgepnt_ptr+pnt.shape[0]] = True
+        if edgeInd>=0:
+            self.nedgepoints[edgeInd] = pnt.shape[0]
+        for i,sc in enumerate(self.scalar_values):
+            #if self.scalars[i]['name']!=self.radname:
+            # All float type for now...
+            self.scalar_values[i][self.edgepnt_ptr:self.edgepnt_ptr+pnt.shape[0]] = np.zeros(pnt.shape[0],dtype='float')+new_scalar_vals[i]
+        self.edgepnt_ptr += pnt.shape[0]      
+        if self.edgepnt_ptr>=self.edgepoints.shape[0]:
+            self.preallocate_edgepoints(500,set_pointer_to_start=False)
+    def add_edge(self,start_node_index,end_node_index,new_scalar_vals):
+        new_conn = [start_node_index,end_node_index]
+        nodes = self.nodecoords[new_conn]
+        length = np.linalg.norm(nodes[1]-nodes[0])
+        #print(length)
+        if length==0:
+            breakpoint()
+        self.add_edgeconn(new_conn)
+        self.add_edgepoints(self.nodecoords[new_conn],new_scalar_vals,edgeInd=self.edge_ptr-1)
+    def remove_edges(self,edge_inds_to_remove):
+    
+        edgeconn = self.edgeconn[self.edgeconn_allocated]
+        nedgepoints = self.nedgepoints[self.edgeconn_allocated]
+        edgepoints = self.edgepoints[self.edgepoints_allocated]
+                
+        nedge = edgeconn.shape[0]
+        keep = np.ones(edgeconn.shape[0],dtype='bool')
+        keep[edge_inds_to_remove] = False
+        edgeconn = edgeconn[keep]
+                
+        # Which edge is each edgepoint from
+        edgeInds = np.repeat(np.linspace(0,nedge-1,nedge,dtype='int'),nedgepoints)
+        
+        # Flag edgepoints from removed edges
+        flag = np.in1d(edgeInds,edge_inds_to_remove)
+        # Filter edgepoints and scalars
+        edgepoints = edgepoints[~flag]
+        for i,sc in enumerate(self.scalar_values):
+            self.scalar_values[i] = self.scalar_values[i][self.edgepoints_allocated][~flag]
+            
+        # Filter n edgepoints
+        nedgepoints = nedgepoints[keep]
+        
+        # Set fields
+        self.edgeconn = edgeconn
+        self.edgepoints = edgepoints
+        self.nedgepoints = nedgepoints
+
+        # Set pointers
+        self.edge_ptr = self.edgeconn.shape[0]
+        self.edgepnt_ptr = self.edgepoints.shape[0]
+
+        # Set pre-allocation
+        self.edgeconn_allocated = self.edgeconn_allocated[self.edgeconn_allocated][keep]
+        self.edgepoints_allocated = self.edgepoints_allocated[self.edgepoints_allocated][~flag]
+        
+    def plot(self,**kwargs):
+        self.set_in_graph()
+        self.graph.plot_graph(**kwargs)
+    def preallocate_nodes(self,n,set_pointer_to_start=False):
+        if set_pointer_to_start:
+            self.node_ptr = self.nodecoords.shape[0]
+        self.nodecoords = np.vstack([self.nodecoords,np.zeros([n,3])])
+        self.nodecoords_allocated = np.concatenate([self.nodecoords_allocated,np.zeros(n,dtype='bool')])
+    def preallocate_edges(self,n,set_pointer_to_start=False):
+        if set_pointer_to_start:
+            self.edge_ptr = self.edgeconn.shape[0]
+        #print(f'Edge preallocation: added {n}')
+        self.edgeconn = np.vstack([self.edgeconn,np.zeros([n,2],dtype='int')-1])
+        self.nedgepoints = np.concatenate([self.nedgepoints,np.zeros(n,dtype='int')])
+        self.edgeconn_allocated = np.concatenate([self.edgeconn_allocated,np.zeros(n,dtype='bool')])
+    def preallocate_edgepoints(self,n,set_pointer_to_start=False):
+        if set_pointer_to_start:
+            self.edgepnt_ptr = self.edgepoints.shape[0]
+        self.edgepoints = np.vstack([self.edgepoints,np.zeros([n,3])])
+        self.edgepoints_allocated = np.concatenate([self.edgepoints_allocated,np.zeros(n,dtype='bool')])
+        for i,sc in enumerate(self.scalar_values):
+            self.scalar_values[i] = np.concatenate([self.scalar_values[i],np.zeros(n,dtype=sc.dtype)-1])
+    def remove_preallocation(self):
+        # Remove all unoccupied slots from each data field
+        self.nodecoords = self.nodecoords[self.nodecoords_allocated]
+        self.edgeconn = self.edgeconn[self.edgeconn_allocated]
+        self.nedgepoints = self.nedgepoints[self.edgeconn_allocated]
+        self.edgepoints = self.edgepoints[self.edgepoints_allocated]
+        for i,sc in enumerate(self.scalar_values):
+            self.scalar_values[i] = self.scalar_values[i][self.edgepoints_allocated]
+            
+        self.nodecoords_allocated = self.nodecoords_allocated[self.nodecoords_allocated]
+        self.edgeconn_allocated = self.edgeconn_allocated[self.edgeconn_allocated]
+        self.edgepoints_allocated = self.edgepoints_allocated[self.edgepoints_allocated]
+        
+        self.node_ptr = self.nodecoords.shape[0]-1
+        self.edge_ptr = self.edgeconn.shape[0]-1
+        self.edgepnt_ptr = self.edgepoints.shape[0]-1
+        
+    def set_in_graph(self):
+        fieldNames = self.graph.fieldNames #['VertexCoordinates','EdgeConnectivity','EdgePointCoordinates','NumEdgePoints','Radii','VesselType','midLinePos']
+        fields = self.graph.fields
+        scalars = self.graph.get_scalars()
+        scalar_names = [x['name'] for x in scalars]
+        
+        nodecoords = self.nodecoords[self.nodecoords_allocated]
+        edgeconn = self.edgeconn[self.edgeconn_allocated]
+        nedgepoints = self.nedgepoints[self.edgeconn_allocated]
+        edgepoints = self.edgepoints[self.edgepoints_allocated]
+        scalar_values = [[] for i in range(len(self.scalar_values))]
+        for i,sc in enumerate(self.scalar_values):
+            scalar_values[i] = self.scalar_values[i][self.edgepoints_allocated]
+        
+        for i,field in enumerate(fields):
+            if field['name']=='VertexCoordinates':
+                self.graph.set_data(nodecoords,name=fieldNames[i])
+            elif field['name']=='EdgeConnectivity':
+                self.graph.set_data(edgeconn.astype('int'),name=fieldNames[i])
+            elif field['name']=='EdgePointCoordinates':
+                self.graph.set_data(edgepoints,name=fieldNames[i])
+            elif field['name']=='NumEdgePoints':
+                self.graph.set_data(nedgepoints.astype('int'),name=fieldNames[i])
+            elif field['name'] in scalar_names:
+                data = scalar_values[scalar_names.index(field['name'])]
+                self.graph.set_data(data,name=fieldNames[i])
+
+        self.graph.set_definition_size('VERTEX',nodecoords.shape[0])
+        self.graph.set_definition_size('EDGE',edgeconn.shape[0])
+        self.graph.set_definition_size('POINT',edgepoints.shape[0])  
+        self.graph.set_graph_sizes()
+        return self.graph
