@@ -1051,7 +1051,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
     def plot_graph(self, cylinders=None, vessel_type=None, color=None, edge_color=None, plot=True, grab=False, min_radius=0., \
                          domain_radius=None, domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,use_edges=True,\
                          cmap_range=[None,None],bgcolor=[0,0,0],cmap=None,win_width=1920,win_height=1080,radius_scale=1.,grab_file=None,
-                         edge_filter=None,node_filter=None,edge_highlight=[],node_highlight=[],highlight_color=[1,1,1]):
+                         edge_filter=None,node_filter=None,edge_highlight=[],node_highlight=[],highlight_color=[1,1,1],scalar_color_name=None):
                          
         """
         Plot the graph using Open3d
@@ -1068,6 +1068,26 @@ class SpatialGraph(amiramesh.AmiraMesh):
         else:
             radii = radField['data']
         vType = self.get_data('VesselType')
+        
+        if scalar_color_name is not None and edge_color is None:
+            if scalar_color_name=='flow':
+                edge_color = graph.point_scalars_to_edge_scalars(name='Flow')
+                if edge_color is None:
+                    print(f"Error: Edge color not located: {scalar_color_name}")
+                edge_color = np.abs(edge_col)
+                edge_color[edge_color==0.] = 1e-6
+                edge_color = np.log(edge_col)
+            elif scalar_color_name=='pressure':
+                edge_color = graph.point_scalars_to_edge_scalars(name='Pressure')
+                if edge_color is None:
+                    print(f"Error: Edge color not located: {scalar_color_name}")
+            elif scalar_color_name=='radius':
+                rad = graph.get_radius_field()
+                edge_color = graph.point_scalars_to_edge_scalars(name=rad['name'])
+                if edge_color is None:
+                    print(f"Error: Edge color not located: {scalar_color_name}")
+            else:
+                pass
         
         cols = None
         if edge_color is not None:
@@ -1118,7 +1138,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
                                 elif vt[1]==1:
                                     col = [0.,0.,1.]
                                 else:
-                                    col = [0.,1.,0.]
+                                    #col = [0.,1.,0.]
+                                    col = [0.5,0.5,0.5]
                                 if i in edge_highlight:
                                     col = highlight_color
                                 
@@ -2390,11 +2411,14 @@ class Edge(object):
 # Create a leight-weight object to pass graph variables around with
 # Useful for editing!
 class GVars(object):
-    def __init__(self,graph):
+    def __init__(self,graph,n_all=500):
         self.node_ptr = 0
         self.edge_ptr = 0
         self.edgepnt_ptr = 0
         self.graph = graph
+        
+        # Set batche size to preallocate
+        self.n_all = n_all 
         
         self.nodecoords = graph.get_data('VertexCoordinates')
         self.edgeconn = graph.get_data('EdgeConnectivity').astype('int')
@@ -2419,12 +2443,12 @@ class GVars(object):
     def add_node(self,node):
         # Assign existing node slot to supplied node coordinate
         if self.node_ptr>=self.nodecoords.shape[0]:
-            self.preallocate_nodes(500,set_pointer_to_start=False)
+            self.preallocate_nodes(self.n_all,set_pointer_to_start=False)
         self.nodecoords[self.node_ptr] = node
         self.nodecoords_allocated[self.node_ptr] = True
         self.node_ptr += 1
         if self.node_ptr>=self.nodecoords.shape[0]:
-            self.preallocate_nodes(500,set_pointer_to_start=False)
+            self.preallocate_nodes(self.n_all,set_pointer_to_start=False)
     def append_nodes(self,nodes,update_pointer=False):
         # Create new slots for an array containing multiple node coordinates
         self.nodecoords = np.vstack([self.nodecoords,nodes])
@@ -2433,16 +2457,16 @@ class GVars(object):
             self.node_ptr = self.nodecoords.shape[0]
     def add_edgeconn(self,conn):
         if self.edge_ptr>=self.edgeconn.shape[0]:
-            self.preallocate_edges(500,set_pointer_to_start=False)
+            self.preallocate_edges(self.n_all,set_pointer_to_start=False)
         self.edgeconn[self.edge_ptr] = conn
         self.edgeconn_allocated[self.edge_ptr] = True
         self.nedgepoints[self.edge_ptr] = 2
         self.edge_ptr += 1
         if self.edge_ptr>=self.edgeconn.shape[0]:
-            self.preallocate_edges(500,set_pointer_to_start=False)
+            self.preallocate_edges(self.n_all,set_pointer_to_start=False)
     def add_edgepoints(self,pnt,new_scalar_vals,edgeInd=-1):
         if self.edgepoints.shape[0]-self.edgepnt_ptr<=pnt.shape[0]:
-            self.preallocate_edgepoints(500,set_pointer_to_start=False)
+            self.preallocate_edgepoints(self.n_all,set_pointer_to_start=False)
         self.edgepoints[self.edgepnt_ptr:self.edgepnt_ptr+pnt.shape[0]] = pnt
         self.edgepoints_allocated[self.edgepnt_ptr:self.edgepnt_ptr+pnt.shape[0]] = True
         if edgeInd>=0:
@@ -2453,14 +2477,14 @@ class GVars(object):
             self.scalar_values[i][self.edgepnt_ptr:self.edgepnt_ptr+pnt.shape[0]] = np.zeros(pnt.shape[0],dtype='float')+new_scalar_vals[i]
         self.edgepnt_ptr += pnt.shape[0]      
         if self.edgepnt_ptr>=self.edgepoints.shape[0]:
-            self.preallocate_edgepoints(500,set_pointer_to_start=False)
+            self.preallocate_edgepoints(self.n_all,set_pointer_to_start=False)
     def add_edge(self,start_node_index,end_node_index,new_scalar_vals):
         new_conn = [start_node_index,end_node_index]
         nodes = self.nodecoords[new_conn]
         length = np.linalg.norm(nodes[1]-nodes[0])
         #print(length)
-        if length==0:
-            breakpoint()
+        #if length>10000.:
+        #    breakpoint()
         self.add_edgeconn(new_conn)
         self.add_edgepoints(self.nodecoords[new_conn],new_scalar_vals,edgeInd=self.edge_ptr-1)
     def remove_edges(self,edge_inds_to_remove):

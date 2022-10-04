@@ -215,10 +215,13 @@ def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2):
             consthd = 0.45
             bctype = 0 # 0=pressure, 1=flow, 3=estimated
             
+            #https://www.ahajournals.org/doi/pdf/10.1161/01.CIR.18.5.864
+            #https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1755-3768.2019.8165
+            
             if nbc==4:
-                pressure = [80.,80.,10.,10.]
+                pressure = [80.,80.,30.,30.]
             elif nbc==2:
-                pressure = [80,60.]
+                pressure = [80,30.]
 
             for inod,pr in zip(endnodes[0],pressure):
                 handle.write(f"{inod+1} {bctype} {pr} {consthd}\n")
@@ -259,7 +262,8 @@ if __name__=='__main__':
         #fname = '/mnt/data2/retinasim/data/cco_circ_domain/graph/retina_cco_a2v_reanimate_conn.am'
         #fname = '/mnt/data2/retinasim/data/cco_circ_domain/graph/retina_cco_a2v_datprep.am'
         #fname ='/mnt/data2/retinasim/data/cco_circ_domain/graph/test_network.am'
-        fname ='/mnt/data2/retinasim/cco/graph/retina_cco_a2v.am'
+        #fname ='/mnt/data2/retinasim/cco/graph/retina_cco_a2v.am'
+        fname = '/mnt/data2/retinasim/cco/graph/retina_cco_voronoicap_1av.am'
         
         #ofile = '/mnt/data2/retinasim/data/cco_circ_domain/graph/reanimate/retina_cco_datprep.dat'
         #ofile = '/mnt/data2/retinasim/data/cco_circ_domain/graph/reanimate/test_network.dat'
@@ -270,7 +274,7 @@ if __name__=='__main__':
         fname ='/mnt/ml/anaconda_envs/vessel_growth_38/lib/python3.8/site-packages/Reanimate/Build_Data/SolvedBloodFlow.txt'
         
         #ofile = '/mnt/data2/retinasim/data/cco_circ_domain/graph/retina_cco_a2v_reanimate.am'
-        ofile = '/mnt/data2/retinasim/cco/graph/retina_cco_a2v_reanimate.am'
+        ofile = '/mnt/data2/retinasim/cco/graph/retina_cco_voronoicap_1av_reanimate.am'
         
         dat2amira(fname,ofile=ofile,plot=False)
 
