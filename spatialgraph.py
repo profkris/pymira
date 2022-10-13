@@ -127,6 +127,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         self.nodeList = None
         self.edgeList = None
+        self.edgeListPtr = 0
         self.path = path
         
         if header_from is not None:
@@ -375,12 +376,13 @@ class SpatialGraph(amiramesh.AmiraMesh):
         nnode = nodeCoords.shape[0]
         self.nodeList = []
         
-        pbar = tqdm(total=nnode) # progress bar
-        self.nodeList = [0] * nnode
-        for nodeIndex in range(nnode):
-            pbar.update(1)
+        self.nodeList = [None] * nnode
+        import time
+        for nodeIndex in trange(nnode):
+            #t0 = time.time()
             self.nodeList[nodeIndex] = Node(graph=self,index=nodeIndex)
-        pbar.close()
+            #if nodeIndex%1000==0:
+            #    print(time.time()-t0)
             
         if path is not None:
             self.write_node_list(path=path)
@@ -798,6 +800,20 @@ class SpatialGraph(amiramesh.AmiraMesh):
         lengths = np.linalg.norm(vertexCoordinates[edgeConnectivity[:,1]]-vertexCoordinates[edgeConnectivity[:,0]],axis=1)
         return lengths
         
+    def get_edge_lengths(self):
+    
+        edgeconn = self.get_data('EdgeConnectivity') 
+        nedgepoints = self.get_data('NumEdgePoints')
+        edgeCoords = self.get_data('EdgePointCoordinates')
+        
+        lengths = np.zeros(self.nedge)
+        for i in trange(self.nedge):
+            x0 = np.sum(nedgepoints[:i])
+            npts = nedgepoints[i]
+            pts = edgeCoords[x0:x0+npts]
+            lengths[i] = np.linalg.norm(pts[:-1]-pts[1:],axis=1)
+        return lengths
+        
     def identify_graphs(self,progBar=False,ignore_node=None,ignore_edge=None,verbose=False,add_scalar=True):
         
         nodeCoords = self.get_data('VertexCoordinates')
@@ -897,7 +913,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
             
         return graphIndex, graph_size
         
-    def edge_scalar_to_node_scalar(self,name):
+    def edge_scalar_to_node_scalar(self,name,maxval=False):
 
         scalar_points = self.get_data(name)
         if scalar_points is None:
@@ -909,21 +925,30 @@ class SpatialGraph(amiramesh.AmiraMesh):
         points = self.get_data('EdgePointCoordinates')
         
         scalar_nodes = np.zeros(verts.shape[0],dtype=scalar_points.dtype)
+        eei = self.edgepoint_edge_indices()
     
-        for nodeIndex in range(self.nnode):
+        for nodeIndex in trange(self.nnode):
             edgeIds = np.where((conns[:,0]==nodeIndex) | (conns[:,1]==nodeIndex))
             if len(edgeIds[0])>0:
-                edgeId = edgeIds[0][0]
+                vals = []
+                for edgeId in edgeIds[0]:
+                    npts = int(npoints[edgeId])
+                    x0 = int(np.sum(npoints[0:edgeId]))
+                    vtype = scalar_points[x0:x0+npts]
+                    pts = points[x0:x0+npts,:]
+                    node = verts[nodeIndex]
                     
-                npts = int(npoints[edgeId])
-                x0 = int(np.sum(npoints[0:edgeId]))
-                vtype = scalar_points[x0:x0+npts]
-                pts = points[x0:x0+npts,:]
-                node = verts[nodeIndex]
-                if np.all(pts[0,:]==node):
-                    scalar_nodes[nodeIndex] = scalar_points[0]
-                else:
-                    scalar_nodes[nodeIndex] = scalar_points[-1]
+                    if not maxval:
+                        if np.all(pts[0,:]==node):
+                            scalar_nodes[nodeIndex] = scalar_points[x0]
+                        else:
+                            scalar_nodes[nodeIndex] = scalar_points[x0+npts]
+                        break
+                    else:
+                        vals.append(scalar_points[x0:x0+npts])
+                if maxval:
+                    scalar_nodes[nodeIndex] = np.max(vals)
+                        
         return scalar_nodes
         
     def point_scalars_to_edge_scalars(self,func=np.mean,name=None):
@@ -1991,7 +2016,7 @@ class Editor(object):
             filter = np.ones(conns.shape[0],dtype='bool')
         
         pts_interp,npoints_interp = [],[]
-        for i,conn in enumerate(conns):
+        for i,conn in enumerate(tqdm(conns)):
             if npoints[i]==2:
                 if not filter[i]:
                     pts_interp.extend(points[i0:i1])
@@ -2106,8 +2131,10 @@ class Node(object):
         if graph is not None:
             # Initialise edge list in graph object
             if graph.edgeList is None:
-                graph.edgeList = []
-            edgeInds = [e.index for e in graph.edgeList]
+                graph.edgeList = arr([None]*graph.nedge)
+            #breakpoint()
+            edgeInds = np.where(graph.edgeList!=None)[0] # [e for e in graph.edgeList if e is not None]
+            #edgeInds = [e.index for e in edgeList]
                 
             vertCoords = graph.get_field('VertexCoordinates')['data']
             if vertCoords is None:
@@ -2139,18 +2166,12 @@ class Node(object):
                 for e in s0[0]:
                     self.edge_indices.append(e)
                     if e not in edgeInds:  
-                        #import pdb
-                        #pdb.set_trace()
                         newEdge = Edge(graph=graph,index=e)
-                        edgeInds.append(e)
-                        graph.edgeList.append(newEdge)
+                        edgeInds = np.append(edgeInds,e)
+                        if graph.edgeList[e] is None:
+                            graph.edgeList[e] = newEdge
                     else:
-                        newEdge = [edge for edge in graph.edgeList if edge.index==e]
-                        if len(newEdge)==1:
-                            newEdge = newEdge[0]
-                        else:
-                            import pdb
-                            pdb.set_trace()
+                        newEdge = graph.edgeList[e] #[edge for edge in graph.edgeList if edge is not None and edge.index==e]
                     self.edges.append(newEdge)
                     self.edge_indices_rev.append(False)
                     self.connecting_node.append(edgeConn[e,1])
@@ -2160,15 +2181,11 @@ class Node(object):
                     self.edge_indices_rev.append(True)
                     if e not in edgeInds:                  
                         newEdge = Edge(graph=graph,index=e)
-                        edgeInds.append(e)
-                        graph.edgeList.append(newEdge)
+                        edgeInds = np.append(edgeInds,e)
+                        if graph.edgeList[e] is None:
+                            graph.edgeList[e] = newEdge
                     else:
-                        newEdge = [edge for edge in graph.edgeList if edge.index==e]
-                        if len(newEdge)==1:
-                            newEdge = newEdge[0]
-                        else:
-                            import pdb
-                            pdb.set_trace()
+                        newEdge = graph.edgeList[e] # [edge for edge in graph.edgeList if edge is not None and edge.index==e]
                     self.edges.append(newEdge)
                     self.connecting_node.append(edgeConn[e,0])
                 
