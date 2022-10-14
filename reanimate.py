@@ -9,7 +9,7 @@ for REANIMATE
 
 def import_dat(filename,plot=True):
 
-    graph = sp.SpatialGraph(initialise=True,scalars=['Radii','VesselType','Flow','Pressure'])
+    graph = sp.SpatialGraph(initialise=True,scalars=['Radii','VesselType','Flow','Pressure'],node_scalars=['NodePressure'])
 
     with open(filename,'r') as f:
         
@@ -101,6 +101,7 @@ def import_dat(filename,plot=True):
     graph.set_data(point_vessel_type,name='VesselType')
     graph.set_data(point_flow,name='Flow')
     graph.set_data(point_pressure,name='Pressure')
+    graph.set_data(node_pressure,name='NodePressure')
     
     if plot:
         edge_col = graph.point_scalars_to_edge_scalars(name='Flow')

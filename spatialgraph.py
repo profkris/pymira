@@ -205,7 +205,6 @@ class SpatialGraph(amiramesh.AmiraMesh):
         """
         Read spatial graph from .am Amira file
         """
-    
         if not amiramesh.AmiraMesh.read(self,*args,**kwargs):
             return False
         if self.get_parameter_value("ContentType")!="HxSpatialGraph":

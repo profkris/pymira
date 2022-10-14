@@ -110,6 +110,7 @@ class AmiraMesh(object):
                 curData = np.reshape(curData,curField['shape'])
                 curField['data'] = curData
             except Exception as e:
+                breakpoint()
                 if not quiet:
                     print(('Error, {}.Line: {} '.format(e,curData)))
                 #import pdb
@@ -162,6 +163,8 @@ class AmiraMesh(object):
                          definition='',type='',
                          encoding='',encoding_length=0,
                          nelements=0,nentries=0,data=None,shape=None):
+        if marker=='':                    
+            marker = self.generate_next_marker()
         return {'name':name,'marker':marker,
                 'definition':definition,'type':type,
                 'encoding':encoding,'encoding_length':encoding_length,
@@ -240,6 +243,7 @@ class AmiraMesh(object):
                         magicMtch = ptn.match(curLine.lower()) is not None
                         if not magicMtch:
                             raise Exception('Error: Not a supported Amira file!')
+                            #pass
                             #return False
                         spl = curLine.split('AmiraMesh')
                         self.fileType = ''.join(spl[1:]).strip()
@@ -314,6 +318,7 @@ class AmiraMesh(object):
                                     fieldDataType = m[0].strip()
                                     if fieldDataType not in self.dataTypes:
                                          raise Exception('Data type not recognised in field line: ',curLine)
+                                         #return False
                                     nel = int(m[1])
                                     fieldName = m[2].strip()
                                 else:
@@ -325,6 +330,7 @@ class AmiraMesh(object):
                                     nel = 1
                             except Exception as e:
                                 raise Exception(e)
+                                #breakpoint()
                                 #return None
 
                             if len(spl)==3:
@@ -349,6 +355,7 @@ class AmiraMesh(object):
                                     assert len(fieldTypeInfo)==2
                             else:
                                 raise Exception('Data type not recognised in field line: ',curLine)
+                                #return None
                             
 #                            def_ = [x for x in self.definitions if x['name']==fieldDef]
 #                            assert len(def_)==1
@@ -359,7 +366,6 @@ class AmiraMesh(object):
 #                            else:
 #                                assert def_['type']==fieldDataType
 #                                assert def_['nelements']==nel
-                                
                             self.fields.append(self._field_generator(name=fieldName,marker=marker,
                                                  definition=fieldDef,type=fieldDataType,
                                                  encoding=fieldTypeInfo[0],encoding_length=fieldTypeInfo[1],
