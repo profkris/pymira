@@ -267,7 +267,8 @@ if __name__=='__main__':
         amira2dat(fname,ofile=ofile,remove_intermediate=False,nbc=2)
     elif conv=='d2a': # import
         fname ='/mnt/ml/anaconda_envs/vessel_growth_38/lib/python3.8/site-packages/Reanimate/Build_Data/SolvedBloodFlow.txt'
-        ofile = '/mnt/data2/retinasim/cco/graph/retina_cco_voronoicap_1av_reanimate.am'
+        #ofile = '/mnt/data2/retinasim/cco/graph/retina_cco_voronoicap_1av_reanimate.am'
+        ofile = '/mnt/data2/retinasim/cco/graph/retina_cco_a2v_reanimate.am'
         
         dat2amira(fname,ofile=ofile,plot=False)
 

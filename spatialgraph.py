@@ -813,6 +813,21 @@ class SpatialGraph(amiramesh.AmiraMesh):
             lengths[i] = np.linalg.norm(pts[:-1]-pts[1:],axis=1)
         return lengths
         
+    def get_node_count(self,edge_node_lookup=None,restore=False,tmpfile=None,graph_params=None):
+
+        nodecoords = self.get_data('VertexCoordinates')
+        edgeconn = self.get_data('EdgeConnectivity')
+        
+        # Which edge each node appears in
+        if edge_node_lookup is not None:
+            node_count = arr([len(edge_node_lookup[i]) for i in range(nodecoords.shape[0])])
+        else:
+            unq,count = np.unique(edgeconn,return_counts=True)
+            all_nodes = np.linspace(0,nodecoords.shape[0]-1,nodecoords.shape[0],dtype='int')
+            node_count = np.zeros(nodecoords.shape[0],dtype='int') 
+            node_count[np.in1d(all_nodes,unq)] = count
+        return node_count         
+        
     def identify_graphs(self,progBar=False,ignore_node=None,ignore_edge=None,verbose=False,add_scalar=True):
         
         nodeCoords = self.get_data('VertexCoordinates')
@@ -1070,188 +1085,246 @@ class SpatialGraph(amiramesh.AmiraMesh):
         p = pv.Plotter()
         p.add_mesh(merged, smooth_shading=True) # scalars='length', 
         p.show()
-
         
-    def plot_graph(self, cylinders=None, vessel_type=None, color=None, edge_color=None, plot=True, grab=False, min_radius=0., \
-                         domain_radius=None, domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,use_edges=True,\
-                         cmap_range=[None,None],bgcolor=[0,0,0],cmap=None,win_width=1920,win_height=1080,radius_scale=1.,grab_file=None,
-                         edge_filter=None,node_filter=None,edge_highlight=[],node_highlight=[],highlight_color=[1,1,1],scalar_color_name=None):
+    def plot_graph(self, **kwargs):
                          
         """
         Plot the graph using Open3d
         """
-                         
-        nc = self.get_data('VertexCoordinates')
-        points = self.get_data('EdgePointCoordinates')
-        npoints = self.get_data('NumEdgePoints')
-        conns = self.get_data('EdgeConnectivity')
-        radField = self.get_radius_field()
+        
+        tp = TubePlot(self, **kwargs)
+
+        return tp 
+        
+class TubePlot(object):
+
+    def __init__(self,graph, cylinders=None, cylinders_combined=None, color=None, edge_color=None, 
+                         min_radius=0.,domain_radius=None,radius_scale=1.,domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,edge_filter=None,node_filter=None,
+                         cmap_range=[None,None],bgcolor=[0.,0.,0.],cmap=None,win_width=1920,win_height=1080,grab_file=None,
+                         edge_highlight=[],node_highlight=[],highlight_color=[1,1,1],scalar_color_name=None,log_color=False,
+                         show=True,block=True):
+        self.vis = None
+        self.graph = graph
+        self.cylinders = cylinders
+        self.cylinders_combined = cylinders_combined
+        
+        self.min_radius = min_radius
+        self.domain_radius = domain_radius
+        self.radius_scale = radius_scale
+        self.domain_centre = domain_centre
+        self.radius_based_resolution = radius_based_resolution
+        self.cyl_res = cyl_res
+        self.edge_filter = edge_filter
+        self.node_filter = node_filter
+        
+        self.cmap_range = cmap_range
+        self.bgcolor = bgcolor
+        self.edge_color = edge_color
+        self.color = color
+        self.cmap = cmap
+        self.win_width = win_width
+        self.win_height = win_height
+        self.show = show
+        self.block = block
+        
+        self.edge_highlight = edge_highlight
+        self.node_highlight = node_highlight
+        self.highlight_color = highlight_color
+        self.scalar_color_name = scalar_color_name
+        self.log_color = log_color
+        
+        # Create cylinders if they have not been provided
+        if self.cylinders is None and self.cylinders_combined is None:
+            self.create_plot_cylinders()
+            
+        # Set colours (only if raw cylinders have been provided)
+        if self.cylinders_combined is None: 
+            print('Preparing graph (adding color and combining)...')
+            self.set_cylinder_colors()
+            # Combine cylinders
+            self.combine_cylinders()
+
+        self.create_plot_window()
+        
+        if self.block:
+            self._show_plot()
+
+    def set_cylinder_colors(self,edge_color=None,scalar_color_name=None,cmap=None,cmap_range=None,update=True):
+    
+        if scalar_color_name is not None:
+            self.scalar_color_name = scalar_color_name
+        if cmap is not None:
+            self.cmap = cmap
+        if cmap_range is not None:
+            self.cmap_range = cmap_range
+    
+        edge_def = self.graph.get_definition('EDGE')
+        nedge = edge_def['size'][0]
+        if len(self.cylinders)!=nedge:
+            print('Incorrect number of cylinders!')
+            return
+            
+        # Grab scalar data for lookup table, if required
+        if edge_color is None:
+            scalars = self.graph.get_scalars()
+            scalarNames = [x['name'] for x in scalars]
+            if self.scalar_color_name in scalarNames:
+                self.edge_color = self.graph.point_scalars_to_edge_scalars(name=self.scalar_color_name)
+            else:
+                self.edge_color = np.ones(nedge)
+        else:
+            self.edge_color = edge_color
+                        
+        if self.edge_color is None:
+            #print(f'Error: no edge color provided!')
+            return
+                     
+        if self.log_color:   
+            self.edge_color = np.abs(self.edge_color)
+            self.edge_color[self.edge_color==0.] = 1e-6
+            self.edge_color = np.log(self.edge_color)
+                            
+        # Set range
+        self.cmap_range = arr(self.cmap_range)
+        if self.cmap_range[0] is None:
+            self.cmap_range[0] = self.edge_color.min()
+        if self.cmap_range[1] is None:
+            self.cmap_range[1] = self.edge_color.max()
+        if self.cmap_range[0]>=self.cmap_range[1]:
+            print('Error: Invalid Cmap range!')
+            self.cmap_range[0] = 0.
+            self.cmap_range[0] = 1.
+        
+        # Set colour map (lookup table) 
+        if self.scalar_color_name=='VesselType':  
+            cols = np.zeros([nedge,3]) 
+            s_art = np.where(self.edge_color==0) 
+            cols[s_art[0],:] = [1.,0.,0.]
+            s_vei = np.where(self.edge_color==1) 
+            cols[s_vei[0],:] = [0.,0.,1.]
+            s_cap = np.where(self.edge_color==2) 
+            cols[s_cap[0],:] = [0.5,0.5,0.5]
+            s_oth = np.where((self.edge_color>2) | (self.edge_color<0)) 
+            cols[s_oth[0],:] = [1.,1.,1.]
+        else:
+            import matplotlib.pyplot as plt
+            cmapObj = plt.cm.get_cmap(self.cmap)
+            col_inds = np.clip((self.edge_color-self.cmap_range[0]) / (self.cmap_range[1]-self.cmap_range[0]),0.,1.)
+            cols = cmapObj(col_inds)[:,0:3]
+
+        if len(self.edge_highlight)>0:
+            self.edge_highlight = arr(self.edge_highlight)
+            cols[self.edge_highlight] = self.highlight_color
+
+        for i,cyl in enumerate(self.cylinders):
+            cyl.paint_uniform_color(cols[i])
+            
+        self.combine_cylinders()
+        
+        if update:
+            self.update()
+        
+    def create_plot_cylinders(self):
+    
+        nc = self.graph.get_data('VertexCoordinates')
+        points = self.graph.get_data('EdgePointCoordinates')
+        npoints = self.graph.get_data('NumEdgePoints')
+        conns = self.graph.get_data('EdgeConnectivity')
+        radField = self.graph.get_radius_field()
         if radField is None:
             print('Could not locate vessel radius data!')
             radii = np.ones(points.shape[0])
         else:
             radii = radField['data']
-        vType = self.get_data('VesselType')
-        
-        if scalar_color_name is not None and edge_color is None:
-            if scalar_color_name=='flow':
-                edge_color = graph.point_scalars_to_edge_scalars(name='Flow')
-                if edge_color is None:
-                    print(f"Error: Edge color not located: {scalar_color_name}")
-                edge_color = np.abs(edge_col)
-                edge_color[edge_color==0.] = 1e-6
-                edge_color = np.log(edge_col)
-            elif scalar_color_name=='pressure':
-                edge_color = graph.point_scalars_to_edge_scalars(name='Pressure')
-                if edge_color is None:
-                    print(f"Error: Edge color not located: {scalar_color_name}")
-            elif scalar_color_name=='radius':
-                rad = graph.get_radius_field()
-                edge_color = graph.point_scalars_to_edge_scalars(name=rad['name'])
-                if edge_color is None:
-                    print(f"Error: Edge color not located: {scalar_color_name}")
-            else:
-                pass
-        
-        cols = None
-        if edge_color is not None:
-            cmap_range = arr(cmap_range)
-            if cmap_range[0] is None:
-                cmap_range[0] = edge_color.min()
-            if cmap_range[1] is None:
-                cmap_range[1] = edge_color.max()
-            if cmap is None or cmap=='':
-                from pymira.turbo_colormap import turbo_colormap_data
-                cmap_data = turbo_colormap_data
-                cols = turbo_colormap_data[(np.clip((edge_color-cmap_range[0]) / (cmap_range[1]-cmap_range[0]),0.,1.)*(turbo_colormap_data.shape[0]-1)).astype('int')]
-            else:
-                import matplotlib.pyplot as plt
-                cmapObj = plt.cm.get_cmap(cmap)
-                col_inds = np.clip((edge_color-cmap_range[0]) / (cmap_range[1]-cmap_range[0]),0.,1.)
-                cols = cmapObj(col_inds)[:,0:3]
-        
-        if use_edges:
+    
+        edge_def = self.graph.get_definition('EDGE')
+        if self.edge_filter is None:
+            self.edge_filter = np.ones(conns.shape[0],dtype='bool')
+        if self.node_filter is None:
+            self.node_filter = np.ones(nc.shape[0],dtype='bool')
 
-            if cylinders is None:
-                edge_def = self.get_definition('EDGE')
-                if edge_filter is None:
-                    edge_filter = np.ones(conns.shape[0],dtype='bool')
-                if node_filter is None:
-                    node_filter = np.ones(nc.shape[0],dtype='bool')
-                    
-                try:
-                    print('Preparing graph...')
-                    for i in trange(edge_def['size'][0]):
-                        if edge_filter[i] and node_filter[conns[i,0]] and node_filter[conns[i,1]]:
-                            i0 = np.sum(npoints[:i])
-                            i1 = i0+npoints[i]
-                            coords = points[i0:i1]
-                            rads = radii[i0:i1]
-                            if vType is None:
-                                vt = np.zeros(coords.shape[0],dtype='int')
-                            else:
-                                vt = vType[i0:i1]
-                            
-                            if vessel_type is None or vessel_type==vt[0]:
-                                if color is not None:
-                                    col = color
-                                elif edge_color is not None:
-                                    col = cols[i]
-                                elif vt[0]==0: # artery
-                                    col = [1.,0.,0.]
-                                elif vt[1]==1:
-                                    col = [0.,0.,1.]
-                                else:
-                                    #col = [0.,1.,0.]
-                                    col = [0.5,0.5,0.5]
-                                if i in edge_highlight:
-                                    col = highlight_color
-                                
-                                if np.any(rads>=min_radius) and (domain_radius is None or np.any(np.linalg.norm(coords-domain_centre)<=domain_radius)):
-                                    for j in range(1,coords.shape[0]):
-                                        if rads[j]>=min_radius:
-                                            x0,x1 = coords[j-1],coords[j]
-                                            vec = x1-x0
-                                            height = np.linalg.norm(x1-x0)
-                                            
-                                            if height>0. and np.isfinite(height) and (domain_radius is None or (np.linalg.norm(x0-domain_centre<=domain_radius) and np.linalg.norm(x1-domain_centre<=domain_radius))):
-                                                vec = vec / height
-                                                if rads[j]<20. and radius_based_resolution:
-                                                    resolution = 4
-                                                else:
-                                                    resolution = cyl_res
-                                                    
-                                                if radius_scale!=1.:
-                                                    rad_cur = rads[j] * radius_scale
-                                                else:
-                                                    rad_cur = rads[j]
-                                                cyl = o3d.geometry.TriangleMesh.create_cylinder(height=height,radius=rad_cur, resolution=resolution)
-                                                translation = x0 + vec*height*0.5
-                                                cyl = cyl.translate(translation, relative=False)
-                                                axis, angle = align_vector_to_another(np.asarray([0.,0.,1.]), vec)
-                                                if angle!=0.:
-                                                    axis_a = axis * angle
-                                                    cyl = cyl.rotate(R=o3d.geometry.get_rotation_matrix_from_axis_angle(axis_a), center=cyl.get_center()) 
-                                                
-                                                cyl.paint_uniform_color(col)
-                                                if cylinders is not None:
-                                                    cylinders += cyl
-                                                else:
-                                                    cylinders = cyl
-                except Exception as e:
-                    #breakpoint()
-                    print(e)
-  
-            else:
-                #if cols is not None:
-                #    for i,cyl in enumerate(cylinders):
-                #        cyl.paint_uniform_color(cols[i])
-                pass
-
-            if plot:
-                vis = o3d.visualization.Visualizer()
-                vis.create_window(width=win_width,height=win_height)
-                vis.add_geometry(cylinders)
-                opt = vis.get_render_option()
-                opt.background_color = np.asarray(bgcolor)
-                vis.run()
-                vis.destroy_window()
-                #o3d.visualization.draw_geometries([cylinders],mesh_show_wireframe=False)
-                #o3d.visualization.draw_geometries([pcd_a,pcd_v],mesh_show_wireframe=True)
-            if grab:
-                # Grab window
-                vis = o3d.visualization.Visualizer()
-                vis.create_window(width=win_width,height=win_height,visible=False)
-                vis.add_geometry(cylinders)
-                opt = vis.get_render_option()
-                opt.background_color = np.asarray(bgcolor)
-                
-                vis.capture_screen_image(grab_file,do_render=True)
-                vis.destroy_window()
-            return cylinders    
-        else:
-            # Legacy
-            import matplotlib.pyplot as plt
-            from mpl_toolkits.mplot3d import Axes3D
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection = '3d')
-            skip = 1
-            ax.scatter(nc[::skip,0],nc[::skip,1],nc[::skip,2], c='r', marker='o',s=1)       
+        self.cylinders = [None]*edge_def['size'][0]
             
-    def get_node_count(self,edge_node_lookup=None,restore=False,tmpfile=None,graph_params=None):
+        print('Preparing graph (creating cylinders)...')
+        # Create cylinders
+        for i in trange(edge_def['size'][0]):
+            if self.edge_filter[i] and self.node_filter[conns[i,0]] and self.node_filter[conns[i,1]]:
+                i0 = np.sum(npoints[:i])
+                i1 = i0+npoints[i]
+                coords = points[i0:i1]
+                rads = radii[i0:i1]
 
-        nodecoords = self.get_data('VertexCoordinates')
-        edgeconn = self.get_data('EdgeConnectivity')
+                if np.any(rads>=self.min_radius) and (self.domain_radius is None or np.any(np.linalg.norm(coords-self.domain_centre)<=self.domain_radius)):
+                    for j in range(1,coords.shape[0]):
+                        if rads[j]>=self.min_radius:
+                            x0,x1 = coords[j-1],coords[j]
+                            vec = x1-x0
+                            height = np.linalg.norm(x1-x0)
+                            
+                            if height>0. and np.isfinite(height) and (self.domain_radius is None or (np.linalg.norm(x0-self.domain_centre<=self.domain_radius) and np.linalg.norm(x1-self.domain_centre<=self.domain_radius))):
+                                vec = vec / height
+                                if rads[j]<20. and self.radius_based_resolution:
+                                    resolution = 4
+                                else:
+                                    resolution = self.cyl_res
+                                    
+                                if self.radius_scale!=1.:
+                                    rad_cur = rads[j] * self.radius_scale
+                                else:
+                                    rad_cur = rads[j]
+                                cyl = o3d.geometry.TriangleMesh.create_cylinder(height=height,radius=rad_cur, resolution=resolution)
+                                translation = x0 + vec*height*0.5
+                                cyl = cyl.translate(translation, relative=False)
+                                axis, angle = align_vector_to_another(np.asarray([0.,0.,1.]), vec)
+                                if angle!=0.:
+                                    axis_a = axis * angle
+                                    cyl = cyl.rotate(R=o3d.geometry.get_rotation_matrix_from_axis_angle(axis_a), center=cyl.get_center()) 
+
+                                self.cylinders[i] = cyl
         
-        # Which edge each node appears in
-        if edge_node_lookup is not None:
-            node_count = arr([len(edge_node_lookup[i]) for i in range(nodecoords.shape[0])])
-        else:
-            unq,count = np.unique(edgeconn,return_counts=True)
-            all_nodes = np.linspace(0,nodecoords.shape[0]-1,nodecoords.shape[0],dtype='int')
-            node_count = np.zeros(nodecoords.shape[0],dtype='int') 
-            node_count[np.in1d(all_nodes,unq)] = count
-        return node_count                    
+    def combine_cylinders(self):
+    
+        if self.vis is not None:
+            self.vis.remove_geometry(self.cylinders_combined)
+    
+        # Initialise
+        self.cylinders_combined = self.cylinders[0] + self.cylinders[1]
+        for cyl in self.cylinders[2:]:
+            self.cylinders_combined += cyl
+            
+        if self.vis is not None:
+            self.vis.add_geometry(self.cylinders_combined)
+        
+    def create_plot_window(self,bgcolor=None,win_width=None,win_height=None):
+    
+        if win_width is not None:
+            self.win_width = win_width
+        if win_height is not None:
+            self.win_height = win_height
+        if bgcolor is not None:
+            self.bgcolor = bgcolor                      
+    
+        self.vis = o3d.visualization.Visualizer()
+        self.vis.create_window(width=self.win_width,height=self.win_height,visible=self.show)
+        
+        if self.cylinders_combined is not None:
+            self.vis.add_geometry(self.cylinders_combined)
+            
+        opt = self.vis.get_render_option()
+        opt.background_color = np.asarray(self.bgcolor)
+        
+    def _show_plot(self):
+        self.vis.run()
+        self.vis.destroy_window()
+        
+    def update(self):
+        self.vis.update_geometry(self.cylinders_combined)
+        
+    def screen_grab(self,fname):
+        self.vis.capture_screen_image(fname,do_render=True)     
+        
+    def destroy_window(self):
+        self.vis.destroy_window()              
 
 class Editor(object):
 

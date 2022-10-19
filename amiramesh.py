@@ -84,7 +84,6 @@ class AmiraMesh(object):
             curData = [s.strip().split(' ') for s in curData.splitlines() if s]
             comment_line = []
             for k,cnt in enumerate(curData):
-                #cnt = cnt.split('#')[0]
                 if '#' in cnt:
                     comment_line.append(k)
                 else:
@@ -110,11 +109,9 @@ class AmiraMesh(object):
                 curData = np.reshape(curData,curField['shape'])
                 curField['data'] = curData
             except Exception as e:
-                breakpoint()
                 if not quiet:
-                    print(('Error, {}.Line: {} '.format(e,curData)))
-                #import pdb
-                #pdb.set_trace()
+                    fname = curField['name']
+                    print(f'Error reading {fname} data: {e}')
 
         elif 'binary' in self.fileType.lower():
             #curData = self.decode_rle(self,curData,uncompressed_size)
