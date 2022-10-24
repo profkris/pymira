@@ -634,18 +634,6 @@ class SpatialGraph(amiramesh.AmiraMesh):
         conn_inds = np.linspace(0,nedge-1,nedge,dtype='int')
         return np.repeat(conn_inds,nEdgePoint)
         
-        #points = self.get_data('EdgePointCoordinates')
-        #npoints = points.shape[0]
-        #nEdgePoint = self.get_data('NumEdgePoints')
-        #edgePointIndex = np.zeros(npoints,dtype='int')
-        #offset = 0
-        #edgeCount = 0
-        #for npCur in nEdgePoint:
-        #    edgePointIndex[offset:offset+npCur] = edgeCount
-        #    edgeCount += 1
-        #    offset += npCur
-        #return edgePointIndex
-        
     def get_edges_containing_node(self,node_index):
         """
         Return which edges contain a supplied node index
@@ -810,7 +798,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
             x0 = np.sum(nedgepoints[:i])
             npts = nedgepoints[i]
             pts = edgeCoords[x0:x0+npts]
-            lengths[i] = np.linalg.norm(pts[:-1]-pts[1:],axis=1)
+            lengths[i] = np.sum(np.linalg.norm(pts[:-1]-pts[1:],axis=1))
         return lengths
         
     def get_node_count(self,edge_node_lookup=None,restore=False,tmpfile=None,graph_params=None):
@@ -987,10 +975,13 @@ class SpatialGraph(amiramesh.AmiraMesh):
             x1 = x0+npts
 
             for j,scalar in enumerate(scalars):
-                if scalar['type']=='float':
-                    scalar_edges[j,i] = func(scalar['data'][x0:x1])
-                elif scalar['type']=='int':
-                    scalar_edges[j,i] = scalar['data'][x0]
+                    
+                data = scalar['data']
+                if data is not None:
+                    if scalar['type']=='float':
+                        scalar_edges[j,i] = func(data[x0:x1])
+                    elif scalar['type']=='int':
+                        scalar_edges[j,i] = data[x0]
         return scalar_edges.squeeze()
  
     def plot_histogram(self,field_name,*args,**kwargs):
@@ -1108,43 +1099,67 @@ class TubePlot(object):
         self.cylinders = cylinders
         self.cylinders_combined = cylinders_combined
         
+        # Minimum vessel radius to plot (scalar)
         self.min_radius = min_radius
+        # Size of area to plot
         self.domain_radius = domain_radius
+        # Factor to scale vessel radii by
         self.radius_scale = radius_scale
+        # Centre of plot domain
         self.domain_centre = domain_centre
+        # Cylinder resolution based on radius (boolean)
         self.radius_based_resolution = radius_based_resolution
+        # Cylinder resolution (scalar)
         self.cyl_res = cyl_res
+        # Edges and nodes to include in plot (np.where result)
         self.edge_filter = edge_filter
         self.node_filter = node_filter
         
+        # Colour range for edges [None,None]
         self.cmap_range = cmap_range
+        # Background colour
         self.bgcolor = bgcolor
+        # Array of edge colours ([nedge])
         self.edge_color = edge_color
+        # Edge colors ([nedge,3])
         self.color = color
+        # Colour map name ('gray','jet')
         self.cmap = cmap
+        # Window dimensions
         self.win_width = win_width
         self.win_height = win_height
+        # Make window visible (boolean)
         self.show = show
+        # Blocking behaviour (boolean)
         self.block = block
         
+        # Array identifying edges to highlight (np.where result)
         self.edge_highlight = edge_highlight
+        # Array identifying nodes to highlight
         self.node_highlight = node_highlight
+        # Hightlight colour for above
         self.highlight_color = highlight_color
+        # Scalar parameter for edge colours (radius by default)
         self.scalar_color_name = scalar_color_name
+        # Whether to log colour scale (boolean)
         self.log_color = log_color
         
         # Create cylinders if they have not been provided
         if self.cylinders is None and self.cylinders_combined is None:
             self.create_plot_cylinders()
             
+        # Create plot window
+        self.create_plot_window()
+            
         # Set colours (only if raw cylinders have been provided)
         if self.cylinders_combined is None: 
             print('Preparing graph (adding color and combining)...')
+            if self.scalar_color_name is None:
+                radName = graph.get_radius_field()['name']
+                self.scalar_color_name = radName
             self.set_cylinder_colors()
             # Combine cylinders
             self.combine_cylinders()
-
-        self.create_plot_window()
         
         if self.block:
             self._show_plot()
@@ -1157,12 +1172,13 @@ class TubePlot(object):
             self.cmap = cmap
         if cmap_range is not None:
             self.cmap_range = cmap_range
-    
-        edge_def = self.graph.get_definition('EDGE')
-        nedge = edge_def['size'][0]
-        if len(self.cylinders)!=nedge:
-            print('Incorrect number of cylinders!')
-            return
+
+        nedge = self.graph.nedge
+        sind = self.cylinder_inds
+        
+        #if len(self.cylinders)!=nedge:
+        #    print('Incorrect number of cylinders!')
+        #    return
             
         # Grab scalar data for lookup table, if required
         if edge_color is None:
@@ -1216,8 +1232,9 @@ class TubePlot(object):
             self.edge_highlight = arr(self.edge_highlight)
             cols[self.edge_highlight] = self.highlight_color
 
-        for i,cyl in enumerate(self.cylinders):
-            cyl.paint_uniform_color(cols[i])
+        for i,cyl in enumerate(self.cylinders[sind[0]]):
+            if cyl is not None:
+                cyl.paint_uniform_color(cols[i])
             
         self.combine_cylinders()
         
@@ -1237,17 +1254,17 @@ class TubePlot(object):
         else:
             radii = radField['data']
     
-        edge_def = self.graph.get_definition('EDGE')
+        nedge = self.graph.nedge
         if self.edge_filter is None:
             self.edge_filter = np.ones(conns.shape[0],dtype='bool')
         if self.node_filter is None:
             self.node_filter = np.ones(nc.shape[0],dtype='bool')
 
-        self.cylinders = [None]*edge_def['size'][0]
+        self.cylinders = np.empty(self.graph.nedgepoint,dtype='object') # [None]*self.graph.nedgepoint
             
         print('Preparing graph (creating cylinders)...')
         # Create cylinders
-        for i in trange(edge_def['size'][0]):
+        for i in trange(nedge):
             if self.edge_filter[i] and self.node_filter[conns[i,0]] and self.node_filter[conns[i,1]]:
                 i0 = np.sum(npoints[:i])
                 i1 = i0+npoints[i]
@@ -1280,17 +1297,27 @@ class TubePlot(object):
                                     axis_a = axis * angle
                                     cyl = cyl.rotate(R=o3d.geometry.get_rotation_matrix_from_axis_angle(axis_a), center=cyl.get_center()) 
 
-                                self.cylinders[i] = cyl
+                                self.cylinders[i0+j] = cyl
+           
+        self.cylinder_inds = np.where(self.cylinders)
         
     def combine_cylinders(self):
     
         if self.vis is not None:
             self.vis.remove_geometry(self.cylinders_combined)
     
-        # Initialise
-        self.cylinders_combined = self.cylinders[0] + self.cylinders[1]
-        for cyl in self.cylinders[2:]:
-            self.cylinders_combined += cyl
+        # Combine (select active cylinder entries)
+        sind = self.cylinder_inds
+        if len(sind[0])>2:
+            # Sum first two - otherwise combined variable becomes first cylinder reference
+            self.cylinders_combined = self.cylinders[sind[0][0]] + self.cylinders[sind[0][2]]
+            for cyl in self.cylinders[sind[0][2:]]:
+                if cyl is not None:
+                    self.cylinders_combined += cyl
+        elif len(sind[0])==2:
+            self.cylinders_combined = self.cylinders[sind[0][0]] + self.cylinders[sind[0][1]] 
+        elif len(sind[0])==1:
+            self.cylinders_combined = self.cylinders[sind[0][0]] 
             
         if self.vis is not None:
             self.vis.add_geometry(self.cylinders_combined)
@@ -1314,17 +1341,21 @@ class TubePlot(object):
         opt.background_color = np.asarray(self.bgcolor)
         
     def _show_plot(self):
-        self.vis.run()
-        self.vis.destroy_window()
+        if self.vis is not None:
+            self.vis.run()
+            self.vis.destroy_window()
         
     def update(self):
-        self.vis.update_geometry(self.cylinders_combined)
+        if self.vis is not None:
+            self.vis.update_geometry(self.cylinders_combined)
         
     def screen_grab(self,fname):
-        self.vis.capture_screen_image(fname,do_render=True)     
+        if self.vis is not None:
+            self.vis.capture_screen_image(fname,do_render=True)     
         
     def destroy_window(self):
-        self.vis.destroy_window()              
+        if self.vis is not None:
+            self.vis.destroy_window()              
 
 class Editor(object):
 
@@ -1611,6 +1642,7 @@ class Editor(object):
         points = graph.get_data('EdgePointCoordinates')
         nedge = graph.get_data('NumEdgePoints')
         scalars = graph.get_scalars()
+        nscalars = graph.get_node_scalars()
         
         nedges = edgeconn.shape[0]
         nnode = nodecoords.shape[0]
@@ -1743,6 +1775,11 @@ class Editor(object):
         # Delete inline nodes and edges connecting them
         node_del_flag[node_count==0] = True
         graph = delete_vertices(graph,~node_del_flag,return_lookup=False)
+        
+        if len(nscalars)>0:
+            for sc in nscalars:
+                data = sc['data'][~node_del_flag]
+                graph.set_data(data,name=sc['name'])
         
         return graph        
 
@@ -2181,7 +2218,8 @@ class Editor(object):
         for j,sd in enumerate(scalar_data_interp):
             graph.set_data(arr(sd),name=scalars[j]['name'])
         
-        graph.set_definition_size('POINT',pts_interp.shape[0])        
+        graph.set_definition_size('POINT',pts_interp.shape[0])   
+        graph.set_graph_sizes()     
 
 class Node(object):
     

@@ -400,7 +400,9 @@ class AmiraMesh(object):
         self.fieldRange = []
         for curField in self.fields:
             mrk = curField['marker']
-            mInd = self.data.find(mrk)
+            mInd = self.data.find(mrk+'\n')
+            if mInd==-1:
+                mInd = self.data.find(mrk)
             mInd += len(mrk)
             self.fieldRange.append(mInd)
         self.fieldRange.append(len(self.data))
@@ -505,6 +507,8 @@ class AmiraMesh(object):
             for d in self.fields:
                 f.write('{}\n'.format(d['marker']))
                 data = d['data']
+                name = d['name']
+                print(f'Field: {name}, {data.shape}')
                 if data.ndim==1:
                     for j in range(data.shape[0]):
                         if data[j] is None:
