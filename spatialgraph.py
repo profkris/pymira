@@ -756,10 +756,23 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     
         return connected
         
-    def connected_nodes(self,index):
+    def connected_nodes(self,index, return_edges=True):
+        # Return all nodes connected to a supplied node index, 
+        # along with the edge indices they are connected by
         vertCoords = self.get_data('VertexCoordinates')
-        edgeConn = self.get_data('EdgeConnectivity')
-            
+        edgeconn = self.get_data('EdgeConnectivity')
+        
+        conn_edges = self.get_edges_containing_node(index)
+        end_nodes = edgeconn[conn_edges]
+        # Remove the current (source) node from the end node list
+        end_nodes = arr([e[e!=index] for e in end_nodes]).flatten()
+
+        if return_edges:
+            return end_nodes, conn_edges
+        else: 
+            return end_nodes
+           
+        # Old, slower version...           
         s0 = np.where(edgeConn[:,0]==index)
         ns0 = len(s0[0])
         s1 = np.where(edgeConn[:,1]==index)
@@ -1174,20 +1187,17 @@ class TubePlot(object):
             self.cmap_range = cmap_range
 
         nedge = self.graph.nedge
+        nedgepoint = self.graph.nedgepoint
         sind = self.cylinder_inds
-        
-        #if len(self.cylinders)!=nedge:
-        #    print('Incorrect number of cylinders!')
-        #    return
             
         # Grab scalar data for lookup table, if required
         if edge_color is None:
             scalars = self.graph.get_scalars()
             scalarNames = [x['name'] for x in scalars]
             if self.scalar_color_name in scalarNames:
-                self.edge_color = self.graph.point_scalars_to_edge_scalars(name=self.scalar_color_name)
+                self.edge_color = self.graph.get_data(name=self.scalar_color_name)
             else:
-                self.edge_color = np.ones(nedge)
+                self.edge_color = np.ones(nedgepoint)
         else:
             self.edge_color = edge_color
                         
@@ -1213,7 +1223,7 @@ class TubePlot(object):
         
         # Set colour map (lookup table) 
         if self.scalar_color_name=='VesselType':  
-            cols = np.zeros([nedge,3]) 
+            cols = np.zeros([nedgepoint,3]) 
             s_art = np.where(self.edge_color==0) 
             cols[s_art[0],:] = [1.,0.,0.]
             s_vei = np.where(self.edge_color==1) 
@@ -2179,7 +2189,7 @@ class Editor(object):
                             pcur[0],pcur[-1] = pts[0],pts[1]
                     else:
                         k = 1
-                        tck, u = interpolate.splprep([pts[:,0], pts[:,1], pts[:,2]],k=k,s=2.) #, s=2)
+                        tck, u = interpolate.splprep([pts[:,0], pts[:,1], pts[:,2]],k=k,s=0) #, s=2)
                         u_fine = np.linspace(0,1,ninterp)
                         pcur = np.zeros([ninterp,3])
                         pcur[:,0], pcur[:,1], pcur[:,2] = interpolate.splev(u_fine, tck)
@@ -2193,7 +2203,7 @@ class Editor(object):
                     
                 for j,sd in enumerate(scalar_data):
                     sdc = sd[i0:i1]
-                    scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],ninterp))
+                    scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],pcur.shape[0]))
                 
                 npoints_interp.append(ninterp)
 
