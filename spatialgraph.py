@@ -1195,7 +1195,11 @@ class TubePlot(object):
             scalars = self.graph.get_scalars()
             scalarNames = [x['name'] for x in scalars]
             if self.scalar_color_name in scalarNames:
+<<<<<<< HEAD
                 self.edge_color = self.graph.get_data(name=self.scalar_color_name)
+=======
+                self.edge_color = self.graph.get_data(self.scalar_color_name) # self.graph.point_scalars_to_edge_scalars(name=self.scalar_color_name)
+>>>>>>> 34acff5275a28c97cf02767e5a70961d04552321
             else:
                 self.edge_color = np.ones(nedgepoint)
         else:
@@ -1243,7 +1247,8 @@ class TubePlot(object):
             self.edge_highlight = arr(self.edge_highlight)
             cols[self.edge_highlight] = self.highlight_color
 
-        for i,cyl in enumerate(self.cylinders[sind[0]]):
+        for i in sind[0]:
+            cyl = self.cylinders[i]
             if cyl is not None:
                 cyl.paint_uniform_color(cols[i])
             
@@ -1275,7 +1280,9 @@ class TubePlot(object):
             
         print('Preparing graph (creating cylinders)...')
         # Create cylinders
+        excluded = []
         for i in trange(nedge):
+            excl = True
             if self.edge_filter[i] and self.node_filter[conns[i,0]] and self.node_filter[conns[i,1]]:
                 i0 = np.sum(npoints[:i])
                 i1 = i0+npoints[i]
@@ -1308,8 +1315,14 @@ class TubePlot(object):
                                     axis_a = axis * angle
                                     cyl = cyl.rotate(R=o3d.geometry.get_rotation_matrix_from_axis_angle(axis_a), center=cyl.get_center()) 
 
+                                # Default - paint white
+                                cyl.paint_uniform_color([1.,1.,1.])
+                                
                                 self.cylinders[i0+j] = cyl
-           
+                                excl = False
+            #if excl:
+            #    print(f'Excluded {i}')
+
         self.cylinder_inds = np.where(self.cylinders)
         
     def combine_cylinders(self):
