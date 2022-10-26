@@ -1236,6 +1236,7 @@ class TubePlot(object):
             import matplotlib.pyplot as plt
             cmapObj = plt.cm.get_cmap(self.cmap)
             col_inds = np.clip((self.edge_color-self.cmap_range[0]) / (self.cmap_range[1]-self.cmap_range[0]),0.,1.)
+            breakpoint()
             cols = cmapObj(col_inds)[:,0:3]
 
         if len(self.edge_highlight)>0:
