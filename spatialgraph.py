@@ -1195,11 +1195,7 @@ class TubePlot(object):
             scalars = self.graph.get_scalars()
             scalarNames = [x['name'] for x in scalars]
             if self.scalar_color_name in scalarNames:
-<<<<<<< HEAD
-                self.edge_color = self.graph.get_data(name=self.scalar_color_name)
-=======
                 self.edge_color = self.graph.get_data(self.scalar_color_name) # self.graph.point_scalars_to_edge_scalars(name=self.scalar_color_name)
->>>>>>> 34acff5275a28c97cf02767e5a70961d04552321
             else:
                 self.edge_color = np.ones(nedgepoint)
         else:
