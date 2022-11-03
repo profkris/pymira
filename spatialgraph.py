@@ -101,22 +101,6 @@ def delete_vertices(graph,keep_nodes,return_lookup=False): # #verts,edges,keep_n
     else:
         return graph
 
-def align_vector_to_another(a=np.array([0, 0, 1]), b=np.array([1, 0, 0])):
-    """
-    Aligns vector a to vector b with axis angle rotation
-    """
-    if np.array_equal(a, b):
-        return None, 0.
-    axis_ = np.cross(a, b)
-    l = np.linalg.norm(axis_)
-    if l>0.:
-        axis_ = axis_ / np.linalg.norm(axis_)
-        angle = np.arccos(np.dot(a, b))
-    else:
-        angle = 0.
-
-    return axis_, angle
-
 class SpatialGraph(amiramesh.AmiraMesh):
 
     """
