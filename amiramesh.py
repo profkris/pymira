@@ -240,8 +240,6 @@ class AmiraMesh(object):
                         magicMtch = ptn.match(curLine.lower()) is not None
                         if not magicMtch:
                             raise Exception('Error: Not a supported Amira file!')
-                            #pass
-                            #return False
                         spl = curLine.split('AmiraMesh')
                         self.fileType = ''.join(spl[1:]).strip()
                         

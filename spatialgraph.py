@@ -13,8 +13,6 @@ import numpy as np
 arr = np.asarray
 import os
 from tqdm import tqdm, trange # progress bar
-import open3d as o3d
-import pyvista as pv
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 
@@ -1839,7 +1837,7 @@ class Editor(object):
         return graph
         
         
-    def interpolate_edges(self,graph,interp_resolution=5.,filter=None,noise_sd=10.):
+    def interpolate_edges(self,graph,interp_resolution=5.,filter=None,noise_sd=0.):
         
         """
         Linear interpolation of edge points, to a fixed minimum resolution
@@ -1853,17 +1851,18 @@ class Editor(object):
         
         scalars = graph.get_scalars()
         scalar_data = [x['data'] for x in scalars]
+        scalar_type = [str(x.dtype) for x in scalar_data]
         scalar_data_interp = [[] for x in scalars]
         
         if filter is None:
             filter = np.ones(conns.shape[0],dtype='bool')
         
-        pts_interp,npoints_interp = [],[]
+        pts_interp,npoints_interp = [],np.zeros(conns.shape[0],dtype='int')-1
         for i,conn in enumerate(tqdm(conns)):
             if npoints[i]==2:
-                if not filter[i]:
+                if filter[i]==False: # Ignore if filter is False
                     pts_interp.extend(points[i0:i1])
-                    npoints_interp.append(2)
+                    npoints_interp[i] = 2 #.append(2)
                     for j,sd in enumerate(scalar_data):
                         scalar_data_interp[j].extend(sd[i0:i1])
                 else:
@@ -1878,17 +1877,29 @@ class Editor(object):
                     else:
                         ninterp = 2
                         
-                    pcur = np.linspace(pts[0],pts[1],ninterp)
+                    pcur = np.linspace(pts[0],pts[-1],ninterp)
                     if noise_sd>0.:
                         pcur += np.random.normal(0.,noise_sd)
-                        pcur[0],pcur[-1] = pts[0],pts[1]
+                        pcur[0],pcur[-1] = pts[0],pts[-1]
                     pts_interp.extend(pcur)
                     
                     for j,sd in enumerate(scalar_data):
                         sdc = sd[i0:i1]
-                        scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],ninterp))
+                        if 'float' in scalar_type[j]:
+                            scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],ninterp))
+                        elif 'int' in scalar_type[j]:
+                            if sdc[0]==sdc[-1]:
+                                scalar_data_interp[j].extend(np.zeros(ninterp)+sdc[0])
+                            else:
+                                breakpoint()
+                                scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],ninterp,dtype='int'))
+                        else:
+                            breakpoint()
                     
-                    npoints_interp.append(ninterp)
+                    npoints_interp[i] = ninterp
+                    
+                    if ninterp!=pcur.shape[0]:
+                        breakpoint()
             elif npoints[i]>2:
                 # Spline interpolate curve at required interval
                 i0 = np.sum(npoints[:i])
@@ -1906,11 +1917,10 @@ class Editor(object):
                 from scipy import interpolate
                 try:
                     if npoints[i]<=4:
-                        #k = 1
-                        pcur = np.linspace(pts[0],pts[1],ninterp)
+                        pcur = np.linspace(pts[0],pts[-1],ninterp)
                         if noise_sd>0.:
                             pcur += np.random.normal(0.,noise_sd)
-                            pcur[0],pcur[-1] = pts[0],pts[1]
+                            pcur[0],pcur[-1] = pts[0],pts[-1]
                     else:
                         k = 1
                         tck, u = interpolate.splprep([pts[:,0], pts[:,1], pts[:,2]],k=k,s=0) #, s=2)
@@ -1925,11 +1935,28 @@ class Editor(object):
                 
                 pts_interp.extend(pcur)
                     
+                #for j,sd in enumerate(scalar_data):
+                #    sdc = sd[i0:i1]
+                #    scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],pcur.shape[0]))
+                    
                 for j,sd in enumerate(scalar_data):
                     sdc = sd[i0:i1]
-                    scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],pcur.shape[0]))
+                    if 'float' in scalar_type[j]:
+                        scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0]))
+                    elif 'int' in scalar_type[j]:
+                        breakpoint()
+                        if sdc[0]==sdc[-1]:
+                            scalar_data_interp[j].extend(np.zeros(ninterp)+sdc[0])
+                        else:
+                            scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0],dtype='int'))
+                    else:
+                        breakpoint()
+                    
                 
-                npoints_interp.append(ninterp)
+                npoints_interp[i] = ninterp
+                
+                if ninterp!=pcur.shape[0]:
+                    breakpoint()
 
                 if False:
                     import matplotlib.pyplot as plt
@@ -1944,8 +1971,12 @@ class Editor(object):
             else:
                 breakpoint()
 
+            # Check nodes match!
+            if not np.all(pts_interp[-ninterp]==coords[conn[0]]) or not np.all(pts_interp[-1]==coords[conn[1]]) or \
+               not np.all(pts_interp[-ninterp]==pts[0]) or not np.all(pts_interp[-1]==pts[-1]):
+                breakpoint()
+
         pts_interp = arr(pts_interp)
-        npoints_interp = arr(npoints_interp)
         graph.set_data(pts_interp,name='EdgePointCoordinates')
         graph.set_data(npoints_interp,name='NumEdgePoints')
        
@@ -2348,6 +2379,7 @@ class GVars(object):
         #    breakpoint()
         self.add_edgeconn(new_conn)
         self.add_edgepoints(self.nodecoords[new_conn],new_scalar_vals,edgeInd=self.edge_ptr-1)
+        
     def remove_edges(self,edge_inds_to_remove):
     
         edgeconn = self.edgeconn[self.edgeconn_allocated]

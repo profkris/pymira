@@ -163,9 +163,11 @@ class TubePlot(object):
             col_inds = np.clip((self.edge_color-self.cmap_range[0]) / (self.cmap_range[1]-self.cmap_range[0]),0.,1.)
             cols = cmapObj(col_inds)[:,0:3]
 
+        epi = self.graph.edgepoint_edge_indices()
         if len(self.edge_highlight)>0:
             self.edge_highlight = arr(self.edge_highlight)
-            cols[self.edge_highlight] = self.highlight_color
+            for e in np.unique(self.edge_highlight):
+                cols[epi==e] = self.highlight_color
 
         for i in sind[0]:
             cyl = self.cylinders[i]
@@ -206,6 +208,7 @@ class TubePlot(object):
         excluded = []
         for i in trange(nedge):
             excl = True
+            
             if self.edge_filter[i] and self.node_filter[conns[i,0]] and self.node_filter[conns[i,1]]:
                 i0 = np.sum(npoints[:i])
                 i1 = i0+npoints[i]
@@ -241,7 +244,7 @@ class TubePlot(object):
                                         cyl = cyl.rotate(R=o3d.geometry.get_rotation_matrix_from_axis_angle(axis_a), center=cyl.get_center()) 
 
                                     # Default - paint white
-                                    cyl.paint_uniform_color([1.,1.,1.])
+                                    cyl.paint_uniform_color([0.,0.,0.])
                                     
                                     self.cylinders[i0+j] = cyl
                                     
@@ -260,6 +263,8 @@ class TubePlot(object):
                                 excl = False
                 
         self.cylinder_inds = np.where(self.cylinders)
+        #breakpoint()
+        #o3d.visualization.draw_geometries(self.cylinders[self.cylinders!=None][:50])
         
     def combine_cylinders(self):
     
@@ -271,7 +276,7 @@ class TubePlot(object):
             sind = self.cylinder_inds
             if len(sind[0])>2:
                 # Sum first two - otherwise combined variable becomes first cylinder reference
-                self.cylinders_combined = self.cylinders[sind[0][0]] + self.cylinders[sind[0][2]]
+                self.cylinders_combined = self.cylinders[sind[0][0]] + self.cylinders[sind[0][1]]
                 for cyl in self.cylinders[sind[0][2:]]:
                     if cyl is not None:
                         self.cylinders_combined += cyl
