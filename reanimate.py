@@ -1,13 +1,14 @@
 from pymira import spatialgraph as sp
 import numpy as np
 arr = np.asarray
+from tqdm import tqdm, trange
 
 """
 Helper functions for import/export of text files
 for REANIMATE
 """
 
-def import_dat(filename,plot=True):
+def import_dat(filename,plot=False):
 
     graph = sp.SpatialGraph(initialise=True,scalars=['Radii','VesselType','Flow','Pressure'],node_scalars=['NodePressure'])
 
@@ -102,20 +103,13 @@ def import_dat(filename,plot=True):
     graph.set_data(point_flow,name='Flow')
     graph.set_data(point_pressure,name='Pressure')
     graph.set_data(node_pressure,name='NodePressure')
-    
-    if plot:
-        edge_col = graph.point_scalars_to_edge_scalars(name='Flow')
-        edge_col = np.abs(edge_col)
-        edge_col[edge_col==0.] = 1e-6
-        edge_col = np.log(edge_col)
-        cyls = graph.plot_graph(edge_color=edge_col,cmap='jet',bgcolor=[0,0,0],plot=False,grab=True,win_width=1920*6,win_height=1080*6,radius_scale=1.5)
         
     if graph.sanity_check() is not None:
         breakpoint()
     
     return graph
     
-def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2):
+def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2,include_length=False):
 
     if remove_intermediate:
         print('Removing intermedate nodes...')
@@ -166,14 +160,14 @@ def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2):
 
         flow = 1.
         diammax = -1.
-        for i in range(nseg):
+        for i in trange(nseg):
             segnodname1 = edgeConnectivity[i,0] + 1
             segnodname2 = edgeConnectivity[i,1] + 1
             diam = np.max([2.*thickness[i],4.])
             if diam > diammax:
                 diammax = diam
                 idiammax = i
-                
+                                
             # Convert vessel type codes
             if vessType[i]==0: # artery
                 vt = 1
@@ -181,8 +175,15 @@ def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2):
                 vt = 2
             elif vessType[i]==1: # vein
                 vt = 3
-
-            handle.write(f"{i+1} {vt} {segnodname1} {segnodname2} {diam} {flow} {0.45}\n")
+                
+            # Calculate lengths
+            if include_length:
+                i0 = np.sum(nedgePoints[:i])
+                pts = edgePointCoordinates[i0:i0+nedgePoints[i]]
+                length = np.sum(np.linalg.norm(edgePointCoordinates[1:]-edgePointCoordinates[:-1],axis=0))
+                handle.write(f"{i+1} {vt} {segnodname1} {segnodname2} {diam} {length} {flow} {0.45}\n")
+            else:
+                handle.write(f"{i+1} {vt} {segnodname1} {segnodname2} {diam} {flow} {0.45}\n")
             
         print(f"Max diameter = {diammax}, idx = {idiammax}")
 

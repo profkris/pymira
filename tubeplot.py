@@ -1,8 +1,10 @@
 import numpy as np
 arr = np.asarray
+norm = np.linalg.norm
 import open3d as o3d
 import pyvista as pv
 from tqdm import tqdm, trange
+from vessel_sim import geometry
 
 def align_vector_to_another(a=np.array([0, 0, 1]), b=np.array([1, 0, 0])):
     """
@@ -23,10 +25,10 @@ def align_vector_to_another(a=np.array([0, 0, 1]), b=np.array([1, 0, 0])):
 class TubePlot(object):
 
     def __init__(self,graph, cylinders=None, cylinders_combined=None, color=None, edge_color=None, 
-                         min_radius=0.,domain_radius=None,radius_scale=1.,domain_centre=arr([0.,0.,0.]),radius_based_resolution=True,cyl_res=10,edge_filter=None,node_filter=None,
+                         min_radius=0.,domain_radius=None,radius_scale=1.,domain_centre=None,radius_based_resolution=True,cyl_res=10,edge_filter=None,node_filter=None,
                          cmap_range=[None,None],bgcolor=[0.,0.,0.],cmap=None,win_width=1920,win_height=1080,grab_file=None,
                          edge_highlight=[],node_highlight=[],highlight_color=[1,1,1],scalar_color_name=None,log_color=False,
-                         show=True,block=True,engine='open3d'):
+                         show=True,block=True,engine='open3d',domain=None,domain_type='cylinder'):
         self.vis = None
         self.graph = graph
         self.cylinders = cylinders
@@ -34,12 +36,26 @@ class TubePlot(object):
         
         # Minimum vessel radius to plot (scalar)
         self.min_radius = min_radius
+        # Domain
+        self.domain = domain
+        self.domain_type = domain_type
         # Size of area to plot
         self.domain_radius = domain_radius
         # Factor to scale vessel radii by
         self.radius_scale = radius_scale
         # Centre of plot domain
-        self.domain_centre = domain_centre
+        self.domain_centre = None
+        if domain_centre is None:
+            if self.domain is not None:
+                self.domain_centre = (self.domain[:,1]+self.domain[:,0])/2.
+        else:
+            self.domain_centre = domain_centre
+        self.domain_radius = None
+        if domain_radius is None: # Use size of first domain
+            if self.domain is not None:
+                self.domain_radius = (self.domain[0,1]-self.domain[0,0])/2.
+        else:
+            self.domain_radius = domain_radius
         # Cylinder resolution based on radius (boolean)
         self.radius_based_resolution = radius_based_resolution
         # Cylinder resolution (scalar)
@@ -101,6 +117,81 @@ class TubePlot(object):
 
         if self.block:
             self._show_plot()
+            
+            
+    def find_domain_intersection(self,start_coord,end_coord,epsilon=1e-6):
+        # Find which face segment intersects
+        if self.domain_type=='cuboid':
+            # Point on each face
+            # Normal to each face
+            pn = arr([[0.,0.,1.],[0.,-1.,0],[0.,0.,-1.],[0.,1.,0.],[1.,0.,0.],[-1.,0.,0.]])
+            intersection = np.zeros([6,3]) * np.nan
+            for i in range(6): 
+                pnt = arr([(x[1]-x[0])/2. for x in self.domain])
+                ind = np.where(pn[i]==1)
+                if len(ind[0])>0:                
+                    pnt[ind[0]] = self.domain[ind[0],0]
+                ind = np.where(pn[i]==-1)
+                if len(ind[0])>0:                
+                    pnt[ind[0]] = self.domain[ind[0],1]
+                    
+                dir = end_coord - start_coord
+                coll,pt = geometry.line_plane_intersection(pnt,pn[i],end_coord,dir)
+                # See if intersection point is inside the domain
+                if pt is not None and self.inside_domain(pt):
+                    intersection[i,:] = pt
+            # Find closest intersection that is on the surface of the cubic domain
+            if np.all(~np.isfinite(intersection)):
+                return None
+            face = np.nanargmin([norm(x-end_coord) for x in intersection])
+            coord = intersection[face,:]
+            return coord 
+        else:  
+            return None                   
+            
+    def inside_domain(self,coord,start_coord=None,epsilon=1e-6,**kwargs):
+
+        #if self.domain is None:
+        #    return True, None
+        # Cuboid domain
+        if self.domain_type=='cuboid':
+            if np.all(self.domain[:,0]<=coord) and np.all(self.domain[:,1]>=coord):
+                return True, None
+            elif start_coord is not None:
+                dom_int = self.find_domain_intersection(start_coord,coord)
+                return False, dom_int
+            else:
+                return False, None
+        elif self.domain_type=='cylinder':
+            if self.domain_centre is None or self.domain_radius is None:
+                return True, None
+            in0 = np.linalg.norm(start_coord-self.domain_centre)<=self.domain_radius
+            in1 = np.linalg.norm(coord-self.domain_centre)<=self.domain_radius
+            if not in0 and not in1:
+                return False, None
+            elif in0 and in1:
+                return True, None
+            else:
+                return False, None #self.find_domain_intersection(start_coord,coord)
+        elif self.domain_type=='surface':
+            # Assumes a plane oriented in x-y
+            if np.all(self.domain[0:2,0]<=coord[0:2]) and np.all(self.domain[0:2,1]>=coord[0:2]):
+                return True, None
+            elif start_coord is not None:
+                dom_int = self.find_domain_intersection(start_coord,coord)
+                return False, dom_int
+            else:
+                return False, None
+        elif self.domain_type=='sphere':
+            radius = (self.domain[:,1]-self.domain[:,0])/2.
+            centre = arr([0.,0.,0.])
+            dist = np.linalg.norm(coord-centre)
+            if dist>radius[0]:
+                return False, None
+            else:
+                return True, None
+        else:
+            return True, None          
 
     def set_cylinder_colors(self,edge_color=None,scalar_color_name=None,cmap=None,cmap_range=None,update=True):
     
@@ -132,7 +223,7 @@ class TubePlot(object):
                      
         if self.log_color:   
             self.edge_color = np.abs(self.edge_color)
-            self.edge_color[self.edge_color==0.] = 1e-6
+            self.edge_color[self.edge_color<=0.] = 1e-6
             self.edge_color = np.log(self.edge_color)
                             
         # Set range
@@ -215,14 +306,15 @@ class TubePlot(object):
                 coords = points[i0:i1]
                 rads = radii[i0:i1]
 
-                if np.any(rads>=self.min_radius) and (self.domain_radius is None or np.any(np.linalg.norm(coords-self.domain_centre)<=self.domain_radius)):
+                if np.any(rads>=self.min_radius): # (self.domain_radius is None or np.any(np.linalg.norm(coords-self.domain_centre)<=self.domain_radius)):
                     for j in range(1,coords.shape[0]):
                         if rads[j]>=self.min_radius:
                             x0,x1 = coords[j-1],coords[j]
                             vec = x1-x0
                             height = np.linalg.norm(x1-x0)
                             
-                            if height>0. and np.isfinite(height) and (self.domain_radius is None or (np.linalg.norm(x0-self.domain_centre<=self.domain_radius) and np.linalg.norm(x1-self.domain_centre<=self.domain_radius))):
+                            inside,intersection = self.inside_domain(x0,start_coord=x1)
+                            if height>0. and np.isfinite(height) and inside: # (self.domain_radius is None or (np.linalg.norm(x0-self.domain_centre<=self.domain_radius) and np.linalg.norm(x1-self.domain_centre<=self.domain_radius))):
                                 vec = vec / height
                                 if rads[j]<20. and self.radius_based_resolution:
                                     resolution = 4
