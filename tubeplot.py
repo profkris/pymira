@@ -33,6 +33,7 @@ class TubePlot(object):
         self.graph = graph
         self.cylinders = cylinders
         self.cylinders_combined = cylinders_combined
+        self.additional_meshes = None
         
         # Minimum vessel radius to plot (scalar)
         self.min_radius = min_radius
@@ -272,6 +273,17 @@ class TubePlot(object):
         
         if update:
             self.update()
+            
+    def add_torus(self,centre=arr([0.,0.,0.]),**kwargs):
+        torus = o3d.geometry.TriangleMesh.create_torus(**kwargs) # torus_radius=1.0, tube_radius=0.5, radial_resolution=30, tubular_resolution=20
+        torus = torus.translate(centre, relative=False)
+        # For now, add it in to the combined mesh. TODO: Have a dedicated set of additional meshes
+        if self.additional_meshes is None:
+            self.additional_meshes = torus
+            self.vis.add_geometry(self.additional_meshes)
+        else:
+            self.additional_meshes += torus
+        self.update()
         
     def create_plot_cylinders(self):
     
@@ -401,6 +413,8 @@ class TubePlot(object):
         
             if self.cylinders_combined is not None:
                 self.vis.add_geometry(self.cylinders_combined)
+            if self.additional_meshes is not None:
+                self.vis.add_geometry(self.additional_meshes)
             
             opt = self.vis.get_render_option()
             opt.background_color = np.asarray(self.bgcolor)
@@ -416,7 +430,13 @@ class TubePlot(object):
     def update(self):
         if self.engine=='open3d':
             if self.vis is not None:
-                self.vis.update_geometry(self.cylinders_combined)
+                meshes = []
+                #breakpoint()
+                if self.additional_meshes is not None:
+                    self.vis.update_geometry(self.additional_meshes)
+                if self.cylinders_combined is not None: 
+                    meshes.append(self.cylinders_combined)
+                    self.vis.update_geometry(self.cylinders_combined)
         
     def screen_grab(self,fname):
         if self.engine=='open3d':

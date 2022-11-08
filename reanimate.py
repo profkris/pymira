@@ -109,7 +109,7 @@ def import_dat(filename,plot=False):
     
     return graph
     
-def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2,include_length=False):
+def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2,include_length=False,pressure=None):
 
     if remove_intermediate:
         print('Removing intermedate nodes...')
@@ -220,10 +220,11 @@ def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2,in
             #https://www.ahajournals.org/doi/pdf/10.1161/01.CIR.18.5.864
             #https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1755-3768.2019.8165
             
-            if nbc==4:
-                pressure = [80.,80.,30.,30.]
-            elif nbc==2:
-                pressure = [80,30.]
+            if pressure is None:
+                if nbc==4:
+                    pressure = [80.,80.,30.,30.]
+                elif nbc==2:
+                    pressure = [80,30.]
 
             for inod,pr in zip(endnodes[0],pressure):
                 handle.write(f"{inod+1} {bctype} {pr} {consthd}\n")
