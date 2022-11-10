@@ -2,8 +2,11 @@
 # There must be a folder on the python path called reanimate with the amiramesh.py file in it
 from pymira import amiramesh as am
 import json
+from pathlib import Path
+import os
+join = os.path.join
 
-def convert(filepath):
+def convert(filepath,opath=None):
     a = am.AmiraMesh()
     a.read(filepath,quiet=True)
     o = dict()
@@ -16,6 +19,14 @@ def convert(filepath):
         name = name[0].upper() + name[1:]
         if field['data'] is not None:
             o[name] = field['data'].tolist()
-    f = open(filepath + '.json', 'w')
-    json.dump(o, f)
-    f.close()
+            
+    if opath is not None:
+        f = join(opath,Path(filepath).stem+'.json')
+    else:
+        f = filepath.replace('.am','.json')
+    
+    print(f)
+    with open(f, 'w') as handle:
+        json.dump(o, handle)
+        
+    return f
