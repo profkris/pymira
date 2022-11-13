@@ -6,7 +6,7 @@ from pathlib import Path
 import os
 join = os.path.join
 
-def convert(filepath,opath=None):
+def convert(filepath,opath=None,ofilename=None):
     a = am.AmiraMesh()
     a.read(filepath,quiet=True)
     o = dict()
@@ -16,17 +16,22 @@ def convert(filepath,opath=None):
     # Data stored as numpy array, so call tolist()
     for field in a.fields:
         name = field['name']
+        if name.lower()=='radii':
+            name = 'radius'
         name = name[0].upper() + name[1:]
         if field['data'] is not None:
             o[name] = field['data'].tolist()
             
     if opath is not None:
-        f = join(opath,Path(filepath).stem+'.json')
+        if ofilename is not None:
+            f = join(opath,ofilename)
+        else:
+            f = join(opath,Path(filepath).stem+'.json')
     else:
         f = filepath.replace('.am','.json')
     
     print(f)
     with open(f, 'w') as handle:
-        json.dump(o, handle)
+        json.dump(o, handle, indent=4)
         
     return f
