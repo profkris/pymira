@@ -127,9 +127,11 @@ class SpatialGraph(amiramesh.AmiraMesh):
         Print to cli for debugging
         """
         print('GRAPH')
-        print(('Fields: {}'.format(self.fieldNames)))
-        for f in self.fields:
-            print(f)
+        #print(('Fields: {}'.format(self.fieldNames)))
+        for i,d in enumerate(self.definitions):
+            print(f"Definition {i}: {d['name']}, size: {d['size']}")
+        for i,f in enumerate(self.fields):
+            print( f"Field {i}: {f['name']}, type: {f['type']}, shape: {f['shape']}") #, data: {f['data']}")
             
     def print(self):
         self.__str__()

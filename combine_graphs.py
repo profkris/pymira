@@ -101,6 +101,8 @@ def combine_cco(path,mFiles,ofile):
             midLinePos = np.zeros(graph_to_add.nedgepoint)
         elif 'lower' in f:
             midLinePos = np.zeros(graph_to_add.nedgepoint) + 1
+        else:
+            midLinePos = np.zeros(graph_to_add.nedgepoint)
         marker = graph_to_add.generate_next_marker()
         graph_to_add.add_field(name='VesselType',marker=marker,definition='POINT',type='float',nelements=1,data=vesselType)
         marker = graph_to_add.generate_next_marker()
