@@ -24,11 +24,11 @@ def align_vector_to_another(a=np.array([0, 0, 1]), b=np.array([1, 0, 0])):
 
 class TubePlot(object):
 
-    def __init__(self,graph, cylinders=None, cylinders_combined=None, color=None, edge_color=None, 
+    def __init__(self,graph, parameter=None, cylinders=None, cylinders_combined=None, color=None, edge_color=None, 
                          min_radius=0.,domain_radius=None,radius_scale=1.,domain_centre=None,radius_based_resolution=True,cyl_res=10,edge_filter=None,node_filter=None,
-                         cmap_range=[None,None],bgcolor=[0.,0.,0.],cmap=None,win_width=1920,win_height=1080,grab_file=None,
+                         cmap_range=[None,None],bgcolor=[0.,0.,0.],cmap=None,win_width=6000,win_height=6000,grab_file=None,
                          edge_highlight=[],node_highlight=[],highlight_color=[1,1,1],scalar_color_name=None,log_color=False,
-                         show=True,block=True,engine='open3d',domain=None,domain_type='cylinder'):
+                         show=True,block=True,engine='open3d',domain=None,domain_type='cylinder',ignore_domain=False):
         self.vis = None
         self.graph = graph
         self.cylinders = cylinders
@@ -40,6 +40,7 @@ class TubePlot(object):
         # Domain
         self.domain = domain
         self.domain_type = domain_type
+        self.ignore_domain = ignore_domain
         # Size of area to plot
         self.domain_radius = domain_radius
         # Factor to scale vessel radii by
@@ -92,7 +93,10 @@ class TubePlot(object):
         # Hightlight colour for above
         self.highlight_color = highlight_color
         # Scalar parameter for edge colours (radius by default)
-        self.scalar_color_name = scalar_color_name
+        if parameter is not None:
+            self.scalar_color_name = parameter
+        else:
+            self.scalar_color_name = scalar_color_name
         # Whether to log colour scale (boolean)
         self.log_color = log_color
         
@@ -151,6 +155,9 @@ class TubePlot(object):
             return None                   
             
     def inside_domain(self,coord,start_coord=None,epsilon=1e-6,**kwargs):
+    
+        if self.ignore_domain:
+            return True, None
 
         #if self.domain is None:
         #    return True, None
@@ -194,7 +201,7 @@ class TubePlot(object):
         else:
             return True, None          
 
-    def set_cylinder_colors(self,edge_color=None,scalar_color_name=None,cmap=None,cmap_range=None,update=True):
+    def set_cylinder_colors(self,edge_color=None,scalar_color_name=None,cmap=None,cmap_range=None,update=True,log_color=False):
     
         if scalar_color_name is not None:
             self.scalar_color_name = scalar_color_name
@@ -202,6 +209,7 @@ class TubePlot(object):
             self.cmap = cmap
         if cmap_range is not None:
             self.cmap_range = cmap_range
+        self.log_color = log_color
 
         nedge = self.graph.nedge
         nedgepoint = self.graph.nedgepoint
@@ -233,10 +241,10 @@ class TubePlot(object):
             self.cmap_range[0] = self.edge_color.min()
         if self.cmap_range[1] is None:
             self.cmap_range[1] = self.edge_color.max()
-        if self.cmap_range[0]>=self.cmap_range[1]:
-            print('Error: Invalid Cmap range!')
-            self.cmap_range[0] = 0.
-            self.cmap_range[0] = 1.
+        if self.cmap_range[0]>self.cmap_range[1]:
+            print('Warning: Invalid Cmap range!')
+            #self.cmap_range[0] = 0.
+            #self.cmap_range[0] = 1.
         
         # Set colour map (lookup table) 
         if self.scalar_color_name=='VesselType':  
@@ -274,15 +282,29 @@ class TubePlot(object):
         if update:
             self.update()
             
-    def add_torus(self,centre=arr([0.,0.,0.]),**kwargs):
+    def add_torus(self,centre=arr([0.,0.,0.]),color=arr([1.,1.,1.]),**kwargs):
         torus = o3d.geometry.TriangleMesh.create_torus(**kwargs) # torus_radius=1.0, tube_radius=0.5, radial_resolution=30, tubular_resolution=20
+        # Simple translation (TODO: Add rotation, etc.)
         torus = torus.translate(centre, relative=False)
-        # For now, add it in to the combined mesh. TODO: Have a dedicated set of additional meshes
+        torus.paint_uniform_color(color)
         if self.additional_meshes is None:
             self.additional_meshes = torus
             self.vis.add_geometry(self.additional_meshes)
         else:
             self.additional_meshes += torus
+        self.update()
+        
+    def add_cylinder(self,centre=arr([0.,0.,0.]),color=arr([1.,1.,1.]),**kwargs):
+        cyl = o3d.geometry.TriangleMesh.create_cylinder(**kwargs)
+        # Simple translation (TODO: Add rotation, etc.)
+        cyl = cyl.translate(centre, relative=False)
+        cyl.paint_uniform_color(color)
+        # For now, add it in to the combined mesh. TODO: Have a dedicated set of additional meshes
+        if self.additional_meshes is None:
+            self.additional_meshes = cyl
+            self.vis.add_geometry(self.additional_meshes)
+        else:
+            self.additional_meshes += cyl
         self.update()
         
     def create_plot_cylinders(self):
@@ -446,4 +468,7 @@ class TubePlot(object):
     def destroy_window(self):
         if self.engine=='open3d':
             if self.vis is not None:
-                self.vis.destroy_window()              
+                control = self.vis.get_view_control()
+                self.vis.destroy_window()  
+                del control
+                del self.vis            

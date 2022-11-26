@@ -105,9 +105,9 @@ class AmiraMesh(object):
             else: # Default to float
                 dtype = np.dtype('f')
             try:
-                curData = np.asarray(curData,dtype=dtype)
+                curData = np.asarray(curData) #,dtype=dtype)
                 curData = np.reshape(curData,curField['shape'])
-                curField['data'] = curData
+                curField['data'] = curData.astype(dtype)
             except Exception as e:
                 if not quiet:
                     fname = curField['name']
@@ -407,26 +407,12 @@ class AmiraMesh(object):
 
         for i,curField in enumerate(self.fields):
             self._read_file_data(self.data,self.fieldRange[i],self.fieldRange[i+1],curField['marker'],quiet=quiet)
+            
+        # Remove any null data fields
+        self.fields = [x for x in self.fields if x['data'] is not None]
+
+        # Populate field names            
         self.fieldNames = [x['name'] for x in self.fields]
-                        
-#                else:
-#                    # The first time a data section marker is found (usually '@1') is during
-#                    # reading the header (it's hopw we know the header has ended). When the next
-#                    # data section marker (usually '@2') is found, we should end up here.
-#                    # This means that we are always sorting through the data once we've been
-#                    # through it already.
-#                    print i#,curLine
-#                    if i==32:
-#                        import pdb
-#                        pdb.set_trace()
-#                    dataSectionChk,newDataMarker,newMarkerIndex = self._dataline(curLine)
-#                    #eofChk = i==(len(content)-1) # Check for end of file
-#                    
-#                    if dataSectionChk:
-#                        import pdb
-#                        pdb.set_trace()
-#                        self._populate_next_data_field(i,curDataMarker)
-#                        curDataMarker = newDataMarker # Increment the marker
 
         # Populate the last field
         #self._populate_next_data_field(i,curDataMarker,eof=True)

@@ -656,6 +656,13 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 return match[0]
         return None
         
+    def get_radius_field_name(self):
+        f = self.get_radius_field()
+        if f is None:
+            return None
+        else: 
+            return f['name']
+        
     def edgepoint_indices(self,edgeIndex):
         """
         For a given edge index, return the start and end indices corresponding to edgepoints and scalars
@@ -678,6 +685,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         Check that all fields have the correct size, plus other checks and tests
         """ 
         self.set_graph_sizes()
+        err = ''
         
         for d in self.definitions:
             defName = d['name']
@@ -685,31 +693,47 @@ class SpatialGraph(amiramesh.AmiraMesh):
             fields = [f for f in self.fields if f['definition']==defName]
             for f in fields:
                 if f['nentries'][0]!=defSize:
-                    print(('{} field size does not match {} definition size!'.format(f['name'],defName)))
+                    err = f'{f["name"]} field size does not match {defName} definition size!'
+                    print(err)
                 if f['shape'][0]!=defSize:
-                    print(('{} shape size does not match {} definition size!'.format(f['name'],defName)))
+                    err = f'{f["name"]} shape size does not match {defName} definition size!'               
+                    print(err)
                 if not all(x==y for x,y in zip(f['data'].shape,f['shape'])):
-                    print(('{} data shape does not match shape field!'.format(f['name'])))
+                    err = f'{f["name"]} data shape does not match shape field!'
+                    print(err)               
 
         if deep:
-            for nodeInd in range(self.nnode):
+            for nodeInd in trange(self.nnode):
                 node = self.get_node(nodeInd)
                 for i,e in enumerate(node.edges):
                     if not node.edge_indices_rev[i]:
                         if not all(x==y for x,y in zip(e.start_node_coords,node.coords)):
-                            print(('Node coordinates ({}) do not match start of edge ({}) coordinates: {} {}'.format(node.index,e.index,e.start_node_coords,node.coords)))
+                            err = f'Node coordinates ({node.index}) do not match start of edge ({e.index}) coordinates: {e.start_node_coords} {node.coords}'
+                            #print(('Node coordinates ({}) do not match start of edge ({}) coordinates: {} {}'.format(node.index,e.index,e.start_node_coords,node.coords)))
                         if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
-                            print(('Edge start point does not match edge/node start ({}) coordinates'.format(e.index)))
+                            err = f'Edge start point does not match edge/node start ({e.index}) coordinates'
+                            #print(('Edge start point does not match edge/node start ({}) coordinates'.format(e.index)))
                         if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
-                            print(('Edge end point does not match edge/node end ({}) coordinates'.format(e.index)))
+                            err = f'Edge end point does not match edge/node end ({e.index}) coordinates'
+                            #print(('Edge end point does not match edge/node end ({}) coordinates'.format(e.index)))
                     else:
                         if not all(x==y for x,y in zip(e.end_node_coords,node.coords)):
-                            print(('Node coordinates ({}) do not match end of edge ({}) coordinates'.format(node.index,e.index)))
+                            err = f'Node coordinates ({node.index}) do not match end of edge ({e.index}) coordinates'
+                            print(err)
+                            #print(('Node coordinates ({}) do not match end of edge ({}) coordinates'.format(node.index,e.index)))
                         if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
-                            print(('Edge end point does not match edge start (REVERSE) ({}) coordinates'.format(e.index)))
+                            err = f'Edge end point does not match edge start (REVERSE) ({e.index}) coordinates'
+                            print(err)
+                            #print(('Edge end point does not match edge start (REVERSE) ({}) coordinates'.format(e.index)))
                         if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
-                            print(('Edge start point does not match edge end (REVERSE) ({}) coordinates'.format(e.index)))        
+                            err = f'Edge start point does not match edge end (REVERSE) ({e.index}) coordinates'
+                            print(err)
+                            #print(('Edge start point does not match edge end (REVERSE) ({}) coordinates'.format(e.index)))        
 
+        if err!='':
+            return False
+        else:
+            return True
 
         
     def nodes_connected_to(self,nodes,path=None):
@@ -1087,6 +1111,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         """
         
         from pymira.tubeplot import TubePlot
+        
         tp = TubePlot(self, **kwargs)
 
         return tp 

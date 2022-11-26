@@ -104,12 +104,12 @@ def import_dat(filename,plot=False):
     graph.set_data(point_pressure,name='Pressure')
     graph.set_data(node_pressure,name='NodePressure')
         
-    if graph.sanity_check() is not None:
+    if not graph.sanity_check():
         breakpoint()
     
     return graph
     
-def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2,include_length=False,pressure=None):
+def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2,include_length=True,pressure=None):
 
     if remove_intermediate:
         print('Removing intermedate nodes...')
@@ -180,7 +180,7 @@ def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2,in
             if include_length:
                 i0 = np.sum(nedgePoints[:i])
                 pts = edgePointCoordinates[i0:i0+nedgePoints[i]]
-                length = np.sum(np.linalg.norm(edgePointCoordinates[1:]-edgePointCoordinates[:-1],axis=0))
+                length = np.sum([np.linalg.norm(pts[j]-pts[j-1]) for j in range(1,pts.shape[0])])
                 handle.write(f"{i+1} {vt} {segnodname1} {segnodname2} {diam} {length} {flow} {0.45}\n")
             else:
                 handle.write(f"{i+1} {vt} {segnodname1} {segnodname2} {diam} {flow} {0.45}\n")
