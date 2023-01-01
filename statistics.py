@@ -25,13 +25,7 @@ class Statistics(object):
         self.graph = graph
         self.nodes = None
         self.edges = None
-        rad_names = ['radii','thickness','radius']
-        self.radius_field_name = None
-        for rad_name in rad_names:
-            radii = self.graph.get_data(rad_name.lower())
-            if radii is not None:
-                self.radius_field_name = rad_name
-                print(rad_name)
+        self.radius_field_name = self.graph.get_radius_field()['name']
                 
         self.radii = None
         self.nconn = None

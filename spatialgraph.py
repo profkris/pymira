@@ -2359,7 +2359,12 @@ class GVars(object):
         radname = graph.get_radius_field()['name']
         self.radname = radname
         
-    def add_node(self,node):
+        node_scalars = graph.get_node_scalars()
+        node_scalar_values = [x['data'].copy() for x in node_scalars]
+        self.node_scalar_values = node_scalar_values
+        self.node_scalars = node_scalars
+        
+    def add_node(self,node,new_scalar_vals=[]):
         # Assign existing node slot to supplied node coordinate
         if self.node_ptr>=self.nodecoords.shape[0]:
             self.preallocate_nodes(self.n_all,set_pointer_to_start=False)
@@ -2368,6 +2373,10 @@ class GVars(object):
         self.node_ptr += 1
         if self.node_ptr>=self.nodecoords.shape[0]:
             self.preallocate_nodes(self.n_all,set_pointer_to_start=False)
+            
+        for i,sc in enumerate(self.node_scalar_values):
+            self.node_scalar_values[i][self.node_ptr] = new_scalar_vals[i]
+            
     def append_nodes(self,nodes,update_pointer=False):
         # Create new slots for an array containing multiple node coordinates
         self.nodecoords = np.vstack([self.nodecoords,nodes])
@@ -2452,6 +2461,11 @@ class GVars(object):
             self.node_ptr = self.nodecoords.shape[0]
         self.nodecoords = np.vstack([self.nodecoords,np.zeros([n,3])])
         self.nodecoords_allocated = np.concatenate([self.nodecoords_allocated,np.zeros(n,dtype='bool')])
+        for i,sc in enumerate(self.node_scalar_values):
+            if sc.dtype in ['bool']:
+                self.node_scalar_values[i] = np.concatenate([self.node_scalar_values[i],np.zeros(n,dtype=sc.dtype)])
+            else:
+                self.node_scalar_values[i] = np.concatenate([self.node_scalar_values[i],np.zeros(n,dtype=sc.dtype)-1])
     def preallocate_edges(self,n,set_pointer_to_start=False):
         if set_pointer_to_start:
             self.edge_ptr = self.edgeconn.shape[0]
@@ -2476,6 +2490,8 @@ class GVars(object):
             self.scalar_values[i] = self.scalar_values[i][self.edgepoints_allocated]
             
         self.nodecoords_allocated = self.nodecoords_allocated[self.nodecoords_allocated]
+        for i,sc in enumerate(self.node_scalar_values):
+            self.node_scalar_values[i] = self.node_scalar_values[i][self.nodecoords_allocated]
         self.edgeconn_allocated = self.edgeconn_allocated[self.edgeconn_allocated]
         self.edgepoints_allocated = self.edgepoints_allocated[self.edgepoints_allocated]
         
@@ -2488,6 +2504,8 @@ class GVars(object):
         fields = self.graph.fields
         scalars = self.graph.get_scalars()
         scalar_names = [x['name'] for x in scalars]
+        node_scalars = self.graph.get_node_scalars()
+        node_scalar_names = [x['name'] for x in node_scalars]
         
         nodecoords = self.nodecoords[self.nodecoords_allocated]
         edgeconn = self.edgeconn[self.edgeconn_allocated]
@@ -2496,6 +2514,9 @@ class GVars(object):
         scalar_values = [[] for i in range(len(self.scalar_values))]
         for i,sc in enumerate(self.scalar_values):
             scalar_values[i] = self.scalar_values[i][self.edgepoints_allocated]
+        node_scalar_values = [[] for i in range(len(self.node_scalar_values))]
+        for i,sc in enumerate(self.node_scalar_values):
+            node_scalar_values[i] = self.node_scalar_values[i][self.nodecoords_allocated]
         
         for i,field in enumerate(fields):
             if field['name']=='VertexCoordinates':
@@ -2508,6 +2529,9 @@ class GVars(object):
                 self.graph.set_data(nedgepoints.astype('int'),name=fieldNames[i])
             elif field['name'] in scalar_names:
                 data = scalar_values[scalar_names.index(field['name'])]
+                self.graph.set_data(data,name=fieldNames[i])
+            elif field['name'] in node_scalar_names:
+                data = node_scalar_values[node_scalar_names.index(field['name'])]
                 self.graph.set_data(data,name=fieldNames[i])
 
         self.graph.set_definition_size('VERTEX',nodecoords.shape[0])
