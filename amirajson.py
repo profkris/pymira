@@ -1,13 +1,13 @@
 # Converts an object loaded using AmiraMesh from https://github.com/CABI-SWS/reanimate
 # There must be a folder on the python path called reanimate with the amiramesh.py file in it
-from pymira import amiramesh as am
+from pymira import spatialgraph as am
 import json
 from pathlib import Path
 import os
 join = os.path.join
 
 def convert(filepath,opath=None,ofilename=None):
-    a = am.AmiraMesh()
+    a = am.SpatialGraph()
     a.read(filepath,quiet=True)
     o = dict()
     # AmiraMesh object data held in fields by name:
@@ -29,8 +29,7 @@ def convert(filepath,opath=None,ofilename=None):
             f = join(opath,Path(filepath).stem+'.json')
     else:
         f = filepath.replace('.am','.json')
-    
-    print(f)
+
     with open(f, 'w') as handle:
         json.dump(o, handle, indent=4)
         

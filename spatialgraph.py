@@ -77,6 +77,10 @@ def delete_vertices(graph,keep_nodes,return_lookup=False): # #verts,edges,keep_n
     # Remove nodes and update indices
     nodecoords, edgeconn, edge_lookup = update_array_index(nodecoords,edgeconn,keep_nodes)
     
+    node_scalars = graph.get_node_scalars()
+    for i,sc in enumerate(node_scalars):
+        graph.set_data(node_scalars[i]['data'][keep_nodes],name=sc['name'])
+    
     # Update VERTEX definition
     vertex_def = graph.get_definition('VERTEX')
     vertex_def['size'] = [nodecoords.shape[0]]
@@ -119,6 +123,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
             self.definitions = copy.deepcopy(header_from.definitions)
             self.header = copy.deepcopy(header_from.header)
             self.fieldNames = copy.deepcopy(header_from.fieldNames)
+            
         if initialise:
             self.initialise(scalars=scalars,node_scalars=node_scalars)        
             
@@ -132,9 +137,32 @@ class SpatialGraph(amiramesh.AmiraMesh):
             print(f"Definition {i}: {d['name']}, size: {d['size']}")
         for i,f in enumerate(self.fields):
             print( f"Field {i}: {f['name']}, type: {f['type']}, shape: {f['shape']}") #, data: {f['data']}")
+        return ''
             
     def print(self):
-        self.__str__()
+        self.__repr__()
+        
+    def copy(self):
+        graph_copy = SpatialGraph()
+        
+        import copy
+        graph_copy.parameters = copy.deepcopy(self.parameters)
+        graph_copy.definitions = copy.deepcopy(self.definitions)
+        graph_copy.header = copy.deepcopy(self.header)
+        graph_copy.fieldNames = copy.deepcopy(self.fieldNames)
+        
+        graph_copy.fields = []
+        for i,f in enumerate(self.fields):
+            fcopy = f.copy()
+            fcopy['data'] = f['data'].copy()
+            graph_copy.fields.append(fcopy)
+            
+        graph_copy.set_graph_sizes()
+        
+        graph_copy.fileType = self.fileType
+        graph_copy.filename = self.filename
+            
+        return graph_copy
             
     def initialise(self,scalars=None,node_scalars=None):
     
@@ -579,6 +607,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
             print(('Could not locate requested field: {}'.format(fieldName)))
             return
         _  = self.fields.pop(f[0][0])
+        _  = self.fieldNames.pop(f[0][0])
         
     def get_node(self,index):
         """
@@ -641,7 +670,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         """
         Return scalar edge fields
         """
-        return [f for f in self.fields if f['definition'].lower()=='vertex' and len(f['shape'])==1 and f['name']!='VertexCoordinates']
+        return [f for f in self.fields if f is not None and f['definition'].lower()=='vertex' and len(f['shape'])==1 and f['name']!='VertexCoordinates']
         
     def get_radius_field(self):
         """
@@ -673,12 +702,21 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         assert edgeIndex>=0
         assert edgeIndex<nedge
-        
+        chase
         npoints = nedgepoints[edgeIndex]
         start_index = np.sum(nedgepoints[:edgeIndex])
         end_index = start_index + npoints
         
         return [start_index,end_index]
+        
+    def check_for_degenerate_edges(self):
+
+        edgeconn = self.get_data('EdgeConnectivity')
+        un,cn = np.unique(edgeconn,axis=0,return_counts=True)
+        if np.any(cn>1):
+            return True
+        else:
+            return False
             
     def sanity_check(self,deep=False):
         """
@@ -1391,6 +1429,89 @@ class Editor(object):
         self.delete_edges(graph,selfconn,remove_disconnected_nodes=False)
         return graph
         
+    def simplify_edges(self,graph,factor=2.,fixed=None,exclude=[]):
+        
+        nodecoords = graph.get_data('VertexCoordinates')
+        edgeconn = graph.get_data('EdgeConnectivity')
+        points = graph.get_data('EdgePointCoordinates')
+        nedge = graph.get_data('NumEdgePoints')
+        scalars = graph.get_scalars()
+        nscalars = graph.get_node_scalars()
+        
+        scalars = graph.get_scalars()
+        scalar_data = [x['data'] for x in scalars]
+        scalar_type = [str(x.dtype) for x in scalar_data]
+        scalar_data_interp = [[] for x in scalars]
+        
+        points_new = points.copy() * 0.
+        nedge_new = np.zeros(graph.nedge,dtype='int')
+        
+        e_counter = 0
+        for i in range(graph.nedge):
+            edge = graph.get_edge(i)
+            
+            if i in exclude:
+                nn = edge.npoints
+            elif fixed is None:
+                nn = np.clip(int(np.ceil(edge.npoints / float(factor))),2,None)
+            else:
+                nn = fixed
+            pts = edge.coordinates
+            
+            if nn!=edge.npoints:
+                from scipy import interpolate
+                try:
+                    if nn<=4:
+                        pcur = np.linspace(pts[0],pts[-1],nn)
+                    else:
+                        k = 1
+                        # Interpolate fails if all values are equal (to zero?)
+                        # This most commonly happens in z-direction, for retinas at least, so add noise and remove later
+                        if np.all(pts[:,2]==pts[0,2]):
+                            z = pts[:,2] + np.random.normal(0.,0.1,pts.shape[0])
+                        else:
+                            z = pts[:,2]
+                        tck, u = interpolate.splprep([pts[:,0], pts[:,1], z],k=k,s=0) #, s=2)
+                        u_fine = np.linspace(0,1,nn)
+                        pcur = np.zeros([nn,3])
+                        pcur[:,0], pcur[:,1], pcur[:,2] = interpolate.splev(u_fine, tck)
+                        if np.all(pts[:,2]==pts[0,2]):
+                            pcur[:,2] = pts[0,2]
+                except Exception as e:
+                    breakpoint()
+
+            else:
+                pcur = pts
+                           
+            for j,sd in enumerate(scalar_data):
+                sdc = sd[edge.i0:edge.i1]
+                if 'float' in scalar_type[j]:
+                    scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],nn))
+                elif 'int' in scalar_type[j]:
+                    if sdc[0]==sdc[-1]:
+                        scalar_data_interp[j].extend(np.zeros(nn)+sdc[0])
+                    else:
+                        scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],nn,dtype='int'))
+                elif 'bool' in scalar_type[j]:
+                    scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],nn,dtype='bool'))
+                else:
+                    breakpoint()
+                
+            points_new[e_counter:e_counter+nn] = pcur
+            nedge_new[i] = nn
+            e_counter += nn
+            
+        graph.set_data(points_new[:e_counter], name='EdgePointCoordinates')
+        graph.set_data(nedge_new, name='NumEdgePoints')
+        
+        for j,sd in enumerate(scalar_data_interp):
+            graph.set_data(arr(sd),name=scalars[j]['name'])
+        
+        graph.set_definition_size('POINT',e_counter)   
+        graph.set_graph_sizes()     
+        
+        return graph
+        
     def remove_intermediate_nodes(self,graph):
         """
         Remove nodes that have exactly two connections, and add them into the edge data
@@ -1918,8 +2039,10 @@ class Editor(object):
                             if sdc[0]==sdc[-1]:
                                 scalar_data_interp[j].extend(np.zeros(ninterp)+sdc[0])
                             else:
-                                breakpoint()
+                                #breakpoint()
                                 scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],ninterp,dtype='int'))
+                        elif 'bool' in scalar_type[j]:
+                            scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],nn,dtype='bool'))                                
                         else:
                             breakpoint()
                     
@@ -1950,10 +2073,18 @@ class Editor(object):
                             pcur[0],pcur[-1] = pts[0],pts[-1]
                     else:
                         k = 1
-                        tck, u = interpolate.splprep([pts[:,0], pts[:,1], pts[:,2]],k=k,s=0) #, s=2)
+                        # Interpolate fails if all values are equal (to zero?)
+                        # This most commonly happens in z-direction, for retinas at least, so add noise and remove later
+                        if np.all(pts[:,2]==pts[0,2]):
+                            z = pts[:,2] + np.random.normal(0.,0.1,pts.shape[0])
+                        else:
+                            z = pts[:,2]
+                        tck, u = interpolate.splprep([pts[:,0], pts[:,1], z],k=k,s=0) #, s=2)
                         u_fine = np.linspace(0,1,ninterp)
                         pcur = np.zeros([ninterp,3])
                         pcur[:,0], pcur[:,1], pcur[:,2] = interpolate.splev(u_fine, tck)
+                        if np.all(pts[:,2]==pts[0,2]):
+                            pcur[:,2] = pts[0,2]
                 except Exception as e:
                     breakpoint()
                 
@@ -2370,12 +2501,11 @@ class GVars(object):
             self.preallocate_nodes(self.n_all,set_pointer_to_start=False)
         self.nodecoords[self.node_ptr] = node
         self.nodecoords_allocated[self.node_ptr] = True
+        for i,sc in enumerate(self.node_scalar_values):
+            self.node_scalar_values[i][self.node_ptr] = new_scalar_vals[i]
         self.node_ptr += 1
         if self.node_ptr>=self.nodecoords.shape[0]:
             self.preallocate_nodes(self.n_all,set_pointer_to_start=False)
-            
-        for i,sc in enumerate(self.node_scalar_values):
-            self.node_scalar_values[i][self.node_ptr] = new_scalar_vals[i]
             
     def append_nodes(self,nodes,update_pointer=False):
         # Create new slots for an array containing multiple node coordinates
@@ -2383,38 +2513,39 @@ class GVars(object):
         self.nodecoords_allocated = np.concatenate([self.nodecoords_allocated,np.ones(nodes.shape[0],dtype='bool')])
         if update_pointer:
             self.node_ptr = self.nodecoords.shape[0]
-    def add_edgeconn(self,conn):
+    def add_edgeconn(self,conn,npts=2):
         if self.edge_ptr>=self.edgeconn.shape[0]:
             self.preallocate_edges(self.n_all,set_pointer_to_start=False)
         self.edgeconn[self.edge_ptr] = conn
         self.edgeconn_allocated[self.edge_ptr] = True
-        self.nedgepoints[self.edge_ptr] = 2
+        self.nedgepoints[self.edge_ptr] = npts
         self.edge_ptr += 1
         if self.edge_ptr>=self.edgeconn.shape[0]:
             self.preallocate_edges(self.n_all,set_pointer_to_start=False)
     def add_edgepoints(self,pnt,new_scalar_vals,edgeInd=-1):
-        if self.edgepoints.shape[0]-self.edgepnt_ptr<=pnt.shape[0]:
+        npts = pnt.shape[0]
+        if self.edgepoints.shape[0]-self.edgepnt_ptr<=npts:
             self.preallocate_edgepoints(self.n_all,set_pointer_to_start=False)
-        self.edgepoints[self.edgepnt_ptr:self.edgepnt_ptr+pnt.shape[0]] = pnt
-        self.edgepoints_allocated[self.edgepnt_ptr:self.edgepnt_ptr+pnt.shape[0]] = True
+        self.edgepoints[self.edgepnt_ptr:self.edgepnt_ptr+npts] = pnt
+        self.edgepoints_allocated[self.edgepnt_ptr:self.edgepnt_ptr+npts] = True
         if edgeInd>=0:
-            self.nedgepoints[edgeInd] = pnt.shape[0]
+            self.nedgepoints[edgeInd] = npts
         for i,sc in enumerate(self.scalar_values):
-            #if self.scalars[i]['name']!=self.radname:
-            # All float type for now...
-            self.scalar_values[i][self.edgepnt_ptr:self.edgepnt_ptr+pnt.shape[0]] = np.zeros(pnt.shape[0],dtype='float')+new_scalar_vals[i]
-        self.edgepnt_ptr += pnt.shape[0]      
+            dt = self.scalar_values[i].dtype
+            self.scalar_values[i][self.edgepnt_ptr:self.edgepnt_ptr+npts] = np.zeros(npts,dtype=dt)+new_scalar_vals[i]
+        self.edgepnt_ptr += npts     
         if self.edgepnt_ptr>=self.edgepoints.shape[0]:
             self.preallocate_edgepoints(self.n_all,set_pointer_to_start=False)
-    def add_edge(self,start_node_index,end_node_index,new_scalar_vals):
+    def add_edge(self,start_node_index,end_node_index,new_scalar_vals,points=None):
         new_conn = [start_node_index,end_node_index]
         nodes = self.nodecoords[new_conn]
-        length = np.linalg.norm(nodes[1]-nodes[0])
-        #print(length)
-        #if length>10000.:
-        #    breakpoint()
-        self.add_edgeconn(new_conn)
-        self.add_edgepoints(self.nodecoords[new_conn],new_scalar_vals,edgeInd=self.edge_ptr-1)
+        if points is None or not np.all(points[0]==self.nodecoords[new_conn[0]]) or not np.all(points[-1]==self.nodecoords[new_conn[1]]):
+            self.add_edgeconn(new_conn)
+            self.add_edgepoints(self.nodecoords[new_conn],new_scalar_vals,edgeInd=self.edge_ptr-1)
+        else:
+            npts = points.shape[0]
+            self.add_edgeconn(new_conn,npts=npts)
+            self.add_edgepoints(points,new_scalar_vals,edgeInd=self.edge_ptr-1)
         
     def remove_edges(self,edge_inds_to_remove):
     
@@ -2459,7 +2590,7 @@ class GVars(object):
     def preallocate_nodes(self,n,set_pointer_to_start=False):
         if set_pointer_to_start:
             self.node_ptr = self.nodecoords.shape[0]
-        self.nodecoords = np.vstack([self.nodecoords,np.zeros([n,3])])
+        self.nodecoords = np.vstack([self.nodecoords,np.zeros([n,3],dtype=self.nodecoords.dtype)])
         self.nodecoords_allocated = np.concatenate([self.nodecoords_allocated,np.zeros(n,dtype='bool')])
         for i,sc in enumerate(self.node_scalar_values):
             if sc.dtype in ['bool']:
@@ -2498,6 +2629,113 @@ class GVars(object):
         self.node_ptr = self.nodecoords.shape[0]-1
         self.edge_ptr = self.edgeconn.shape[0]-1
         self.edgepnt_ptr = self.edgepoints.shape[0]-1
+        
+    def insert_node_in_edge(self,edge_index,edgepoint_index):
+    
+        # Returns the new node index and the two new edges (if any are made)
+        
+        nodeCoords = self.nodecoords[self.nodecoords_allocated]
+        edgeConn = self.edgeconn[self.edgeconn_allocated]
+        nedgepoints = self.nedgepoints[self.edgeconn_allocated]
+        edgeCoords = self.edgepoints[self.edgepoints_allocated]
+        scalars = []
+        for i,sc in enumerate(self.scalar_values):
+            scalars.append(self.scalar_values[i][self.edgepoints_allocated])
+        node_scalars = []
+        for i,sc in enumerate(self.node_scalar_values):
+            node_scalars.append(self.node_scalar_values[i][self.nodecoords_allocated])
+    
+        nnode = len(nodeCoords)
+        nedge = len(edgeConn)
+        nedgepoint = len(edgeCoords)
+        
+        x0 = int(np.sum(nedgepoints[:int(edge_index)]))
+        x1 = x0 + int(nedgepoints[int(edge_index)])
+        edge = edgeCoords[x0:x1]
+        npoints = edge.shape[0]
+        
+        xp = int(edgepoint_index)
+        new_node_coords = edge[xp]
+        
+        start_node = edgeConn[edge_index,0]
+        end_node = edgeConn[edge_index,1]
+        
+        if int(edgepoint_index)<npoints-1 and int(edgepoint_index)>0:
+            new_edge0 = edge[:xp+1]
+            new_edge1 = edge[xp:]
+        elif int(edgepoint_index)<0:
+            return edge, None, start_node, None
+        elif int(edgepoint_index)==npoints-1:
+            print('ERROR: _insert_node_in_edge: Edgepoint index>number of edgepoints!')
+            return edge, None, end_node, None
+        else:
+            return None, None, None, None
+            
+        # Assign the first new edge to the location of the supplied edge
+        # Create a new location for the second new edge
+        nedgepoints[int(edge_index)] = new_edge0.shape[0]
+        nedgepoints = np.concatenate([nedgepoints,[new_edge1.shape[0]]])
+        
+        # Squeeze in new edges into storage array
+        # Grab all edge coordinates prior to edge to be bisected
+        if x0>0:
+            edgeCoords_0 = edgeCoords[:x0]
+        else:
+            edgeCoords_0 = []
+        # Edge coordinates listed after the bisected edge
+        if edgeCoords.shape[0]>x0+npoints:
+            edgeCoords_1 = edgeCoords[x1:]
+        else:
+            edgeCoords_1 = []
+
+        edgeCoords = np.concatenate([x for x in [edgeCoords_0,new_edge0.copy(),edgeCoords_1,new_edge1.copy()] if len(x)>0 and not np.all(x)==-1])
+        
+        # Amend original connection
+        new_node_index = nodeCoords.shape[0]
+        edgeConn[edge_index] = [start_node,new_node_index]
+        new_conn = np.asarray([new_node_index,end_node])
+        edgeConn = np.concatenate([edgeConn,[new_conn]])
+        new_edge_index = nedge
+        # Add in new node coords
+        nodeCoords = np.concatenate([nodeCoords,[new_node_coords]])
+        
+        new_node_scalars = [x[start_node] for x in node_scalars]
+        
+        # Sort out scalars
+        for i,data in enumerate(node_scalars):
+            node_scalars[i] = np.concatenate([data,[new_node_scalars[i]]])
+            
+        for i,data in enumerate(scalars):
+            if x0>0:
+                sc_0 = data[:x0]
+            else:
+                sc_0 = []
+            if data.shape[0]>x0+npoints:
+                sc_1 = data[x1:]
+            else:
+                sc_1 = []
+            new_sc0 = data[x0:x0+xp+1]
+            new_sc1 = data[x0+xp:x1]
+            scalars[i] = np.concatenate([x for x in [sc_0,new_sc0.copy(),sc_1,new_sc1.copy()] if len(x)>0 and not np.all(x)==-1])
+            
+        self.nodecoords[:nodeCoords.shape[0]] = nodeCoords
+        self.edgeconn[:edgeConn.shape[0]] = edgeConn
+        self.nedgepoints[:nedgepoints.shape[0]] = nedgepoints
+        self.edgepoints[:edgeCoords.shape[0]] = edgeCoords
+        
+        self.nodecoords_allocated[:nodeCoords.shape[0]] = True #np.linspace(0,nodeCoords.shape[0]-1,nodeCoords.shape[0],dtype='int')
+        self.edgeconn_allocated[:edgeConn.shape[0]] = True #np.linspace(0,edgeConn.shape[0]-1,edgeConn.shape[0],dtype='int')
+        self.edgepoints_allocated[:edgeCoords.shape[0]] = True #np.linspace(0,edgeCoords.shape[0]-1,edgeCoords.shape[0],dtype='int')
+        self.node_ptr = nodeCoords.shape[0]
+        self.edge_ptr = edgeConn.shape[0]
+        self.edgepnt_ptr = edgeCoords.shape[0]
+
+        for i,sc in enumerate(self.scalar_values):
+            self.scalar_values[i][:scalars[i].shape[0]] = scalars[i]
+        for i,sc in enumerate(self.node_scalar_values):
+            self.node_scalar_values[i][:node_scalars[i].shape[0]] = node_scalars[i]
+           
+        return new_edge0.copy(), new_edge1.copy(), new_node_index, new_conn
         
     def set_in_graph(self):
         fieldNames = self.graph.fieldNames #['VertexCoordinates','EdgeConnectivity','EdgePointCoordinates','NumEdgePoints','Radii','VesselType','midLinePos']

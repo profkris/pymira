@@ -201,7 +201,7 @@ class TubePlot(object):
         else:
             return True, None          
 
-    def set_cylinder_colors(self,edge_color=None,scalar_color_name=None,cmap=None,cmap_range=None,update=True,log_color=False):
+    def set_cylinder_colors(self,edge_color=None,scalar_color_name=None,cmap=None,cmap_range=None,update=True,log_color=None):
     
         if scalar_color_name is not None:
             self.scalar_color_name = scalar_color_name
@@ -209,7 +209,8 @@ class TubePlot(object):
             self.cmap = cmap
         if cmap_range is not None:
             self.cmap_range = cmap_range
-        self.log_color = log_color
+        if log_color is not None:
+            self.log_color = log_color
 
         nedge = self.graph.nedge
         nedgepoint = self.graph.nedgepoint
@@ -279,6 +280,10 @@ class TubePlot(object):
             
         self.combine_cylinders()
         
+        if len(self.node_highlight)>0:
+            nodes = self.graph.get_data('VertexCoordinates')
+            self.vis.add_point_cloud(nodes[self.node_highlight],color=[1.,1.,1.]) # Deactivated at initialisation by existing vessels
+        
         if update:
             self.update()
             
@@ -305,6 +310,28 @@ class TubePlot(object):
             self.vis.add_geometry(self.additional_meshes)
         else:
             self.additional_meshes += cyl
+        self.update()
+        
+    def add_point_cloud(self,points,color=arr([1.,1.,1.]),**kwargs):
+        pointcloud = o3d.geometry.PointCloud()
+        pointcloud.points = o3d.utility.Vector3dVector(points)
+        
+        if color.shape[0]==points.shape[0] and color.shape[1]==3:
+            pointcloud.colors = o3d.utility.Vector3dVector(color)
+        else:
+            pointcloud.paint_uniform_color(color)
+            
+        #material = o3d.visualization.rendering.Material()
+        #material.shader = "defaultUnlit"
+        #material.base_color = color
+        #material.point_size = 6
+            
+        # For now, add it in to the combined mesh. TODO: Have a dedicated set of additional meshes
+        if self.additional_meshes is None:
+            self.additional_meshes = pointcloud
+            self.vis.add_geometry(self.additional_meshes)
+        else:
+            self.additional_meshes += pointcloud
         self.update()
         
     def create_plot_cylinders(self):

@@ -69,6 +69,7 @@ def csv2amira(filepath, ofile='', sanity_check=True):
         ofile = filepath+'.am'
     graph.write(ofile)
     print('Converted {} to {}'.format(filepath,ofile))
+    return ofile
             
 if __name__=='__main__':
 
