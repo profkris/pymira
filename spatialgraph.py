@@ -1985,7 +1985,7 @@ class Editor(object):
         return graph
         
         
-    def interpolate_edges(self,graph,interp_resolution=5.,filter=None,noise_sd=0.):
+    def interpolate_edges(self,graph,interp_resolution=None,ninterp=2,filter=None,noise_sd=0.):
         
         """
         Linear interpolation of edge points, to a fixed minimum resolution
@@ -2007,23 +2007,23 @@ class Editor(object):
         
         pts_interp,npoints_interp = [],np.zeros(conns.shape[0],dtype='int')-1
         for i,conn in enumerate(tqdm(conns)):
-            if npoints[i]==2:
-                if filter[i]==False: # Ignore if filter is False
-                    pts_interp.extend(points[i0:i1])
-                    npoints_interp[i] = 2 #.append(2)
-                    for j,sd in enumerate(scalar_data):
-                        scalar_data_interp[j].extend(sd[i0:i1])
-                else:
-                    i0 = np.sum(npoints[:i])
-                    i1 = i0 + npoints[i]
-                    pts = points[i0:i1]
-                        
+            i0 = np.sum(npoints[:i])
+            i1 = i0 + npoints[i]
+            pts = points[i0:i1]
+            
+            if filter[i]==False: # Ignore if filter is False
+                pts_interp.extend(points[i0:i1])
+                npoints_interp[i] = npoints[i] #.append(2)
+                for j,sd in enumerate(scalar_data):
+                    scalar_data_interp[j].extend(sd[i0:i1])
+            else:
+            
+                if npoints[i]==2:      
                     # Find how many additional points to interpolate in (if length>interpolation resolution)
-                    length = np.linalg.norm(pts[1]-pts[0])
-                    if length>interp_resolution:
-                        ninterp = np.clip(int(np.ceil(length / interp_resolution)+1),2,None)
-                    else:
-                        ninterp = 2
+                    if interp_resolution is not None:
+                        length = np.linalg.norm(pts[1]-pts[0])
+                        if length>interp_resolution:
+                            ninterp = np.clip(int(np.ceil(length / interp_resolution)+1),2,None)
                         
                     pcur = np.linspace(pts[0],pts[-1],ninterp)
                     if noise_sd>0.:
@@ -2050,89 +2050,89 @@ class Editor(object):
                     
                     if ninterp!=pcur.shape[0]:
                         breakpoint()
-            elif npoints[i]>2:
-                # Spline interpolate curve at required interval
-                i0 = np.sum(npoints[:i])
-                i1 = i0 + npoints[i]
-                pts = points[i0:i1]
+                elif npoints[i]>2:
+                    # Spline interpolate curve at required interval
+                    i0 = np.sum(npoints[:i])
+                    i1 = i0 + npoints[i]
+                    pts = points[i0:i1]
 
-                dists = arr([np.linalg.norm(pts[i]-pts[i-1]) for i,p in enumerate(pts[1:])])
-                length = np.sum(dists)
-                
-                if length>interp_resolution:
-                    ninterp = np.clip(int(np.ceil(length / interp_resolution)+1),2,None)
+                    dists = arr([np.linalg.norm(pts[i]-pts[i-1]) for i,p in enumerate(pts[1:])])
+                    length = np.sum(dists)
+                    
+                    if length>interp_resolution:
+                        ninterp = np.clip(int(np.ceil(length / interp_resolution)+1),2,None)
+                    else:
+                        ninterp = 2
+                    
+                    from scipy import interpolate
+                    try:
+                        if npoints[i]<=4:
+                            pcur = np.linspace(pts[0],pts[-1],ninterp)
+                            if noise_sd>0.:
+                                pcur += np.random.normal(0.,noise_sd)
+                                pcur[0],pcur[-1] = pts[0],pts[-1]
+                        else:
+                            k = 1
+                            # Interpolate fails if all values are equal (to zero?)
+                            # This most commonly happens in z-direction, for retinas at least, so add noise and remove later
+                            if np.all(pts[:,2]==pts[0,2]):
+                                z = pts[:,2] + np.random.normal(0.,0.1,pts.shape[0])
+                            else:
+                                z = pts[:,2]
+                            tck, u = interpolate.splprep([pts[:,0], pts[:,1], z],k=k,s=0) #, s=2)
+                            u_fine = np.linspace(0,1,ninterp)
+                            pcur = np.zeros([ninterp,3])
+                            pcur[:,0], pcur[:,1], pcur[:,2] = interpolate.splev(u_fine, tck)
+                            if np.all(pts[:,2]==pts[0,2]):
+                                pcur[:,2] = pts[0,2]
+                    except Exception as e:
+                        breakpoint()
+                    
+                    pcur[0] = pts[0]
+                    pcur[-1] = pts[-1]
+                    
+                    pts_interp.extend(pcur)
+                        
+                    #for j,sd in enumerate(scalar_data):
+                    #    sdc = sd[i0:i1]
+                    #    scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],pcur.shape[0]))
+                        
+                    for j,sd in enumerate(scalar_data):
+                        sdc = sd[i0:i1]
+                        if 'float' in scalar_type[j]:
+                            scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0]))
+                        elif 'int' in scalar_type[j]:
+                            breakpoint()
+                            if sdc[0]==sdc[-1]:
+                                scalar_data_interp[j].extend(np.zeros(ninterp)+sdc[0])
+                            else:
+                                scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0],dtype='int'))
+                        else:
+                            breakpoint()
+                        
+                    
+                    npoints_interp[i] = ninterp
+                    
+                    if ninterp!=pcur.shape[0]:
+                        breakpoint()
+
+                    if False:
+                        import matplotlib.pyplot as plt
+                        from mpl_toolkits.mplot3d import Axes3D
+                        fig2 = plt.figure(2)
+                        ax3d = fig2.add_subplot(111, projection='3d')
+                        ax3d.plot(pcur[:,0], pcur[:,1], pcur[:,2], 'b')
+                        ax3d.plot(pcur[:,0], pcur[:,1], pcur[:,2], 'b*')
+                        ax3d.plot(pts[:,0], pts[:,1], pts[:,2], 'r*')
+                        plt.show()
+                        breakpoint()
                 else:
-                    ninterp = 2
-                
-                from scipy import interpolate
-                try:
-                    if npoints[i]<=4:
-                        pcur = np.linspace(pts[0],pts[-1],ninterp)
-                        if noise_sd>0.:
-                            pcur += np.random.normal(0.,noise_sd)
-                            pcur[0],pcur[-1] = pts[0],pts[-1]
-                    else:
-                        k = 1
-                        # Interpolate fails if all values are equal (to zero?)
-                        # This most commonly happens in z-direction, for retinas at least, so add noise and remove later
-                        if np.all(pts[:,2]==pts[0,2]):
-                            z = pts[:,2] + np.random.normal(0.,0.1,pts.shape[0])
-                        else:
-                            z = pts[:,2]
-                        tck, u = interpolate.splprep([pts[:,0], pts[:,1], z],k=k,s=0) #, s=2)
-                        u_fine = np.linspace(0,1,ninterp)
-                        pcur = np.zeros([ninterp,3])
-                        pcur[:,0], pcur[:,1], pcur[:,2] = interpolate.splev(u_fine, tck)
-                        if np.all(pts[:,2]==pts[0,2]):
-                            pcur[:,2] = pts[0,2]
-                except Exception as e:
-                    breakpoint()
-                
-                pcur[0] = pts[0]
-                pcur[-1] = pts[-1]
-                
-                pts_interp.extend(pcur)
-                    
-                #for j,sd in enumerate(scalar_data):
-                #    sdc = sd[i0:i1]
-                #    scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],pcur.shape[0]))
-                    
-                for j,sd in enumerate(scalar_data):
-                    sdc = sd[i0:i1]
-                    if 'float' in scalar_type[j]:
-                        scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0]))
-                    elif 'int' in scalar_type[j]:
-                        breakpoint()
-                        if sdc[0]==sdc[-1]:
-                            scalar_data_interp[j].extend(np.zeros(ninterp)+sdc[0])
-                        else:
-                            scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0],dtype='int'))
-                    else:
-                        breakpoint()
-                    
-                
-                npoints_interp[i] = ninterp
-                
-                if ninterp!=pcur.shape[0]:
                     breakpoint()
 
-                if False:
-                    import matplotlib.pyplot as plt
-                    from mpl_toolkits.mplot3d import Axes3D
-                    fig2 = plt.figure(2)
-                    ax3d = fig2.add_subplot(111, projection='3d')
-                    ax3d.plot(pcur[:,0], pcur[:,1], pcur[:,2], 'b')
-                    ax3d.plot(pcur[:,0], pcur[:,1], pcur[:,2], 'b*')
-                    ax3d.plot(pts[:,0], pts[:,1], pts[:,2], 'r*')
-                    plt.show()
+                # Check nodes match!
+                if not np.all(pts_interp[-ninterp]==coords[conn[0]]) or not np.all(pts_interp[-1]==coords[conn[1]]) or \
+                   not np.all(pts_interp[-ninterp]==pts[0]) or not np.all(pts_interp[-1]==pts[-1]):
                     breakpoint()
-            else:
-                breakpoint()
-
-            # Check nodes match!
-            if not np.all(pts_interp[-ninterp]==coords[conn[0]]) or not np.all(pts_interp[-1]==coords[conn[1]]) or \
-               not np.all(pts_interp[-ninterp]==pts[0]) or not np.all(pts_interp[-1]==pts[-1]):
-                breakpoint()
 
         pts_interp = arr(pts_interp)
         graph.set_data(pts_interp,name='EdgePointCoordinates')
@@ -2142,7 +2142,7 @@ class Editor(object):
             graph.set_data(arr(sd),name=scalars[j]['name'])
         
         graph.set_definition_size('POINT',pts_interp.shape[0])   
-        graph.set_graph_sizes()     
+        graph.set_graph_sizes()   
 
 class Node(object):
     
@@ -2495,6 +2495,38 @@ class GVars(object):
         self.node_scalar_values = node_scalar_values
         self.node_scalars = node_scalars
         
+    def set_nodecoords(self,nodecoords,scalars=None,update_pointer=False):
+        # Reset all nodes to array argument provided
+        if self.nodecoords.shape[0]<nodecoords.shape[0]:
+            self.preallocate_nodes(nodecoords.shape[0]-self.nodecoords.shape[0],set_pointer_to_start=False)
+        self.nodecoords[:nodecoords.shape[0]] = nodecoords
+        self.nodecoords_allocated[:] = False
+        self.nodecoords_allocated[:nodecoords.shape[0]] = True        
+        self.node_ptr = nodecoords.shape[0]
+        for i,sc in enumerate(scalars):
+            self.node_scalar_values[i][:nodecoords.shape[0]] = sc
+        
+    def set_edgeconn(self,edgeconn,nedgepoints,update_pointer=False):
+        # Reset all edgeconn and nedgepoints to array argument provided
+        if self.edgeconn.shape[0]<edgeconn.shape[0]:
+            self.preallocate_edges(edgeconn.shape[0],set_pointer_to_start=False)
+        self.edgeconn[:edgeconn.shape[0]] = edgeconn
+        self.nedgepoints[:nedgepoints.shape[0]] = nedgepoints
+        self.edgeconn_allocated[:] = False
+        self.edgeconn_allocated[:edgeconn.shape[0]] = True        
+        self.edge_ptr = edgeconn.shape[0]
+        
+    def set_edgepoints(self,edgepoints,scalars=None,update_pointer=False):
+        # Reset all nodes to array argument provided
+        if self.edgepoints.shape[0]<edgepoints.shape[0]:
+            self.preallocate_edgepoints(edgepoints.shape[0]-self.edgepoints.shape[0],set_pointer_to_start=False)
+        self.edgepoints[:edgepoints.shape[0]] = edgepoints
+        self.edgepoints_allocated[:] = False
+        self.edgepoints_allocated[:edgepoints.shape[0]] = True        
+        self.edgepnt_ptr = edgepoints.shape[0]
+        for i,sc in enumerate(scalars):
+            self.scalar_values[i][:edgepoints.shape[0]] = sc
+        
     def add_node(self,node,new_scalar_vals=[]):
         # Assign existing node slot to supplied node coordinate
         if self.node_ptr>=self.nodecoords.shape[0]:
@@ -2506,13 +2538,13 @@ class GVars(object):
         self.node_ptr += 1
         if self.node_ptr>=self.nodecoords.shape[0]:
             self.preallocate_nodes(self.n_all,set_pointer_to_start=False)
-            
     def append_nodes(self,nodes,update_pointer=False):
         # Create new slots for an array containing multiple node coordinates
         self.nodecoords = np.vstack([self.nodecoords,nodes])
         self.nodecoords_allocated = np.concatenate([self.nodecoords_allocated,np.ones(nodes.shape[0],dtype='bool')])
         if update_pointer:
             self.node_ptr = self.nodecoords.shape[0]
+            
     def add_edgeconn(self,conn,npts=2):
         if self.edge_ptr>=self.edgeconn.shape[0]:
             self.preallocate_edges(self.n_all,set_pointer_to_start=False)
@@ -2522,6 +2554,18 @@ class GVars(object):
         self.edge_ptr += 1
         if self.edge_ptr>=self.edgeconn.shape[0]:
             self.preallocate_edges(self.n_all,set_pointer_to_start=False)
+
+    def add_edge(self,start_node_index,end_node_index,new_scalar_vals,points=None):
+        new_conn = [start_node_index,end_node_index]
+        nodes = self.nodecoords[new_conn]
+        if points is None or not np.all(points[0]==self.nodecoords[new_conn[0]]) or not np.all(points[-1]==self.nodecoords[new_conn[1]]):
+            self.add_edgeconn(new_conn)
+            self.add_edgepoints(self.nodecoords[new_conn],new_scalar_vals,edgeInd=self.edge_ptr-1)
+        else:
+            npts = points.shape[0]
+            self.add_edgeconn(new_conn,npts=npts)
+            self.add_edgepoints(points,new_scalar_vals,edgeInd=self.edge_ptr-1)
+            
     def add_edgepoints(self,pnt,new_scalar_vals,edgeInd=-1):
         npts = pnt.shape[0]
         if self.edgepoints.shape[0]-self.edgepnt_ptr<=npts:
@@ -2536,16 +2580,6 @@ class GVars(object):
         self.edgepnt_ptr += npts     
         if self.edgepnt_ptr>=self.edgepoints.shape[0]:
             self.preallocate_edgepoints(self.n_all,set_pointer_to_start=False)
-    def add_edge(self,start_node_index,end_node_index,new_scalar_vals,points=None):
-        new_conn = [start_node_index,end_node_index]
-        nodes = self.nodecoords[new_conn]
-        if points is None or not np.all(points[0]==self.nodecoords[new_conn[0]]) or not np.all(points[-1]==self.nodecoords[new_conn[1]]):
-            self.add_edgeconn(new_conn)
-            self.add_edgepoints(self.nodecoords[new_conn],new_scalar_vals,edgeInd=self.edge_ptr-1)
-        else:
-            npts = points.shape[0]
-            self.add_edgeconn(new_conn,npts=npts)
-            self.add_edgepoints(points,new_scalar_vals,edgeInd=self.edge_ptr-1)
         
     def remove_edges(self,edge_inds_to_remove):
     
@@ -2663,10 +2697,13 @@ class GVars(object):
         if int(edgepoint_index)<npoints-1 and int(edgepoint_index)>0:
             new_edge0 = edge[:xp+1]
             new_edge1 = edge[xp:]
-        elif int(edgepoint_index)<0:
+        elif int(edgepoint_index)<=0:
+            print('ERROR: GVars.insert_node_in_edge: Edgepoint index<=0!')
+            breakpoint()
             return edge, None, start_node, None
-        elif int(edgepoint_index)==npoints-1:
-            print('ERROR: _insert_node_in_edge: Edgepoint index>number of edgepoints!')
+        elif int(edgepoint_index)>=npoints-1:
+            print('ERROR: GVars.insert_node_in_edge: Edgepoint index>number of edgepoints!')
+            breakpoint()
             return edge, None, end_node, None
         else:
             return None, None, None, None
@@ -2717,23 +2754,28 @@ class GVars(object):
             new_sc0 = data[x0:x0+xp+1]
             new_sc1 = data[x0+xp:x1]
             scalars[i] = np.concatenate([x for x in [sc_0,new_sc0.copy(),sc_1,new_sc1.copy()] if len(x)>0 and not np.all(x)==-1])
-            
-        self.nodecoords[:nodeCoords.shape[0]] = nodeCoords
-        self.edgeconn[:edgeConn.shape[0]] = edgeConn
-        self.nedgepoints[:nedgepoints.shape[0]] = nedgepoints
-        self.edgepoints[:edgeCoords.shape[0]] = edgeCoords
         
-        self.nodecoords_allocated[:nodeCoords.shape[0]] = True #np.linspace(0,nodeCoords.shape[0]-1,nodeCoords.shape[0],dtype='int')
-        self.edgeconn_allocated[:edgeConn.shape[0]] = True #np.linspace(0,edgeConn.shape[0]-1,edgeConn.shape[0],dtype='int')
-        self.edgepoints_allocated[:edgeCoords.shape[0]] = True #np.linspace(0,edgeCoords.shape[0]-1,edgeCoords.shape[0],dtype='int')
-        self.node_ptr = nodeCoords.shape[0]
-        self.edge_ptr = edgeConn.shape[0]
-        self.edgepnt_ptr = edgeCoords.shape[0]
+        #breakpoint()
+        self.set_nodecoords(nodeCoords,scalars=node_scalars)  
+        self.set_edgeconn(edgeConn,nedgepoints)  
+        self.set_edgepoints(edgeCoords,scalars=scalars)
+        
+        #self.nodecoords[:nodeCoords.shape[0]] = nodeCoords
+        #self.edgeconn[:edgeConn.shape[0]] = edgeConn
+        #self.nedgepoints[:nedgepoints.shape[0]] = nedgepoints
+        #self.edgepoints[:edgeCoords.shape[0]] = edgeCoords
+        
+        #self.nodecoords_allocated[:nodeCoords.shape[0]] = True #np.linspace(0,nodeCoords.shape[0]-1,nodeCoords.shape[0],dtype='int')
+        #self.edgeconn_allocated[:edgeConn.shape[0]] = True #np.linspace(0,edgeConn.shape[0]-1,edgeConn.shape[0],dtype='int')
+        #self.edgepoints_allocated[:edgeCoords.shape[0]] = True #np.linspace(0,edgeCoords.shape[0]-1,edgeCoords.shape[0],dtype='int')
+        #self.node_ptr = nodeCoords.shape[0]
+        #self.edge_ptr = edgeConn.shape[0]
+        #self.edgepnt_ptr = edgeCoords.shape[0]
 
-        for i,sc in enumerate(self.scalar_values):
-            self.scalar_values[i][:scalars[i].shape[0]] = scalars[i]
-        for i,sc in enumerate(self.node_scalar_values):
-            self.node_scalar_values[i][:node_scalars[i].shape[0]] = node_scalars[i]
+        #for i,sc in enumerate(self.scalar_values):
+        #    self.scalar_values[i][:scalars[i].shape[0]] = scalars[i]
+        #for i,sc in enumerate(self.node_scalar_values):
+        #    self.node_scalar_values[i][:node_scalars[i].shape[0]] = node_scalars[i]
            
         return new_edge0.copy(), new_edge1.copy(), new_node_index, new_conn
         
