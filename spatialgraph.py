@@ -603,7 +603,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         Remove a data field from the graph
         """
         f = [(i,f) for (i,f) in enumerate(self.fields) if f['name']==fieldName]
-        if f[0][1] is None:
+        if len(f)==0 or f[0][1] is None:
             print(('Could not locate requested field: {}'.format(fieldName)))
             return
         _  = self.fields.pop(f[0][0])
