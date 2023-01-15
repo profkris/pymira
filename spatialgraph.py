@@ -741,29 +741,30 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     print(err)               
 
         if deep:
+            self.edgeList = None
             for nodeInd in trange(self.nnode):
                 node = self.get_node(nodeInd)
                 for i,e in enumerate(node.edges):
                     if not node.edge_indices_rev[i]:
-                        if not all(x==y for x,y in zip(e.start_node_coords,node.coords)):
+                        if not all(x.astype('float32')==y.astype('float32') for x,y in zip(e.start_node_coords,node.coords)):
                             err = f'Node coordinates ({node.index}) do not match start of edge ({e.index}) coordinates: {e.start_node_coords} {node.coords}'
                             #print(('Node coordinates ({}) do not match start of edge ({}) coordinates: {} {}'.format(node.index,e.index,e.start_node_coords,node.coords)))
-                        if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
+                        if not all(x.astype('float32')==y.astype('float32') for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
                             err = f'Edge start point does not match edge/node start ({e.index}) coordinates'
                             #print(('Edge start point does not match edge/node start ({}) coordinates'.format(e.index)))
-                        if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
+                        if not all(x.astype('float32')==y.astype('float32') for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
                             err = f'Edge end point does not match edge/node end ({e.index}) coordinates'
                             #print(('Edge end point does not match edge/node end ({}) coordinates'.format(e.index)))
                     else:
-                        if not all(x==y for x,y in zip(e.end_node_coords,node.coords)):
+                        if not all(x.astype('float32')==y.astype('float32') for x,y in zip(e.end_node_coords,node.coords)):
                             err = f'Node coordinates ({node.index}) do not match end of edge ({e.index}) coordinates'
                             print(err)
                             #print(('Node coordinates ({}) do not match end of edge ({}) coordinates'.format(node.index,e.index)))
-                        if not all(x==y for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
+                        if not all(x.astype('float32')==y.astype('float32') for x,y in zip(e.coordinates[0,:],e.start_node_coords)):
                             err = f'Edge end point does not match edge start (REVERSE) ({e.index}) coordinates'
                             print(err)
                             #print(('Edge end point does not match edge start (REVERSE) ({}) coordinates'.format(e.index)))
-                        if not all(x==y for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
+                        if not all(x.astype('float32')==y.astype('float32') for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
                             err = f'Edge start point does not match edge end (REVERSE) ({e.index}) coordinates'
                             print(err)
                             #print(('Edge start point does not match edge end (REVERSE) ({}) coordinates'.format(e.index)))        
@@ -1983,8 +1984,7 @@ class Editor(object):
         graph.set_graph_sizes()
         
         return graph
-        
-        
+
     def interpolate_edges(self,graph,interp_resolution=None,ninterp=2,filter=None,noise_sd=0.):
         
         """
@@ -2042,7 +2042,7 @@ class Editor(object):
                                 #breakpoint()
                                 scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],ninterp,dtype='int'))
                         elif 'bool' in scalar_type[j]:
-                            scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],nn,dtype='bool'))                                
+                            scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],ninterp,dtype='bool'))                                
                         else:
                             breakpoint()
                     
@@ -2107,9 +2107,10 @@ class Editor(object):
                                 scalar_data_interp[j].extend(np.zeros(ninterp)+sdc[0])
                             else:
                                 scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0],dtype='int'))
+                        elif 'bool' in scalar_type[j]:
+                            scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],ninterp,dtype='bool')) 
                         else:
                             breakpoint()
-                        
                     
                     npoints_interp[i] = ninterp
                     
@@ -2163,12 +2164,11 @@ class Node(object):
         
         if graph is not None:
             # Initialise edge list in graph object
+            
             if graph.edgeList is None:
                 graph.edgeList = arr([None]*graph.nedge)
-            #breakpoint()
             edgeInds = np.where(graph.edgeList!=None)[0] # [e for e in graph.edgeList if e is not None]
-            #edgeInds = [e.index for e in edgeList]
-                
+
             vertCoords = graph.get_field('VertexCoordinates')['data']
             if vertCoords is None:
                 return
@@ -2392,11 +2392,11 @@ class Edge(object):
             stat = -3
             return stat
         
-        if not all([x==y for x,y in zip(self.end_node_coords,self.coordinates[-1,:])]):
-            print('Warning: End node coordinates do not match last edge coordiate!')
+        if not all([x.astype('float32')==y.astype('float32') for x,y in zip(self.end_node_coords,self.coordinates[-1,:])]):
+            print('Warning: End node coordinates do not match last edge coordinate!')
             stat = -1
-        if not all([x==y for x,y in zip(self.start_node_coords,self.coordinates[0,:])]):
-            print('Warning: Start node coordinates do not match first edge coordiate!')
+        if not all([x.astype('float32')==y.astype('float32') for x,y in zip(self.start_node_coords,self.coordinates[0,:])]):
+            print('Warning: Start node coordinates do not match first edge coordinate!')
             stat = -2
             
         return stat
@@ -2818,4 +2818,5 @@ class GVars(object):
         self.graph.set_definition_size('EDGE',edgeconn.shape[0])
         self.graph.set_definition_size('POINT',edgepoints.shape[0])  
         self.graph.set_graph_sizes()
+        self.graph.edgeList = None
         return self.graph
