@@ -52,7 +52,7 @@ class TubePlot(object):
                 self.domain_centre = (self.domain[:,1]+self.domain[:,0])/2.
         else:
             self.domain_centre = domain_centre
-        self.domain_radius = None
+        #self.domain_radius = None
         if domain_radius is None: # Use size of first domain
             if self.domain is not None:
                 self.domain_radius = (self.domain[0,1]-self.domain[0,0])/2.

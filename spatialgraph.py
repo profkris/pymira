@@ -1657,11 +1657,6 @@ class Editor(object):
         node_del_flag[node_count==0] = True
         graph = delete_vertices(graph,~node_del_flag,return_lookup=False)
         
-        if len(nscalars)>0:
-            for sc in nscalars:
-                data = sc['data'][~node_del_flag]
-                graph.set_data(data,name=sc['name'])
-        
         return graph        
 
     def remove_intermediate_nodesOLD(self,graph,file=None,nodeList=None,path=None):
@@ -2470,9 +2465,9 @@ class GVars(object):
         # Set batche size to preallocate
         self.n_all = n_all 
         
-        self.nodecoords = graph.get_data('VertexCoordinates')
+        self.nodecoords = graph.get_data('VertexCoordinates').astype('float32')
         self.edgeconn = graph.get_data('EdgeConnectivity').astype('int')
-        self.edgepoints = graph.get_data('EdgePointCoordinates')
+        self.edgepoints = graph.get_data('EdgePointCoordinates').astype('float32')
         self.nedgepoints = graph.get_data('NumEdgePoints').astype('int')
         
         self.node_ptr = self.nodecoords.shape[0]
@@ -2800,11 +2795,11 @@ class GVars(object):
         
         for i,field in enumerate(fields):
             if field['name']=='VertexCoordinates':
-                self.graph.set_data(nodecoords,name=fieldNames[i])
+                self.graph.set_data(nodecoords.astype('float32'),name=fieldNames[i])
             elif field['name']=='EdgeConnectivity':
                 self.graph.set_data(edgeconn.astype('int'),name=fieldNames[i])
             elif field['name']=='EdgePointCoordinates':
-                self.graph.set_data(edgepoints,name=fieldNames[i])
+                self.graph.set_data(edgepoints.astype('float32'),name=fieldNames[i])
             elif field['name']=='NumEdgePoints':
                 self.graph.set_data(nedgepoints.astype('int'),name=fieldNames[i])
             elif field['name'] in scalar_names:
