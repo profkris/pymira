@@ -1143,6 +1143,10 @@ class SpatialGraph(amiramesh.AmiraMesh):
         p.add_mesh(merged, smooth_shading=True) # scalars='length', 
         p.show()
         
+    def plot(self,**kwargs):
+        tp = self.plot_graph(**kwargs)
+        return tp
+        
     def plot_graph(self, **kwargs):
                          
         """
@@ -1246,7 +1250,7 @@ class Editor(object):
            
         return new_edge0.copy(), new_edge1.copy(), new_node_index,new_conn,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars
 
-    def _del_nodes(self,nodes_to_delete,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=None):
+    def _del_nodes(self,nodes_to_delete,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=[]):
     
         nnode = len(nodeCoords)
         nedge = len(edgeConn)
@@ -1320,6 +1324,12 @@ class Editor(object):
             scalars = None
         
         nodeCoords_ed,edgeConn_ed,nedgepoints_ed,edgeCoords_ed,scalars,info = self._del_nodes(nodes_to_delete,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=scalars)
+        
+        node_scalars = graph.get_node_scalars()
+        node_to_keep = np.ones(nnode,dtype='bool')
+        node_to_keep[nodes_to_delete] = False
+        for sc in node_scalars:
+            graph.set_data(sc['data'][node_to_keep],name=sc['name'])
 
         # Update VERTEX definition
         vertex_def = graph.get_definition('VERTEX')
