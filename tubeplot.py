@@ -248,7 +248,9 @@ class TubePlot(object):
             #self.cmap_range[0] = 1.
         
         # Set colour map (lookup table) 
-        if self.scalar_color_name=='VesselType':  
+        if self.color is not None:
+            cols = self.color
+        elif self.scalar_color_name=='VesselType':  
             cols = np.zeros([nedgepoint,3]) 
             s_art = np.where(self.edge_color==0) 
             cols[s_art[0],:] = [1.,0.,0.]
@@ -259,10 +261,15 @@ class TubePlot(object):
             s_oth = np.where((self.edge_color>2) | (self.edge_color<0)) 
             cols[s_oth[0],:] = [1.,1.,1.]
         else:
-            import matplotlib.pyplot as plt
-            cmapObj = plt.cm.get_cmap(self.cmap)
-            col_inds = np.clip((self.edge_color-self.cmap_range[0]) / (self.cmap_range[1]-self.cmap_range[0]),0.,1.)
-            cols = cmapObj(col_inds)[:,0:3]
+            if len(self.edge_color.shape)==2 and self.edge_color.shape[-1]==3:
+                cols = self.cols
+                if np.max(cols)>1.:
+                    cols = cols / np.max(cols)
+            else:
+                import matplotlib.pyplot as plt
+                cmapObj = plt.cm.get_cmap(self.cmap)
+                col_inds = np.clip((self.edge_color-self.cmap_range[0]) / (self.cmap_range[1]-self.cmap_range[0]),0.,1.)
+                cols = cmapObj(col_inds)[:,0:3]
 
         epi = self.graph.edgepoint_edge_indices()
         if len(self.edge_highlight)>0:
