@@ -648,17 +648,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
         conn_inds = np.linspace(0,nedge-1,nedge,dtype='int')
         return np.repeat(conn_inds,nEdgePoint)
         
-    def get_edges_containing_node(self,node_index):
+    def get_edges_containing_node(self,node_inds,mode='or'):
         """
-        Return which edges contain a supplied node index
+        Return which edges contain supplied node indices
         """
-        nodecoords = self.get_data('VertexCoordinates')
         edgeconn = self.get_data('EdgeConnectivity')
-        edgepoints = self.get_data('EdgePointCoordinates')
-        nedgepoints = self.get_data('NumEdgePoints')
-        
-        sind = np.where((edgeconn[:,0]==node_index) | (edgeconn[:,1]==node_index))
-        return sind[0]
+        if mode=='or':
+            return np.where(np.in1d(edgeconn[:,0],node_inds) | np.in1d(edgeconn[:,1],node_inds))
+        elif mode=='and':
+            return np.where(np.in1d(edgeconn[:,0],node_inds) & np.in1d(edgeconn[:,1],node_inds))
         
     def get_scalars(self):
         """
@@ -1013,6 +1011,38 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     scalar_nodes[nodeIndex] = np.max(vals)
                         
         return scalar_nodes
+        
+    def point_scalars_to_node_scalars(self,mode='max',name=None):
+
+        scalars = self.get_scalars()
+        if name is not None:
+            scalars = [x for x in scalars if x['name']==name]
+            if len(scalars)==0:
+                return None
+    
+        nodes = self.get_data('VertexCoordinates')
+        conns = self.get_data('EdgeConnectivity')
+        npoints = self.get_data('NumEdgePoints')
+        points = self.get_data('EdgePointCoordinates')
+        
+        nsc = len(scalars)
+        scalar_nodes = np.zeros([nsc,nodes.shape[0]]) + np.nan
+    
+        for i,conn in enumerate(tqdm(conns)):
+            npts = int(npoints[i])
+            x0 = int(np.sum(npoints[0:i]))
+            x1 = x0+npts
+
+            for j,scalar in enumerate(scalars):
+                    
+                data = scalar['data']
+                if data is not None:
+                    for node in conn:
+                        if mode=='max':
+                            scalar_nodes[j,node] = np.nanmax([np.max(data[x0:x1]),scalar_nodes[j,node]])
+                        elif scalar['type']=='int':
+                            scalar_nodes[j,node] = np.nanmin([np.min(data[x0:x1]),scalar_nodes[j,node]])
+        return scalar_nodes.squeeze()
         
     def point_scalars_to_edge_scalars(self,func=np.mean,name=None):
 
@@ -2668,6 +2698,17 @@ class GVars(object):
         self.node_ptr = self.nodecoords.shape[0]-1
         self.edge_ptr = self.edgeconn.shape[0]-1
         self.edgepnt_ptr = self.edgepoints.shape[0]-1
+        
+        
+    def convert_edgepoints_to_nodes(self):
+
+        while True:
+            nep = self.nedgepoints[self.edgeconn_allocated] #graph.get_data('NumEdgePoints')
+            sind = np.where(nep>2)
+            if len(sind[0])>0:
+                self.insert_node_in_edge(sind[0][0],1)
+            else:
+                break
         
     def insert_node_in_edge(self,edge_index,edgepoint_index):
     
