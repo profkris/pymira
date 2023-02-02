@@ -873,8 +873,121 @@ class SpatialGraph(amiramesh.AmiraMesh):
             all_nodes = np.linspace(0,nodecoords.shape[0]-1,nodecoords.shape[0],dtype='int')
             node_count = np.zeros(nodecoords.shape[0],dtype='int') 
             node_count[np.in1d(all_nodes,unq)] = count
-        return node_count         
+        return node_count
         
+    def identify_inlet_outlet(self,tmpfile=None,restore=False,ignore=None):
+
+        nodecoords = self.get_data('VertexCoordinates')
+        edgeconn = self.get_data('EdgeConnectivity')
+        edgepoints = self.get_data('EdgePointCoordinates')
+        nedgepoints = self.get_data('NumEdgePoints')
+        radius = self.get_data(self.get_radius_field_name())
+        category = self.get_data('VesselType')
+        
+        if category is None:
+            category = np.zeros(edgepoints.shape[0],dtype='bool')
+
+        inds = np.linspace(0,edgeconn.shape[0]-1,edgeconn.shape[0],dtype='int')
+        edge_inds = np.repeat(inds,nedgepoints)
+        first_edgepoint_inds = np.concatenate([[0],np.cumsum(nedgepoints)[:-1]])
+
+        #edge_node_lookup = create_edge_node_lookup(nodecoords,edgeconn,tmpfile=tmpfile,restore=restore)
+                
+        # Calculate node connectivity
+        node_count = self.get_node_count() #,edge_node_lookup=edge_node_lookup)
+        # Find graph end nodes (1 connection only)
+        term_inds = np.where(node_count==1)
+        terminal_node = np.zeros(nodecoords.shape[0],dtype='bool')
+        terminal_node[term_inds] = True
+
+        # Assign a radius to nodes using the largest radius of each connected edge
+        edge_radius = radius[first_edgepoint_inds]
+
+        # Assign a category to each node using the minimum category of each connected edge (thereby favouring arteries/veins (=0,1) over capillaries (=2))
+        edge_category = category[first_edgepoint_inds]
+        
+        # Locate arterial input(s)
+        mask = np.ones(edgeconn.shape[0])
+        mask[(edge_category!=0) | ((node_count[edgeconn[:,0]]!=1) & (node_count[edgeconn[:,0]]!=1))] = np.nan
+        if ignore is not None:
+            mask[(np.in1d(edgeconn[:,0],ignore)) | (np.in1d(edgeconn[:,1],ignore))] = np.nan
+        if np.nansum(mask)==0.:
+            a_inlet_node = None
+        else:
+            a_inlet_edge_ind = np.nanargmax(edge_radius*mask)
+            a_inlet_edge = edgeconn[a_inlet_edge_ind]
+            a_inlet_node = a_inlet_edge[node_count[a_inlet_edge]==1][0]
+        
+        # Locate vein output(s)
+        mask = np.ones(edgeconn.shape[0])
+        mask[(edge_category!=1) | ((node_count[edgeconn[:,0]]!=1) & (node_count[edgeconn[:,0]]!=1))] = np.nan
+        if ignore is not None:
+            mask[(np.in1d(edgeconn[:,0],ignore)) | (np.in1d(edgeconn[:,1],ignore))] = np.nan
+        if np.nansum(mask)==0.:
+            v_outlet_node = None
+        else:
+            v_outlet_edge_ind = np.nanargmax(edge_radius*mask)
+            v_outlet_edge = edgeconn[v_outlet_edge_ind]
+            v_outlet_node = v_outlet_edge[node_count[v_outlet_edge]==1][0]
+        
+        return a_inlet_node,v_outlet_node  
+
+    def test_treelike(self, inlet=None, outlet=None):
+
+        if inlet is None:
+            inlet,outlet = self.identify_inlet_outlet()
+            
+        nodecoords = self.get_data('VertexCoordinates')
+        edgeconn = self.get_data('EdgeConnectivity')
+        edgepoints = self.get_data('EdgePointCoordinates')
+        nedgepoints = self.get_data('NumEdgePoints')
+        radius = self.get_data(self.get_radius_field_name())
+        
+        visited = []
+        for i,root in enumerate([inlet,outlet]):
+            if root is not None:
+                prev_front = None
+                front = [inlet]
+                visited.extend(front)
+                #breakpoint()
+                count = 0
+                while True:
+                    edges = self.get_edges_containing_node(front)
+                    all_conn_nodes = edgeconn[edges].flatten()
+                    # Store nodes not in front
+                    if prev_front is not None:
+                        next_front = all_conn_nodes[~np.in1d(all_conn_nodes,front) & ~np.in1d(all_conn_nodes,prev_front)]
+                    else:
+                        next_front = all_conn_nodes[~np.in1d(all_conn_nodes,front)]
+                    if len(next_front)>0:
+                        dplicates = np.in1d(next_front,visited)
+                        if np.any(dplicates):
+                            print(f'Test treelike, revisited: {next_front[dplicates]}')
+                            breakpoint()
+                            return False
+                        unq,cnt = np.unique(next_front,return_counts=True)
+                        if np.any(cnt)>1:
+                            print(f'Test treelike, duplicate paths to: {unq[cnt>1]}')
+                            breakpoint()
+                            return False
+                        visited.extend(next_front.tolist())
+                        prev_front = front
+                        front = next_front
+                    else:
+                        break
+                    count += 1
+                    if count>edgeconn.shape[0]*2:
+                        print(f'Test treelike: Count limit reached...')
+                        return False
+        
+        # Double check
+        all_in = np.in1d(np.arange(nodecoords.shape[0]),visited)
+        if not np.all(all_in):
+            print(f'Not all nodes visited: {np.arange(nodecoords.shape[0])[~all_in]}')
+            return False
+        
+        return True
+                    
     def identify_graphs(self,progBar=False,ignore_node=None,ignore_edge=None,verbose=False,add_scalar=True):
         
         nodeCoords = self.get_data('VertexCoordinates')
