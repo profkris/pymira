@@ -962,12 +962,12 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     if len(next_front)>0:
                         dplicates = np.in1d(next_front,visited)
                         if np.any(dplicates):
-                            print(f'Test treelike, revisited: {next_front[dplicates]}')
+                            print(f'Test treelike, node revisited: {next_front[dplicates]}')
                             breakpoint()
                             return False
                         unq,cnt = np.unique(next_front,return_counts=True)
                         if np.any(cnt)>1:
-                            print(f'Test treelike, duplicate paths to: {unq[cnt>1]}')
+                            print(f'Test treelike, duplicate paths to node: {unq[cnt>1]}')
                             breakpoint()
                             return False
                         visited.extend(next_front.tolist())
