@@ -932,7 +932,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         return a_inlet_node,v_outlet_node  
 
-    def test_treelike(self, inlet=None, outlet=None):
+    def test_treelike(self, inlet=None, outlet=None, euler=True):
 
         if inlet is None:
             inlet,outlet = self.identify_inlet_outlet()
@@ -944,14 +944,18 @@ class SpatialGraph(amiramesh.AmiraMesh):
         radius = self.get_data(self.get_radius_field_name())
         
         visited = []
+        # Start at either arterial input or venous outlet (if both exist)
         for i,root in enumerate([inlet,outlet]):
             if root is not None:
+                # Initialise front from previous iterations
                 prev_front = None
-                front = [inlet]
+                # Intitialise current front
+                front = [root]
+                # Initialise node that have been visited
                 visited.extend(front)
-                #breakpoint()
                 count = 0
                 while True:
+                    # Find edges containing nodes in the current front
                     edges = self.get_edges_containing_node(front)
                     all_conn_nodes = edgeconn[edges].flatten()
                     # Store nodes not in front
@@ -962,7 +966,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     if len(next_front)>0:
                         dplicates = np.in1d(next_front,visited)
                         if np.any(dplicates):
-                            print(f'Test treelike, revisited: {next_front[dplicates]}')
+                            print(f'Test treelike, revisited: {next_front[dplicates]}, it: {count}')
+                            dnodes = next_front[dplicates]
+                            edges = self.get_edges_containing_node(dnodes)
                             breakpoint()
                             return False
                         unq,cnt = np.unique(next_front,return_counts=True)
@@ -984,6 +990,49 @@ class SpatialGraph(amiramesh.AmiraMesh):
         all_in = np.in1d(np.arange(nodecoords.shape[0]),visited)
         if not np.all(all_in):
             print(f'Not all nodes visited: {np.arange(nodecoords.shape[0])[~all_in]}')
+            return False
+            
+        gc = self.get_node_count()
+        vt = self.edge_scalar_to_node_scalar('VesselType')
+        edges = self.get_data('EdgeConnectivity')
+        
+        # Euler: Arterial nodes
+        if euler:
+            n_anode = np.sum((vt==0))
+            if n_anode>0:
+                a_nodes = np.where(vt==0)
+                a_edges = self.get_edges_containing_node(a_nodes)[0]
+                n_aedges = a_edges.shape[0]
+                if n_anode!=n_aedges+1:
+                    if n_anode>n_aedges+1:
+                        print(f'Euler criterion failed (arterial, too many nodes! {n_anode} nodes, {n_aedges} edges)')
+                    if n_anode<n_aedges+1:
+                        print(f'Euler criterion failed (arterial, too many edges! {n_anode} nodes, {n_aedges} edges)')
+                    return False
+                
+            # Euler: Venous nodes
+            n_vnode = np.sum((vt==1))
+            if n_vnode>0:
+                v_nodes = np.where(vt==1)
+                v_edges = self.get_edges_containing_node(v_nodes)[0]
+                n_vedges = v_edges.shape[0]
+                if n_vnode!=n_vedges+1:
+                    if n_vnode>n_vedges+1:
+                        print(f'Euler criterion failed (venous, too many nodes! {n_vnode} nodes, {n_vedges} edges)')
+                    if n_vnode<n_vedges+1:
+                        print(f'Euler criterion failed (venous, too many edges! {n_vnode} nodes, {n_vedges} edges)')
+                    return False
+            
+        duplicate_edges = np.zeros(edges.shape[0],dtype='int')
+        for i,x in enumerate(edges): 
+            duplicate_edges[i] = len(np.where( (edges[:,0]==x[0]) & (edges[:,1]==x[1]))[0]) + len(np.where( (edges[:,1]==x[0]) & (edges[:,0]==x[1]))[0])
+        if np.any(duplicate_edges>1):
+            print(f'Duplicated edges!')
+            return False
+                
+        selfconnected_edges = (edges[:,0]==edges[:,1])
+        if np.any(selfconnected_edges):
+            print(f'Self-connected edges!')
             return False
         
         return True
@@ -1116,7 +1165,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         if np.all(pts[0,:]==node):
                             scalar_nodes[nodeIndex] = scalar_points[x0]
                         else:
-                            scalar_nodes[nodeIndex] = scalar_points[x0+npts]
+                            scalar_nodes[nodeIndex] = scalar_points[x0+npts-1]
                         break
                     else:
                         vals.append(scalar_points[x0:x0+npts])
