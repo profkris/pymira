@@ -654,9 +654,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
         """
         edgeconn = self.get_data('EdgeConnectivity')
         if mode=='or':
-            return np.where(np.in1d(edgeconn[:,0],node_inds) | np.in1d(edgeconn[:,1],node_inds))
+            return np.where(np.in1d(edgeconn[:,0],node_inds) | np.in1d(edgeconn[:,1],node_inds))[0]
         elif mode=='and':
-            return np.where(np.in1d(edgeconn[:,0],node_inds) & np.in1d(edgeconn[:,1],node_inds))
+            return np.where(np.in1d(edgeconn[:,0],node_inds) & np.in1d(edgeconn[:,1],node_inds))[0]
         
     def get_scalars(self):
         """
@@ -966,14 +966,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     if len(next_front)>0:
                         dplicates = np.in1d(next_front,visited)
                         if np.any(dplicates):
-<<<<<<< HEAD
                             print(f'Test treelike, revisited: {next_front[dplicates]}, it: {count}')
                             dnodes = next_front[dplicates]
                             edges = self.get_edges_containing_node(dnodes)
-=======
-                            print(f'Test treelike, node revisited: {next_front[dplicates]}')
->>>>>>> f00afc1f92c8b2328b18527c79a6bcd7a48296ca
-                            breakpoint()
                             return False
                         unq,cnt = np.unique(next_front,return_counts=True)
                         if np.any(cnt)>1:
@@ -1005,7 +1000,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
             n_anode = np.sum((vt==0))
             if n_anode>0:
                 a_nodes = np.where(vt==0)
-                a_edges = self.get_edges_containing_node(a_nodes)[0]
+                a_edges = self.get_edges_containing_node(a_nodes)
                 n_aedges = a_edges.shape[0]
                 if n_anode!=n_aedges+1:
                     if n_anode>n_aedges+1:
@@ -1018,7 +1013,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
             n_vnode = np.sum((vt==1))
             if n_vnode>0:
                 v_nodes = np.where(vt==1)
-                v_edges = self.get_edges_containing_node(v_nodes)[0]
+                v_edges = self.get_edges_containing_node(v_nodes)
                 n_vedges = v_edges.shape[0]
                 if n_vnode!=n_vedges+1:
                     if n_vnode>n_vedges+1:
@@ -2864,7 +2859,6 @@ class GVars(object):
         self.node_ptr = self.nodecoords.shape[0]-1
         self.edge_ptr = self.edgeconn.shape[0]-1
         self.edgepnt_ptr = self.edgepoints.shape[0]-1
-        
         
     def convert_edgepoints_to_nodes(self):
 
