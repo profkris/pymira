@@ -654,9 +654,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
         """
         edgeconn = self.get_data('EdgeConnectivity')
         if mode=='or':
-            return np.where(np.in1d(edgeconn[:,0],node_inds) | np.in1d(edgeconn[:,1],node_inds))
+            return np.where(np.in1d(edgeconn[:,0],node_inds) | np.in1d(edgeconn[:,1],node_inds))[0]
         elif mode=='and':
-            return np.where(np.in1d(edgeconn[:,0],node_inds) & np.in1d(edgeconn[:,1],node_inds))
+            return np.where(np.in1d(edgeconn[:,0],node_inds) & np.in1d(edgeconn[:,1],node_inds))[0]
         
     def get_scalars(self):
         """
@@ -963,12 +963,12 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         dplicates = np.in1d(next_front,visited)
                         if np.any(dplicates):
                             print(f'Test treelike, node revisited: {next_front[dplicates]}')
-                            breakpoint()
+                            #breakpoint()
                             return False
                         unq,cnt = np.unique(next_front,return_counts=True)
                         if np.any(cnt)>1:
                             print(f'Test treelike, duplicate paths to node: {unq[cnt>1]}')
-                            breakpoint()
+                            #breakpoint()
                             return False
                         visited.extend(next_front.tolist())
                         prev_front = front
