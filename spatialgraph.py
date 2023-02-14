@@ -932,7 +932,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         return a_inlet_node,v_outlet_node  
 
-    def test_treelike(self, inlet=None, outlet=None, euler=True):
+    def test_treelike(self, inlet=None, outlet=None, euler=True, ignore_type=False):
 
         if inlet is None:
             inlet,outlet = self.identify_inlet_outlet()
@@ -997,9 +997,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         # Euler: Arterial nodes
         if euler:
-            n_anode = np.sum((vt==0))
+            if ignore_type:
+                n_anode = np.sum((vt==0) | (vt==1))
+            else:
+                n_anode = np.sum((vt==0))
             if n_anode>0:
-                a_nodes = np.where(vt==0)
+                if ignore_type:
+                    a_nodes = np.where((vt==0) | (vt==1))
+                else:
+                    a_nodes = np.where(vt==0)
                 a_edges = self.get_edges_containing_node(a_nodes)
                 n_aedges = a_edges.shape[0]
                 if n_anode!=n_aedges+1:
@@ -1010,17 +1016,18 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     return False
                 
             # Euler: Venous nodes
-            n_vnode = np.sum((vt==1))
-            if n_vnode>0:
-                v_nodes = np.where(vt==1)
-                v_edges = self.get_edges_containing_node(v_nodes)
-                n_vedges = v_edges.shape[0]
-                if n_vnode!=n_vedges+1:
-                    if n_vnode>n_vedges+1:
-                        print(f'Euler criterion failed (venous, too many nodes! {n_vnode} nodes, {n_vedges} edges)')
-                    if n_vnode<n_vedges+1:
-                        print(f'Euler criterion failed (venous, too many edges! {n_vnode} nodes, {n_vedges} edges)')
-                    return False
+            if ignore_type==False:
+                n_vnode = np.sum((vt==1))
+                if n_vnode>0:
+                    v_nodes = np.where(vt==1)
+                    v_edges = self.get_edges_containing_node(v_nodes)
+                    n_vedges = v_edges.shape[0]
+                    if n_vnode!=n_vedges+1:
+                        if n_vnode>n_vedges+1:
+                            print(f'Euler criterion failed (venous, too many nodes! {n_vnode} nodes, {n_vedges} edges)')
+                        if n_vnode<n_vedges+1:
+                            print(f'Euler criterion failed (venous, too many edges! {n_vnode} nodes, {n_vedges} edges)')
+                        return False
             
         duplicate_edges = np.zeros(edges.shape[0],dtype='int')
         for i,x in enumerate(edges): 
