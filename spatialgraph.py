@@ -973,7 +973,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         unq,cnt = np.unique(next_front,return_counts=True)
                         if np.any(cnt)>1:
                             print(f'Test treelike, duplicate paths to node: {unq[cnt>1]}')
-                            breakpoint()
+                            #breakpoint()
                             return False
                         visited.extend(next_front.tolist())
                         prev_front = front
