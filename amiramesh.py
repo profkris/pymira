@@ -448,6 +448,26 @@ class AmiraMesh(object):
         
         return field
         
+    def write_json(self,filename):
+    
+        import json
+
+        o = dict()
+        # AmiraMesh object data held in fields by name:
+        # 'VertexCoordinates', 'EdgeConnectivity', 'NumEdgePoints', 'EdgePointCoordinates', 'thickness'
+        # Dislike the naming of thickness, so capitalize.
+        # Data stored as numpy array, so call tolist()
+        for field in self.fields:
+            name = field['name']
+            if name.lower()=='radii':
+                name = 'radius'
+            name = name[0].upper() + name[1:]
+            if field['data'] is not None:
+                o[name] = field['data'].tolist()
+
+        with open(filename, 'w') as handle:
+            json.dump(o, handle, indent=4)
+        
     def write(self,filename):
         with open(filename, 'w') as f:
             f.write('# AmiraMesh {}\n'.format(self.fileType))
@@ -492,7 +512,6 @@ class AmiraMesh(object):
                 f.write('{}\n'.format(d['marker']))
                 data = d['data']
                 name = d['name']
-                #print(f'Field: {name}, {data.shape}')
                 if data.ndim==1:
                     for j in range(data.shape[0]):
                         if data[j] is None:
@@ -509,8 +528,6 @@ class AmiraMesh(object):
                             for l in range(data.shape[0]):
                                 data[l,k,j].tofile(f, sep=" ", format="%s")
                                 f.write('\n')
-                    #import pdb
-                    #pdb.set_trace()
                 f.write('\n')
         
 #    def add_field(self,fieldDict):

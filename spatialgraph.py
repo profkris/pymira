@@ -1033,8 +1033,28 @@ class SpatialGraph(amiramesh.AmiraMesh):
         if np.any(selfconnected_edges):
             print(f'Self-connected edges!')
             return False
+            
+        # Test for degeneracy
+        res,_ = self.test_node_degeneracy(find_all=False)
+        if res:
+            return False
         
         return True
+        
+    def test_node_degeneracy(self,find_all=False):
+        degen_nodes = []
+        nodecoords = self.get_data('VertexCoordinates')
+        for i,c1 in enumerate(nodecoords):
+            sind = np.where((nodecoords[:,0]==c1[0]) & (nodecoords[:,1]==c1[1]) & (nodecoords[:,2]==c1[2]))
+            if len(sind[0])>1:
+                if find_all==False:
+                    return True, sind[0]
+                else:
+                    degen_nodes.append(sind[0])
+        if len(degen_nodes)==0:
+            return False,arr(degen_nodes).flatten()
+        else:
+            return True,arr(degen_nodes).flatten()
                     
     def identify_graphs(self,progBar=False,ignore_node=None,ignore_edge=None,verbose=False,add_scalar=True):
         
@@ -2339,7 +2359,31 @@ class Editor(object):
             graph.set_data(arr(sd),name=scalars[j]['name'])
         
         graph.set_definition_size('POINT',pts_interp.shape[0])   
-        graph.set_graph_sizes()   
+        graph.set_graph_sizes()  
+        
+    def displace_degenerate_nodes(self,graph,displacement=1.):
+    
+        nodes = graph.get_data('VertexCoordinates')
+        edgepoints = graph.get_data('EdgePointCoordinates')
+        
+        for i,c1 in enumerate(tqdm(nodes)):
+            sind = np.where((nodes[:,0]==c1[0]) & (nodes[:,1]==c1[1]) & (nodes[:,2]==c1[2]))
+            if len(sind[0])>1:
+                print(f'Degenerate nodes: {sind[0]}')
+                edges = graph.get_edges_containing_node(sind[0])
+                for s in sind[0]:
+                    nodes[s] += np.random.uniform(-displacement/2.,displacement/2.,3)
+                for e in edges:
+                    edge = graph.get_edge(e)
+                    print(f'Fixing edge {e} (nodes: {edge.start_node_index}, {edge.end_node_index})')
+                    if edge.start_node_index in sind[0]:
+                        edgepoints[edge.i0] = nodes[edge.start_node_index]
+                    if edge.end_node_index in sind[0]:
+                        edgepoints[edge.i1-1] = nodes[edge.end_node_index] 
+                        
+        graph.set_data(nodes,name='VertexCoordinates')
+        graph.set_data(edgepoints,name='EdgePointCoordinates') 
+        return graph 
 
 class Node(object):
     

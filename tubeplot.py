@@ -101,7 +101,6 @@ class TubePlot(object):
         self.log_color = log_color
         
         # Create cylinders if they have not been provided
-        breakpoint()
         if self.cylinders is None and self.cylinders_combined is None:
             self.create_plot_cylinders()
      
@@ -366,7 +365,6 @@ class TubePlot(object):
         print('Preparing graph (creating cylinders)...')
         # Create cylinders
         excluded = []
-        breakpoint()
         for i in trange(nedge):
             excl = True
             
