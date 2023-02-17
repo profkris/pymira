@@ -2376,13 +2376,13 @@ class Editor(object):
         for i,c1 in enumerate(tqdm(nodes)):
             sind = np.where((nodes[:,0]==c1[0]) & (nodes[:,1]==c1[1]) & (nodes[:,2]==c1[2]))
             if len(sind[0])>1:
-                print(f'Degenerate nodes: {sind[0]}')
+                #print(f'Degenerate nodes: {sind[0]}')
                 edges = graph.get_edges_containing_node(sind[0])
                 for s in sind[0]:
                     nodes[s] += np.random.uniform(-displacement/2.,displacement/2.,3)
                 for e in edges:
                     edge = graph.get_edge(e)
-                    print(f'Fixing edge {e} (nodes: {edge.start_node_index}, {edge.end_node_index})')
+                    #print(f'Fixing edge {e} (nodes: {edge.start_node_index}, {edge.end_node_index})')
                     if edge.start_node_index in sind[0]:
                         edgepoints[edge.i0] = nodes[edge.start_node_index]
                     if edge.end_node_index in sind[0]:
@@ -2551,22 +2551,12 @@ class Edge(object):
             self.coordinates = np.squeeze(self.get_coordinates_from_graph(graph,index))
             self.start_node_index = edgeConn[index,0]
             self.start_node_coords = nodeCoords[self.start_node_index,:]
-            #self.end_node_index = edgeConn[index,1]
-            #self.end_node_coords = nodeCoords[self.end_node_index,:]
             self.npoints = nedgepoints[index]
-            #self.coordinates = self.get_coordinates_from_graph(graph,index)
             self.scalars,self.scalarNames = self.get_scalars_from_graph(graph,index)
             stat = self.complete_edge(nodeCoords[edgeConn[index,1],:],edgeConn[index,1])
             
             self.i0 = np.sum(nedgepoints[:index])
             self.i1 = self.i0 + nedgepoints[index]
-            
-        #if self.coordinates is not None:
-        #    assert self.npoints==len(self.coordinates[:,0])
-        #    # Make sure start coordinates match
-        #    assert all([x==y for x,y in zip(self.coordinates[0,:],self.start_node_coords)])
-        #    # Make sure end coordinates match
-        #    assert all([x==y for x,y in zip(self.coordinates[-1,:],self.end_node_coords)])
         
     def get_coordinates_from_graph(self,graph,index):
         nedgepoints = graph.get_field('NumEdgePoints')['data']
@@ -2628,22 +2618,25 @@ class Edge(object):
         if is_end:
             self.complete_edge(np.asarray(coords),end_index)
             
-    def complete_edge(self,end_node_coords,end_node_index):
+    def complete_edge(self,end_node_coords,end_node_index,quiet=True):
         stat = 0
         self.end_node_coords = np.asarray(end_node_coords)
         self.end_node_index = end_node_index
         self.complete = True
         
         if self.coordinates.ndim<2 or self.coordinates.shape[0]<2:
-            print(f'Error, too few points in edge {self.index}')
+            if not quiet:
+                print(f'Error, too few points in edge {self.index}')
             stat = -3
             return stat
         
         if not all([x.astype('float32')==y.astype('float32') for x,y in zip(self.end_node_coords,self.coordinates[-1,:])]):
-            print('Warning: End node coordinates do not match last edge coordinate!')
+            if not quiet:
+                print('Warning: End node coordinates do not match last edge coordinate!')
             stat = -1
         if not all([x.astype('float32')==y.astype('float32') for x,y in zip(self.start_node_coords,self.coordinates[0,:])]):
-            print('Warning: Start node coordinates do not match first edge coordinate!')
+            if not quiet:
+                print('Warning: Start node coordinates do not match first edge coordinate!')
             stat = -2
             
         return stat
