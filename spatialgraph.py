@@ -1036,7 +1036,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
             
         # Test for degeneracy
         res,_ = self.test_node_degeneracy(find_all=False)
-        if res:
+        if res: 
+            print('Degenerate nodes present!')
             return False
         
         return True
