@@ -802,6 +802,34 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     
         return connected
         
+    def get_all_connections_to_node(self,nodeInds,maxIter=10000):
+    
+        nodecoords = self.get_data('VertexCoordinates')
+        edgeconn = self.get_data('EdgeConnectivity')
+    
+        nodeStore, edgeStore = [], []
+        edges = self.get_edges_containing_node(nodeInds)
+        if len(edges)>0:
+            edgeStore.extend(edges.flatten().tolist())
+            
+            count = 0
+            while True:
+                next_nodes = edgeconn[edges].flatten()
+                edges = self.get_edges_containing_node(next_nodes)
+                # Take out edges already in store
+                edges = edges[~np.in1d(edges,edgeStore)]
+                # If there are new edges, add them in, otherwise break
+                if len(edges)>0:
+                    edgeStore.extend(edges.flatten().tolist())
+                    nodeStore.extend(next_nodes.flatten().tolist())
+                    count += 1
+                else:
+                    break
+                if count>maxIter:
+                    print(f'Warning, GET_ALL_CONNECTIONS_TO_NODE: Max. iteration count reached!')
+                    break
+        return arr(nodeStore), arr(edgeStore)
+        
     def connected_nodes(self,index, return_edges=True):
         # Return all nodes connected to a supplied node index, 
         # along with the edge indices they are connected by
@@ -2785,6 +2813,58 @@ class GVars(object):
         if update_pointer:
             self.node_ptr = self.nodecoords.shape[0]
             
+    def remove_nodes(self,node_inds_to_remove):
+    
+        nodecoords = self.nodecoords[self.nodecoords_allocated]
+        edgeconn = self.edgeconn[self.edgeconn_allocated]
+        nedgepoints = self.nedgepoints[self.edgeconn_allocated]
+        edgepoints = self.edgepoints[self.edgepoints_allocated]
+                
+        nnode = nodecoords.shape[0]
+        keep = np.ones(nnode,dtype='bool')
+        keep[node_inds_to_remove] = False
+
+        # Remove edges containing nodes
+        # Find which edges must be deleted
+        del_node_inds = np.where(keep==False)[0]
+        del_edges = [np.where((edgeconn[:,0]==i) | (edgeconn[:,1]==i))[0] for i in del_node_inds]
+        # Remove empties (i.e. where the node doesn't appear in any edges)
+        del_edges = [x for x in del_edges if len(x)>0]
+        # Flatten
+        del_edges = [item for sublist in del_edges for item in sublist]
+        # Convert to numpy
+        del_edges = arr(del_edges)
+        # List all edge indices
+        inds = np.linspace(0,edgeconn.shape[0]-1,edgeconn.shape[0],dtype='int')
+        # Define which edge each edgepoint belongs to
+        edge_inds = np.repeat(inds,nedgepoints)
+        # Create a mask of points to keep for edgepoint variables
+        keep_edgepoints = ~np.in1d(edge_inds,del_edges)
+        # Apply mask to edgepoint array
+        edgepoints = edgepoints[keep_edgepoints]
+        # Apply mask to scalars
+        scalars = []
+        for i,scalar in enumerate(self.scalar_values):
+            scalars.append(scalar[self.edgepoints_allocated][keep_edgepoints])
+              
+        # Create a mask for removing edge connections and apply to the nedgepoint array
+        keep_edges = np.ones(edgeconn.shape[0],dtype='bool')
+        if len(del_edges)>0:
+            keep_edges[del_edges] = False
+            nedgepoints = nedgepoints[keep_edges]
+        
+        # Remove nodes and update indices
+        nodecoords, edgeconn, edge_lookup = update_array_index(nodecoords,edgeconn,keep)
+        
+        node_scalars = []
+        for i,sc in enumerate(self.node_scalar_values):
+            sc = sc[self.nodecoords_allocated][keep]
+            node_scalars.append(sc)
+            
+        self.set_nodecoords(nodecoords,scalars=node_scalars)
+        self.set_edgeconn(edgeconn,nedgepoints)
+        self.set_edgepoints(edgepoints,scalars=scalars)
+            
     def add_edgeconn(self,conn,npts=2):
         if self.edge_ptr>=self.edgeconn.shape[0]:
             self.preallocate_edges(self.n_all,set_pointer_to_start=False)
@@ -2857,6 +2937,7 @@ class GVars(object):
         # Set pre-allocation
         self.edgeconn_allocated = self.edgeconn_allocated[self.edgeconn_allocated][keep]
         self.edgepoints_allocated = self.edgepoints_allocated[self.edgepoints_allocated][~flag]
+        
         
     def plot(self,**kwargs):
         self.set_in_graph()
