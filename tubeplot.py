@@ -25,7 +25,7 @@ def align_vector_to_another(a=np.array([0, 0, 1]), b=np.array([1, 0, 0])):
 class TubePlot(object):
 
     def __init__(self,graph, parameter=None, cylinders=None, cylinders_combined=None, color=None, edge_color=None, 
-                         min_radius=0.,domain_radius=None,radius_scale=1.,domain_centre=None,radius_based_resolution=True,cyl_res=10,edge_filter=None,node_filter=None,
+                         min_radius=0.,domain_radius=None,radius_scale=1.,fixed_radius=None,domain_centre=None,radius_based_resolution=True,cyl_res=10,edge_filter=None,node_filter=None,
                          cmap_range=[None,None],bgcolor=[0.,0.,0.],cmap=None,win_width=6000,win_height=6000,grab_file=None,
                          edge_highlight=[],node_highlight=[],highlight_color=[1,1,1],scalar_color_name=None,log_color=False,
                          show=True,block=True,engine='open3d',domain=None,domain_type='cylinder',ignore_domain=False):
@@ -45,6 +45,7 @@ class TubePlot(object):
         self.domain_radius = domain_radius
         # Factor to scale vessel radii by
         self.radius_scale = radius_scale
+        self.fixed_radius = fixed_radius
         # Centre of plot domain
         self.domain_centre = None
         if domain_centre is None:
@@ -217,15 +218,23 @@ class TubePlot(object):
         sind = self.cylinder_inds
             
         # Grab scalar data for lookup table, if required
-        if edge_color is None:
+        if edge_color is None and self.edge_color is None:
             scalars = self.graph.get_scalars()
             scalarNames = [x['name'] for x in scalars]
             if self.scalar_color_name in scalarNames:
                 self.edge_color = self.graph.get_data(self.scalar_color_name) # self.graph.point_scalars_to_edge_scalars(name=self.scalar_color_name)
             else:
-                self.edge_color = np.ones(nedge)
-        else:
+                print('TubePlot: Defaulting to blank palette!')
+                self.edge_color = np.ones(nedgepoint)
+        # Use the value passed as argument
+        elif edge_color is not None:
             self.edge_color = edge_color
+        # Use the 
+        elif self.edge_color is not None:
+            pass
+        else:
+            print('TubePlot: Defaulting to blank palette!')
+            self.edge_color = np.ones(nedgepoint)
                         
         if self.edge_color is None:
             #print(f'Error: no edge color provided!')
@@ -233,7 +242,7 @@ class TubePlot(object):
                      
         if self.log_color:   
             self.edge_color = np.abs(self.edge_color)
-            self.edge_color[self.edge_color<=0.] = 1e-6
+            self.edge_color[self.edge_color<=0.] = 1e-12
             self.edge_color = np.log(self.edge_color)
                             
         # Set range
@@ -261,10 +270,12 @@ class TubePlot(object):
             s_oth = np.where((self.edge_color>2) | (self.edge_color<0)) 
             cols[s_oth[0],:] = [1.,1.,1.]
         else:
+            # RGB color
             if len(self.edge_color.shape)==2 and self.edge_color.shape[-1]==3:
                 cols = self.cols
                 if np.max(cols)>1.:
                     cols = cols / np.max(cols)
+            # Lookup 
             else:
                 import matplotlib.pyplot as plt
                 cmapObj = plt.cm.get_cmap(self.cmap)
@@ -388,8 +399,10 @@ class TubePlot(object):
                                     resolution = 4
                                 else:
                                     resolution = self.cyl_res
-                                    
-                                if self.radius_scale!=1.:
+                                
+                                if self.fixed_radius is not None:
+                                    rad_cur = fixed_radius    
+                                elif self.radius_scale!=1.:
                                     rad_cur = rads[j] * self.radius_scale
                                 else:
                                     rad_cur = rads[j]

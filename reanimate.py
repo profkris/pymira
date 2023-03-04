@@ -219,7 +219,6 @@ def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2,in
             
             #https://www.ahajournals.org/doi/pdf/10.1161/01.CIR.18.5.864
             #https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1755-3768.2019.8165
-            
             if pressure is None:
                 if nbc==4:
                     pressure = [80.,80.,30.,30.]
