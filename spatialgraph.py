@@ -2354,7 +2354,7 @@ class Editor(object):
                         if 'float' in scalar_type[j]:
                             scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0]))
                         elif 'int' in scalar_type[j]:
-                            breakpoint()
+                            #breakpoint()
                             if sdc[0]==sdc[-1]:
                                 scalar_data_interp[j].extend(np.zeros(ninterp)+sdc[0])
                             else:
