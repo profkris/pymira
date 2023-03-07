@@ -689,6 +689,13 @@ class SpatialGraph(amiramesh.AmiraMesh):
             return None
         else: 
             return f['name']
+            
+    def get_radius_data(self):
+        f = self.get_radius_field()
+        if f is None:
+            return None
+        else: 
+            return f['data']
         
     def edgepoint_indices(self,edgeIndex):
         """
@@ -2237,7 +2244,7 @@ class Editor(object):
         
         return graph
 
-    def interpolate_edges(self,graph,interp_resolution=None,ninterp=2,filter=None,noise_sd=0.):
+    def interpolate_edges(self,graph,interp_resolution=None,interp_radius_factor=None,ninterp=2,filter=None,noise_sd=0.):
         
         """
         Linear interpolation of edge points, to a fixed minimum resolution
@@ -2248,6 +2255,7 @@ class Editor(object):
         points = graph.get_data('EdgePointCoordinates')
         npoints = graph.get_data('NumEdgePoints')
         conns = graph.get_data('EdgeConnectivity')
+        radii = graph.get_radius_data()
         
         scalars = graph.get_scalars()
         scalar_data = [x['data'] for x in scalars]
@@ -2270,9 +2278,17 @@ class Editor(object):
                     scalar_data_interp[j].extend(sd[i0:i1])
             else:
             
-                if npoints[i]==2:      
+                if npoints[i]==2:  
+                    ninterp = 2    
                     # Find how many additional points to interpolate in (if length>interpolation resolution)
-                    if interp_resolution is not None:
+                    if interp_radius_factor is not None and radii is not None:
+                        length = np.linalg.norm(pts[1]-pts[0])
+                        meanRadius = np.mean(radii[i0:i1])
+                        cur_interp_res = interp_radius_factor*meanRadius
+                        if length>cur_interp_res:
+                            ninterp = np.clip(int(np.ceil(length / cur_interp_res)+1),2,None)
+                        print(f'Ninterp: {ninterp}, npoints: {npoints[i]}, cur_interp_res:{cur_interp_res}')
+                    elif interp_resolution is not None:
                         length = np.linalg.norm(pts[1]-pts[0])
                         if length>interp_resolution:
                             ninterp = np.clip(int(np.ceil(length / interp_resolution)+1),2,None)
@@ -2311,11 +2327,19 @@ class Editor(object):
                     dists = arr([np.linalg.norm(pts[i]-pts[i-1]) for i,p in enumerate(pts[1:])])
                     length = np.sum(dists)
                     
-                    if length>interp_resolution:
+                    if interp_radius_factor is not None and radii is not None:
+                        meanRadius = np.mean(radii[i0:i1])
+                        cur_interp_res = interp_radius_factor*meanRadius
+                        if length>cur_interp_res:
+                            ninterp = np.clip(int(np.ceil(length / cur_interp_res)+1),2,None)
+                        else:
+                            ninterp = 2
+                        print(f'Ninterp: {ninterp}, npoints: {npoints[i]}, cur_interp_res:{cur_interp_res}')
+                    elif length>interp_resolution:
                         ninterp = np.clip(int(np.ceil(length / interp_resolution)+1),2,None)
                     else:
                         ninterp = 2
-                    
+
                     from scipy import interpolate
                     try:
                         if npoints[i]<=4:
@@ -2986,12 +3010,12 @@ class GVars(object):
         self.edge_ptr = self.edgeconn.shape[0]-1
         self.edgepnt_ptr = self.edgepoints.shape[0]-1
         
-    def convert_edgepoints_to_nodes(self):
+    def convert_edgepoints_to_nodes(self,interp_radius_factor=None):
 
         while True:
             nep = self.nedgepoints[self.edgeconn_allocated] #graph.get_data('NumEdgePoints')
             sind = np.where(nep>2)
-            if len(sind[0])>0:
+            if len(sind[0])>0:            
                 self.insert_node_in_edge(sind[0][0],1)
             else:
                 break

@@ -401,7 +401,7 @@ class TubePlot(object):
                                     resolution = self.cyl_res
                                 
                                 if self.fixed_radius is not None:
-                                    rad_cur = fixed_radius    
+                                    rad_cur = self.fixed_radius    
                                 elif self.radius_scale!=1.:
                                     rad_cur = rads[j] * self.radius_scale
                                 else:
