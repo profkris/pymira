@@ -2278,6 +2278,7 @@ class Editor(object):
                     scalar_data_interp[j].extend(sd[i0:i1])
             else:
             
+                # If the current edge has only 2 points
                 if npoints[i]==2:  
                     ninterp = 2    
                     # Find how many additional points to interpolate in (if length>interpolation resolution)
@@ -2287,7 +2288,7 @@ class Editor(object):
                         cur_interp_res = interp_radius_factor*meanRadius
                         if length>cur_interp_res:
                             ninterp = np.clip(int(np.ceil(length / cur_interp_res)+1),2,None)
-                        print(f'Ninterp: {ninterp}, npoints: {npoints[i]}, cur_interp_res:{cur_interp_res}')
+                        #print(f'Ninterp: {ninterp}, npoints: {npoints[i]}, cur_interp_res:{cur_interp_res}')
                     elif interp_resolution is not None:
                         length = np.linalg.norm(pts[1]-pts[0])
                         if length>interp_resolution:
@@ -2318,6 +2319,8 @@ class Editor(object):
                     
                     if ninterp!=pcur.shape[0]:
                         breakpoint()
+                        
+                # If the existing edge has more than 2 points
                 elif npoints[i]>2:
                     # Spline interpolate curve at required interval
                     i0 = np.sum(npoints[:i])
@@ -2334,7 +2337,7 @@ class Editor(object):
                             ninterp = np.clip(int(np.ceil(length / cur_interp_res)+1),2,None)
                         else:
                             ninterp = 2
-                        print(f'Ninterp: {ninterp}, npoints: {npoints[i]}, cur_interp_res:{cur_interp_res}')
+                        #print(f'Ninterp: {ninterp}, npoints: {npoints[i]}, cur_interp_res:{cur_interp_res}')
                     elif length>interp_resolution:
                         ninterp = np.clip(int(np.ceil(length / interp_resolution)+1),2,None)
                     else:
