@@ -2424,6 +2424,65 @@ class Editor(object):
         graph.set_definition_size('POINT',pts_interp.shape[0])   
         graph.set_graph_sizes()  
         
+    def insert_nodes_in_edges(self,graph,interp_resolution=None,interp_radius_factor=None,filter=None):
+        
+        """
+        """
+        
+        coords = graph.get_data('VertexCoordinates')
+        points = graph.get_data('EdgePointCoordinates')
+        npoints = graph.get_data('NumEdgePoints')
+        conns = graph.get_data('EdgeConnectivity')
+        radii = graph.get_radius_data()
+
+        if filter is None:
+            filter_pts = np.ones(points.shape[0],dtype='bool')
+        else:
+            # Convert from edge to edgepoint
+            filter_pts = np.repeat(filter,npoints)
+            
+        # Add filter field
+        graph.add_field(name='Filter',marker=f'@{len(graph.fields)+1}',definition='POINT',type='bool',nelements=1,nentries=[0])  
+        graph.set_data(filter_pts,name='Filter')
+        
+        print('Inserting nodes in edges...')
+
+        while True:
+            coords = graph.get_data('VertexCoordinates')
+            points = graph.get_data('EdgePointCoordinates')
+            npoints = graph.get_data('NumEdgePoints')
+            conns = graph.get_data('EdgeConnectivity')
+            filter_pts = graph.get_data('Filter')
+            radii = graph.get_radius_data()
+        
+            change = False
+            
+            for i,conn in enumerate(tqdm(conns)):
+                i0 = np.sum(npoints[:i])
+                i1 = i0 + npoints[i]
+                pts = points[i0:i1]
+
+                if filter_pts[i0]==True: # Ignore if filter is False           
+                    lengths = arr([np.linalg.norm(pts[j]-pts[j-1]) for j in range(1,npoints[i])])
+                    meanRadius = np.mean(radii[i0:i1])
+                    cur_interp_res = interp_radius_factor*meanRadius
+                    print(np.sum(lengths),cur_interp_res)
+                    if np.sum(lengths)>cur_interp_res:
+                        stmp = np.where(np.cumsum(lengths)>=cur_interp_res)
+                        if len(stmp[0])>0 and npoints[i]>2 and (stmp[0][0]+1)<(npoints[i]-1):
+                            # and stmp[0][0]>0 and stmp[0][-1]<npoints[i]-1:
+                            gvars = GVars(graph)
+                            _ = gvars.insert_node_in_edge(i,stmp[0][0]+1)
+                            graph = gvars.set_in_graph()
+                            change = True
+                            print('Change!')
+                            break
+            if not change:
+                break
+                
+        graph.remove_field('Filter')
+        return graph
+        
     def displace_degenerate_nodes(self,graph,displacement=1.):
     
         nodes = graph.get_data('VertexCoordinates')
