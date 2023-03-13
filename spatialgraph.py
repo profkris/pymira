@@ -2466,7 +2466,7 @@ class Editor(object):
                     lengths = arr([np.linalg.norm(pts[j]-pts[j-1]) for j in range(1,npoints[i])])
                     meanRadius = np.mean(radii[i0:i1])
                     cur_interp_res = interp_radius_factor*meanRadius
-                    print(np.sum(lengths),cur_interp_res)
+                    print(i,np.sum(lengths),cur_interp_res)
                     if np.sum(lengths)>cur_interp_res:
                         stmp = np.where(np.cumsum(lengths)>=cur_interp_res)
                         if len(stmp[0])>0 and npoints[i]>2 and (stmp[0][0]+1)<(npoints[i]-1):
@@ -2838,14 +2838,18 @@ class GVars(object):
         self.edgeconn_allocated = np.ones(self.edgeconn.shape[0],dtype='bool')
         self.edgepoints_allocated = np.ones(self.edgepoints.shape[0],dtype='bool')
         
-        scalars = graph.get_scalars()
+        self.set_scalars()
+        
+    def set_scalars(self):
+        scalars = self.graph.get_scalars()
         scalar_values = [x['data'].copy() for x in scalars]
         self.scalar_values = scalar_values
         self.scalars = scalars
-        radname = graph.get_radius_field()['name']
+        radname = self.graph.get_radius_field()['name']
         self.radname = radname
+        self.radind = [i for i,x in enumerate(self.scalars) if x['name']==radname][0]
         
-        node_scalars = graph.get_node_scalars()
+        node_scalars = self.graph.get_node_scalars()
         node_scalar_values = [x['data'].copy() for x in node_scalars]
         self.node_scalar_values = node_scalar_values
         self.node_scalars = node_scalars
@@ -3074,13 +3078,64 @@ class GVars(object):
         
     def convert_edgepoints_to_nodes(self,interp_radius_factor=None):
 
+        nedgepoint = self.edgepnt_ptr
+        strt = self.node_ptr
+        with tqdm(total=nedgepoint) as pbar:
+            pbar.update(self.node_ptr)
+            while True:
+                nep = self.nedgepoints[self.edgeconn_allocated] #graph.get_data('NumEdgePoints')
+                sind = np.where(nep>2)
+                if len(sind[0])>0:            
+                    self.insert_node_in_edge(sind[0][0],1)
+                    pbar.update(1)
+                else:
+                    break
+                
+    def insert_nodes_in_edges(self,interp_resolution=None,interp_radius_factor=None,filter=None):
+        
+        points = self.edgepoints[self.edgepoints_allocated]
+        if filter is None:
+            filter_pts = np.ones(points.shape[0],dtype='bool')
+        else:
+            # Convert from edge to edgepoint
+            filter_pts = np.repeat(filter,npoints)
+            
+        # Add filter field
+        self.graph = self.set_in_graph()
+        self.graph.add_field(name='Filter',marker=f'@{len(self.graph.fields)+1}',definition='POINT',type='bool',nelements=1,nentries=[0])  
+        self.graph.set_data(filter_pts,name='Filter')
+        
+        self.set_scalars()
+        
+        print('Inserting nodes in edges...')
+
+        i = 0
+        ninterp = 0
         while True:
-            nep = self.nedgepoints[self.edgeconn_allocated] #graph.get_data('NumEdgePoints')
-            sind = np.where(nep>2)
-            if len(sind[0])>0:            
-                self.insert_node_in_edge(sind[0][0],1)
-            else:
+            filter_pts = self.scalar_values[-1]
+            radii = self.scalar_values[self.radind]
+
+            npoints = self.nedgepoints[self.edgeconn_allocated]
+            i0 = np.sum(npoints[:i])
+            i1 = i0 + npoints[i]
+            pts = self.edgepoints[i0:i1]
+
+            if filter_pts[i0]==True: # Ignore if filter is False           
+                lengths = arr([np.linalg.norm(pts[j]-pts[j-1]) for j in range(1,npoints[i])])
+                meanRadius = np.mean(radii[i0:i1])
+                cur_interp_res = interp_radius_factor*meanRadius
+                #print(i,ninterp,self.edge_ptr)
+                if np.sum(lengths)>cur_interp_res:
+                    stmp = np.where(np.cumsum(lengths)>=cur_interp_res)
+                    if len(stmp[0])>0 and npoints[i]>2 and (stmp[0][0]+1)<(npoints[i]-1):
+                        _ = self.insert_node_in_edge(i,stmp[0][0]+1)
+                        ninterp += 1
+                        
+            i += 1
+            if i>=self.edge_ptr:
                 break
+                
+        self.graph.remove_field('Filter')
         
     def insert_node_in_edge(self,edge_index,edgepoint_index):
     
