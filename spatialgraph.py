@@ -811,10 +811,14 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
     def get_all_connections_to_node(self,nodeInds,maxIter=10000):
     
+        """
+        Find all edges that are connected to a node
+        """
+    
         nodecoords = self.get_data('VertexCoordinates')
         edgeconn = self.get_data('EdgeConnectivity')
     
-        nodeStore, edgeStore = [], []
+        nodeStore, edgeStore, conn_order = [], [], []
         edges = self.get_edges_containing_node(nodeInds)
         if len(edges)>0:
             edgeStore.extend(edges.flatten().tolist())
@@ -829,6 +833,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 if len(edges)>0:
                     edgeStore.extend(edges.flatten().tolist())
                     nodeStore.extend(next_nodes.flatten().tolist())
+                    conn_order.extend([count]*next_nodes.shape[0])
                     count += 1
                 else:
                     break
@@ -1100,6 +1105,35 @@ class SpatialGraph(amiramesh.AmiraMesh):
             return True,arr(degen_nodes).flatten()
                     
     def identify_graphs(self,progBar=False,ignore_node=None,ignore_edge=None,verbose=False,add_scalar=True):
+
+        # NEW VERSION (faster)!
+        # Find all connected nodes
+        gc = self.get_node_count()
+        sends = np.where(gc<=1)
+        nodes_visited = []
+        node_graph_index = np.zeros(self.nnode,dtype='int') - 1
+        #node_graph_contains_root = np.zeros(graph.nnode,dtype='bool')
+        graph_index_count = 0
+        for send in sends[0]:
+            if node_graph_index[send]==-1:
+                node_graph_index[send] = graph_index_count
+                #node_graph_contains_root[send] = np.any(frozenNode[send])
+                edges = self.get_edges_containing_node(send)
+                cnodes,cedges = self.get_all_connections_to_node(send)
+
+                if len(cnodes)>0:                            
+                    node_graph_index[cnodes] = graph_index_count
+                    #node_graph_contains_root[cnodes] = np.any(frozenNode[cnodes])
+
+                graph_index_count += 1
+
+            if np.all(node_graph_index>=0):
+                break
+                
+        unique, counts = np.unique(node_graph_index, return_counts=True)
+                
+        return node_graph_index, counts
+        
         
         nodeCoords = self.get_data('VertexCoordinates')
         conn = self.get_data('EdgeConnectivity')
@@ -2212,6 +2246,7 @@ class Editor(object):
     def largest_graph(self, graph):
 
         graphNodeIndex, graph_size = graph.identify_graphs(progBar=True)
+        unq_graph_indices, graph_size = np.unique(graphNodeIndex, return_counts=True)
         largest_graph_index = np.argmax(graph_size)
         node_indices = np.arange(graph.nnode)
         nodes_to_delete = node_indices[graphNodeIndex!=largest_graph_index]
@@ -2221,24 +2256,26 @@ class Editor(object):
         
     def remove_graphs_smaller_than(self, graph, lim, pfile=None):
 
-        if pfile is None:
+        if True: #pfile is None:
             graphNodeIndex, graph_size = graph.identify_graphs(progBar=True)
         else:
             import pickle
             plist = pickle.load(open(pfile,"r"))
             graphNodeIndex, graph_size = plist[0],plist[1]
             
-        graph_index_to_delete = np.where(graph_size<lim)
-        nodes_to_delete = []
-        for gitd in graph_index_to_delete[0]:
-            inds = np.where(graphNodeIndex==gitd)
-            nodes_to_delete.extend(inds[0].tolist())
-        nodes_to_delete = np.asarray(nodes_to_delete)
+        unq_graph_indices, graph_size = np.unique(graphNodeIndex, return_counts=True)
             
-        #node_indices = np.arange(graph.nnode)
-        #nodes_to_delete = node_indices[graphNodeIndex!=largest_graph_index]
+        graph_index_to_delete = np.where(graph_size<lim)
+        if len(graph_index_to_delete)==0:
+            return graph
+            
+        nodes_to_delete = []
+        for gitd in np.hstack([unq_graph_indices[graph_index_to_delete],-1]):
+            inds = np.where(graphNodeIndex==gitd)
+            if len(inds)>0:
+                nodes_to_delete.extend(inds[0].tolist())
+        nodes_to_delete = np.asarray(nodes_to_delete)
 
-        #breakpoint()
         graph = self.delete_nodes(graph,nodes_to_delete)
         graph.set_graph_sizes()
         
