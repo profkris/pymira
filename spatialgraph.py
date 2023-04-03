@@ -811,10 +811,14 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
     def get_all_connections_to_node(self,nodeInds,maxIter=10000):
     
+        """
+        Find all edges that are connected to a node
+        """
+    
         nodecoords = self.get_data('VertexCoordinates')
         edgeconn = self.get_data('EdgeConnectivity')
     
-        nodeStore, edgeStore = [], []
+        nodeStore, edgeStore, conn_order = [], [], []
         edges = self.get_edges_containing_node(nodeInds)
         if len(edges)>0:
             edgeStore.extend(edges.flatten().tolist())
@@ -829,6 +833,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 if len(edges)>0:
                     edgeStore.extend(edges.flatten().tolist())
                     nodeStore.extend(next_nodes.flatten().tolist())
+                    conn_order.extend([count]*next_nodes.shape[0])
                     count += 1
                 else:
                     break
@@ -1100,6 +1105,35 @@ class SpatialGraph(amiramesh.AmiraMesh):
             return True,arr(degen_nodes).flatten()
                     
     def identify_graphs(self,progBar=False,ignore_node=None,ignore_edge=None,verbose=False,add_scalar=True):
+
+        # NEW VERSION (faster)!
+        # Find all connected nodes
+        gc = self.get_node_count()
+        sends = np.where(gc<=1)
+        nodes_visited = []
+        node_graph_index = np.zeros(self.nnode,dtype='int') - 1
+        #node_graph_contains_root = np.zeros(graph.nnode,dtype='bool')
+        graph_index_count = 0
+        for send in sends[0]:
+            if node_graph_index[send]==-1:
+                node_graph_index[send] = graph_index_count
+                #node_graph_contains_root[send] = np.any(frozenNode[send])
+                edges = self.get_edges_containing_node(send)
+                cnodes,cedges = self.get_all_connections_to_node(send)
+
+                if len(cnodes)>0:                            
+                    node_graph_index[cnodes] = graph_index_count
+                    #node_graph_contains_root[cnodes] = np.any(frozenNode[cnodes])
+
+                graph_index_count += 1
+
+            if np.all(node_graph_index>=0):
+                break
+                
+        unique, counts = np.unique(node_graph_index, return_counts=True)
+                
+        return node_graph_index, counts
+        
         
         nodeCoords = self.get_data('VertexCoordinates')
         conn = self.get_data('EdgeConnectivity')
@@ -2212,6 +2246,7 @@ class Editor(object):
     def largest_graph(self, graph):
 
         graphNodeIndex, graph_size = graph.identify_graphs(progBar=True)
+        unq_graph_indices, graph_size = np.unique(graphNodeIndex, return_counts=True)
         largest_graph_index = np.argmax(graph_size)
         node_indices = np.arange(graph.nnode)
         nodes_to_delete = node_indices[graphNodeIndex!=largest_graph_index]
@@ -2221,28 +2256,169 @@ class Editor(object):
         
     def remove_graphs_smaller_than(self, graph, lim, pfile=None):
 
-        if pfile is None:
+        if True: #pfile is None:
             graphNodeIndex, graph_size = graph.identify_graphs(progBar=True)
         else:
             import pickle
             plist = pickle.load(open(pfile,"r"))
             graphNodeIndex, graph_size = plist[0],plist[1]
             
-        graph_index_to_delete = np.where(graph_size<lim)
-        nodes_to_delete = []
-        for gitd in graph_index_to_delete[0]:
-            inds = np.where(graphNodeIndex==gitd)
-            nodes_to_delete.extend(inds[0].tolist())
-        nodes_to_delete = np.asarray(nodes_to_delete)
+        unq_graph_indices, graph_size = np.unique(graphNodeIndex, return_counts=True)
             
-        #node_indices = np.arange(graph.nnode)
-        #nodes_to_delete = node_indices[graphNodeIndex!=largest_graph_index]
+        graph_index_to_delete = np.where(graph_size<lim)
+        if len(graph_index_to_delete)==0:
+            return graph
+            
+        nodes_to_delete = []
+        for gitd in np.hstack([unq_graph_indices[graph_index_to_delete],-1]):
+            inds = np.where(graphNodeIndex==gitd)
+            if len(inds)>0:
+                nodes_to_delete.extend(inds[0].tolist())
+        nodes_to_delete = np.asarray(nodes_to_delete)
 
-        #breakpoint()
         graph = self.delete_nodes(graph,nodes_to_delete)
         graph.set_graph_sizes()
         
         return graph
+        
+    def filter_graph_by_radius(self,graph,min_filter_radius=5.,filter_clip_radius=None,write=False,ofile='',keep_stubs=False,stub_len=100.):
+
+        """
+        min_filter_radius: All edges with radii < this value are deleted
+        filter_clip_radius: All edges with radii < this value and > min_filter_radius are set to filter_clip_radius    
+        """
+
+        #nodecoords, edgeconn, edgepoints, nedgepoints, radius, category, mlp = get_graph_fields(graph)
+        
+        nodecoords = graph.get_data('VertexCoordinates')
+        edgeconn = graph.get_data('EdgeConnectivity')
+        edgepoints = graph.get_data('EdgePointCoordinates')
+        nedgepoints = graph.get_data('NumEdgePoints')
+        radius = graph.get_data(graph.get_radius_field_name())
+        scalars = graph.get_scalars()
+        nscalars = graph.get_node_scalars()
+        
+        nedges = edgeconn.shape[0]
+        nnode = nodecoords.shape[0]
+
+        # List all edge indices
+        inds = np.linspace(0,edgeconn.shape[0]-1,edgeconn.shape[0],dtype='int')
+        # Define which edge each edgepoint belongs to
+        edge_inds = np.repeat(inds,nedgepoints)
+        if filter_clip_radius is not None:
+            clip_edge_inds = np.where((radius>=filter_clip_radius) & (radius<=min_filter_radius))
+            radius[clip_edge_inds] = min_filter_radius
+        else:
+            clip_edge_inds = [[]]
+        del_edge_inds = np.where(radius<min_filter_radius)
+        
+        edge_stubs = arr([])
+        if keep_stubs:
+            node_radius = np.zeros(nodecoords.shape[0]) - 1
+            rname = graph.get_radius_field_name()
+            rind = [i for i,s in enumerate(graph.get_scalars()) if s['name']==rname][0]
+            for i in trange(graph.nedge):
+                edge = graph.get_edge(i)
+                rads = np.min(edge.scalars[rind])
+                node_radius[edge.start_node_index] = np.max([rads,node_radius[edge.start_node_index]])
+                node_radius[edge.end_node_index] = np.max([rads,node_radius[edge.end_node_index]])
+            
+            is_stub = np.zeros(radius.shape[0],dtype='bool')
+            stub_loc = np.zeros(graph.nedge,dtype='int') - 1
+            for i in trange(graph.nedge):
+                edge = graph.get_edge(i)   
+                rads = edge.scalars[rind]
+                #epointinds = np.linspace(edge.i0,edge.i1,edge.npoints,dtype='int')
+                if np.any(rads<min_filter_radius):
+                    if node_radius[edge.start_node_index]>min_filter_radius:
+                        is_stub[edge.i0] = True
+                        stub_loc[i] = 0
+                    elif node_radius[edge.end_node_index]>min_filter_radius:
+                        is_stub[edge.i0] = True   
+                        stub_loc[i] = 1
+
+            del_edge_inds = np.where((radius<min_filter_radius) & (is_stub==False))
+            edgepoint_edges = np.repeat(np.linspace(0,edgeconn.shape[0]-1,edgeconn.shape[0],dtype='int'),nedgepoints)
+            edge_stubs = np.unique(edgepoint_edges[is_stub])
+            #breakpoint()
+            
+            edges = edgeconn[edge_stubs]
+            stub_loc = stub_loc[edge_stubs]
+            # Shorten stubs
+            edgepoints_valid = np.ones(edgepoints.shape[0],dtype='bool') 
+            for i,edge in enumerate(tqdm(edges)):
+                 nodes = nodecoords[edge]
+                 edgeObj = graph.get_edge(edge_stubs[i])
+                 points = edgeObj.coordinates
+                 if stub_loc[i]==0:
+                     lengths = np.concatenate([[0.],np.cumsum(np.linalg.norm(points[1:]-points[:-1]))])
+                     if np.max(lengths)>=stub_len:
+                         x0 = points[0]
+                         x1 = points[lengths>=stub_len]
+                         clen = stub_len
+                     else:
+                         x0 = points[0]
+                         x1 = points[-1]
+                         clen = np.linalg.norm(x1-x0)
+                     vn = x1 - x0
+                     vn = vn / np.linalg.norm(x1-x0)
+                     nodecoords[edge[1]] = x0 + vn*stub_len
+                     new_edgepoints = [x0,x1]
+                 elif stub_loc[i]==1:
+                     points = np.flip(points,axis=0)
+                     lengths = np.concatenate([[0.],np.cumsum(np.linalg.norm(points[1:]-points[:-1]))])
+                     if np.max(lengths)>=stub_len:
+                         x0 = points[0]
+                         x1 = points[lengths>=stub_len]
+                         clen = stub_len
+                     else:
+                         x0 = points[0]
+                         x1 = points[-1]
+                         clen = np.linalg.norm(x1-x0)
+                     vn = x1 - x0
+                     vn = vn / np.linalg.norm(x1-x0)
+                     nodecoords[edge[0]] = x0 + vn*clen
+                     new_edgepoints = [x1,x0]
+                 else:
+                     breakpoint()
+                 edgepoints[edgeObj.i0] = new_edgepoints[0]
+                 edgepoints[edgeObj.i0+1] = new_edgepoints[1]
+                 if edgeObj.npoints>2:
+                     edgepoints_valid[edgeObj.i0+1:edgeObj.i0] = False
+                 nedgepoints[i] = 2
+            #breakpoint()
+            edgepoints = edgepoints[edgepoints_valid]
+
+        print(f'{len(clip_edge_inds[0])} edges with radii>{filter_clip_radius} and radii<{min_filter_radius} clipped.')
+        print(f'{len(del_edge_inds[0])} edges with radii<{min_filter_radius} clipped.')
+
+        # Find unique edge index references
+        keep_edge = np.ones(edgeconn.shape[0],dtype='bool')
+        # Convert to segments
+        del_inds = np.unique(edge_inds[del_edge_inds])
+        keep_edge[del_inds] = False
+        keep_inds = np.where(keep_edge)[0]
+        # Define nodes to keep positively (i.e. using the keep_inds rather than del_inds) so that nodes are retained that appear in edges that aren't flagged for deletion
+        node_keep_inds = np.unique(edgeconn[keep_inds].flatten())
+        keep_node = np.zeros(nodecoords.shape[0],dtype='bool')
+        keep_node[node_keep_inds] = True
+        
+        graph.set_data(nodecoords,name='VertexCoordinates')
+        graph.set_data(edgeconn,name='EdgeConnectivity')
+        graph.set_data(edgepoints,name='EdgePointCoordinates')
+        graph.set_data(nedgepoints,name='NumEdgePoints')
+        graph.set_data(radius,name=graph.get_radius_field_name())
+        graph.set_definition_size('VERTEX',nodecoords[0].shape[0])
+        graph.set_definition_size('EDGE',edgeconn[1].shape[0])
+        graph.set_definition_size('POINT',edgepoints[4].shape[0])            
+        graph.set_graph_sizes()
+        
+        graph = delete_vertices(graph,keep_node)
+        
+        if write:
+            graph.write(ofile)  
+            
+        return graph  
 
     def interpolate_edges(self,graph,interp_resolution=None,interp_radius_factor=None,ninterp=2,filter=None,noise_sd=0.):
         
