@@ -373,7 +373,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         import copy
         return copy.deepcopy(self)
        
-# NODE LIST: Converts the flat data structure into a list of node class objects, with connectivity data included
+    # NODE LIST: Converts the flat data structure into a list of node class objects, with connectivity data included
            
     def node_list(self,path=None):
         
@@ -492,7 +492,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         return graph        
         
-# Spatial methods
+    # Spatial methods
         
     def node_spatial_extent(self):
         
@@ -2482,6 +2482,27 @@ class Editor(object):
                 
         graph.remove_field('Filter')
         return graph
+        
+    def add_noise(self,graph,filter=None,radius_factor=2.):
+    
+        edges = graph.get_data('EdgeConnectivity')
+        edgepoints = graph.get_data('EdgePointCoordinates')
+        radius = graph.get_data(graph.get_radius_field_name())
+        
+        if filter is None:
+            filter = np.ones(graph.nedge,dtype='bool')
+        for i,e in enumerate(tqdm(edges)):
+            if filter[i]:
+                edge = graph.get_edge(i)
+                if edge.npoints>2:
+                    dirs = edge.coordinates[1:]-edge.coordinates[:-1]/(np.linalg.norm(edge.coordinates[1:]-edge.coordinates[:-1]))
+                    orth = np.cross(dirs,arr([0.,0.,1]))
+                    orth = arr([x / np.linalg.norm(x) for x in orth])
+                    orth = np.vstack([arr([0.,0.,0.]),orth])
+                    edgepoints[edge.i0+1:edge.i1-1] += orth[1:-1] + np.random.normal(0.,radius[edge.i0+1:edge.i1-1]*radius_factor)
+                        
+        graph.set_data(edgepoints,name='EdgePointCoordinates') 
+        return graph 
         
     def displace_degenerate_nodes(self,graph,displacement=1.):
     

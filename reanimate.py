@@ -259,10 +259,11 @@ def dat2amira(fname,ofile=None,plot=False):
 if __name__=='__main__':
 
     # Amira to dat (a2d) or dat to Amira (d2a)
-    conv = 'd2a' #'a2d'
+    conv = 'a2d' #'a2d'
     
     if conv=='a2d': # export
         fname = '/mnt/data2/retinasim/cco/graph/retina_cco_voronoicap_1av.am'
+        fname = r'C:\Users\simon\Downloads\retina_cco_a2v.am'
         ofile = fname.replace('.am','.dat')
         
         amira2dat(fname,ofile=ofile,remove_intermediate=False,nbc=2)
