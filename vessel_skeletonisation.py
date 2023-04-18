@@ -102,6 +102,221 @@ def identify_graphs(graph):
         if np.all(node_graph_index>=0):
             break
     return node_graph_index
+    
+def skeletonize(image,resolution=None):
+
+    from skimage.morphology import skeletonize as skel
+    skeleton = skel(image)
+
+    #plt.imsave(join(opath,f.replace('.tif','_mask.png')),(blur*255).astype('int'))
+    #plt.imsave(join(opath,f.replace('.tif','_skeleton.png')),(skeleton*255/np.max(skeleton)).astype('int'))
+    #plt.imsave(join(opath,f.replace('.tif','_enface.png')),(enface).astype('int'))
+    
+    import scipy
+    dist = scipy.ndimage.distance_transform_edt(image) #np.abs(blur-1.))
+    rad = skeleton * dist
+    
+    from pymira import midline_to_graph
+    skeleton3d = np.expand_dims(skeleton,axis=-1)
+    m2g = midline_to_graph.Midline2Graph(skeleton3d.astype('float'))
+    edgepointsInt, edgeconn = m2g.convert() 
+
+    nodes = edgepointsInt.copy().astype('float')   
+    edgepoints = nodes[edgeconn].reshape([2*edgeconn.shape[0],3])
+    nedgepoints = np.zeros(edgeconn.shape[0],dtype='int') + 2
+    
+    radii_node = dist[edgepointsInt[:,0],edgepointsInt[:,1]]
+    radii = radii_node[edgeconn].reshape([2*edgeconn.shape[0]])
+    if resolution is not None:
+        radii *= resolution[0]
+        nodes[:,0] *= resolution[0]
+        nodes[:,1] *= resolution[1]
+        edgepoints[:,0] *= resolution[0]
+        edgepoints[:,1] *= resolution[1]
+    
+    graph = spatialgraph.SpatialGraph(initialise=True,scalars=['Radius'])      
+    graph.set_definition_size('VERTEX',nodes.shape[0])
+    graph.set_definition_size('EDGE',edgeconn.shape[0])
+    graph.set_definition_size('POINT',edgepoints.shape[0])
+    graph.set_data(nodes,name='VertexCoordinates')
+    graph.set_data(edgeconn,name='EdgeConnectivity')
+    graph.set_data(nedgepoints,name='NumEdgePoints')
+    graph.set_data(edgepoints,name='EdgePointCoordinates')
+    graph.set_data(radii,name='Radius')
+    graph.set_graph_sizes()
+    
+    ed = spatialgraph.Editor()
+    #breakpoint()
+    #graph = ed.remove_intermediate_nodes(graph)
+    
+    return graph
+    
+    
+    
+    edgepoints = edgepoints[:,:2]
+    
+    # Remove self-connected points
+    edgeconns = arr([x for x in edgeconn if x[0]!=x[1]])
+    
+    # Convert to node & edge format
+    unq,count = np.unique(edgeconn,return_counts=True)
+    all_nodes = np.linspace(0,edgepoints.shape[0]-1,edgepoints.shape[0],dtype='int')
+    node_count = np.zeros(edgepoints.shape[0],dtype='int') 
+    node_count[np.in1d(all_nodes,unq)] = count
+    count = node_count
+        
+    nodes_edgeinds = np.where(count!=2)[0]
+    nodes = edgepoints[nodes_edgeinds]
+    nnode = nodes.shape[0]
+    
+    edges = []
+    edgepoint_inds = []
+
+    edge_visited = np.zeros(edgeconn.shape[0],dtype='bool')
+    for i in range(nnode):
+        # Find which edges the current node is connected to
+        cur_conns0 = np.where( ((edgeconn[:,0]==nodes_edgeinds[i]) | (edgeconn[:,1]==nodes_edgeinds[i])) & (edge_visited==False))
+        #cur_conns = cur_conns[0][~np.in1d(cur_conns[0],cur_edges[j])]
+        cur_conns0 = cur_conns0[0]
+        nconn = len(cur_conns0)
+        
+        if nconn>0:
+            term = np.zeros(nconn,dtype='bool')
+            edge_invalid = np.zeros(nconn,dtype='bool')
+        
+            #edge_visited[cur_conns[0]] = True
+            cur_edges = [[x] for x in cur_conns0]
+            #cur_edgepoint = [edgepoints[x] for x in cur_edges]
+            
+            # Initialise the edgepoint lists
+            cur_edgepoint_ind = [[nodes_edgeinds[i]] for _ in cur_conns0]
+            # Add in the first connection
+            for j in range(nconn):
+                if edgeconn[cur_conns0[j],0]!=cur_edgepoint_ind[j][-1] and edgeconn[cur_conns0[j],1]==cur_edgepoint_ind[j][-1]:
+                    cur_edgepoint_ind[j].append(edgeconn[cur_conns0[j],0])
+                elif edgeconn[cur_conns0[j],1]!=cur_edgepoint_ind[j][-1] and edgeconn[cur_conns0[j],0]==cur_edgepoint_ind[j][-1]:
+                    cur_edgepoint_ind[j].append(edgeconn[cur_conns0[j],1])
+                else:
+                    breakpoint()
+            
+                #cur_edgepoint_ind[j].append( [edgeconn[x,0] if edgeconn[x,0]!=cur_edgepoint_ind[j][-1] else edgeconn[x,1] for x in cur_conns0][0] )
+                if count[cur_edgepoint_ind[j][-1]]!=2:
+                    term[j] = True
+ 
+            # Walk edges until another node is encountered
+            itcount = 0
+            while True:
+                for j in range(nconn):
+                    if term[j]==False:
+                        cur_conns = np.where( ((edgeconn[:,0]==cur_edgepoint_ind[j][-1]) | (edgeconn[:,1]==cur_edgepoint_ind[j][-1])) & (edge_visited==False) )
+                        cur_conns = cur_conns[0][~np.in1d(cur_conns[0],cur_edges[j])]
+                        if len(cur_conns)==1:
+                            #breakpoint()
+                            if edgeconn[cur_conns,0]!=cur_edgepoint_ind[j][-1] and edgeconn[cur_conns,1]==cur_edgepoint_ind[j][-1]:
+                                cur_edgepoint_ind[j].append(edgeconn[cur_conns,0][0])
+                            elif edgeconn[cur_conns,1]!=cur_edgepoint_ind[j][-1] and edgeconn[cur_conns,0]==cur_edgepoint_ind[j][-1]:
+                                cur_edgepoint_ind[j].append(edgeconn[cur_conns,1][0])
+                            else:
+                                breakpoint()
+                            cur_edges[j].append(cur_conns[0])
+                            edge_visited[cur_conns[0]] = True
+                            
+                            if count[cur_edgepoint_ind[j][-1]]!=2:
+                                term[j] = True
+                        elif len(cur_conns)>1:
+                            #raise
+                            breakpoint()
+                        else:
+                            edge_invalid[j] = True
+                            term[j] = True
+                            #edge_visited[arr(cur_edges[j])] = False
+                            #breakpoint()
+
+                if np.all(term):
+                    break
+                elif itcount>1000:
+                    print(f'Itcount>1000!')
+                    breakpoint()
+                else:
+                    #cur_edgepoint_ind = next_edgepoint_ind
+                    pass
+                itcount += 1
+                
+            #breakpoint() 
+            for j,e in enumerate(cur_edges): 
+                if not edge_invalid[j]:        
+                    edges.append(e)   
+            for j,e in enumerate(cur_edgepoint_ind): 
+                if not edge_invalid[j]:
+                    edgepoint_inds.append(e) 
+
+    unvisited_edges = edgeconn[edge_visited==False]
+    #fig = plt.figure()
+    
+    for i,e in enumerate(edgeconn):
+        if edge_visited[i]==False:
+            ec0 = edgepoints[e[0]]
+            ec1 = edgepoints[e[1]]
+            #plt.plot([ec0[0],ec1[0]],[ec0[1],ec1[1]],c='r')
+            
+    conns = np.zeros([len(edgepoint_inds),2],dtype='int')
+    for i,e in enumerate(edgepoint_inds):
+        ec = edgepoints[e]
+        #plt.plot(ec[ :,0],ec[:,1],c='b')
+        try:
+            conns[i,0] = np.where(nodes_edgeinds==e[0])[0]
+            conns[i,1] = np.where(nodes_edgeinds==e[-1])[0]
+        except Exception as err:
+            print(err)
+            breakpoint()
+
+    nedgepoints = arr([len(x) for x in edgepoint_inds])
+    edgepoint_inds = [x for y in edgepoint_inds for x in y]
+    edgepoints = edgepoints[edgepoint_inds]
+    
+    #plt.show()
+
+    radii = dist[edgepoints[:,0],edgepoints[:,1]]
+    if resolution is not None:
+        radii *= resolution[0]
+    
+    nodes3d = np.zeros([nodes.shape[0],3])
+    nodes3d[:,:2] = nodes
+    if resolution is not None:
+        nodes3d[:,0] *= resolution[0]
+        nodes3d[:,1] *= resolution[1]
+        #nodes3d[:,2] *= resolution[1]
+    edgepoints3d = np.zeros([edgepoints.shape[0],3]) 
+    edgepoints3d[:,:2] = edgepoints
+    if resolution is not None:
+        edgepoints3d[:,0] *= resolution[0]
+        edgepoints3d[:,1] *= resolution[1]
+        #edgepoints3d[:,2] *= resolution[1]
+    
+    graph = spatialgraph.SpatialGraph(initialise=True,scalars=['Radius'])      
+    graph.set_definition_size('VERTEX',nodes.shape[0])
+    graph.set_definition_size('EDGE',conns.shape[0])
+    graph.set_definition_size('POINT',edgepoints.shape[0])
+    graph.set_data(nodes3d,name='VertexCoordinates')
+    graph.set_data(conns,name='EdgeConnectivity')
+    graph.set_data(nedgepoints,name='NumEdgePoints')
+    graph.set_data(edgepoints3d,name='EdgePointCoordinates')
+    graph.set_data(radii,name='Radius')
+    graph.set_graph_sizes()
+
+    graphNodeIndex, graph_size = graph.identify_graphs(progBar=True)
+    ed = spatialgraph.Editor()
+    graph = ed.remove_graphs_smaller_than(graph,20) #identify_graphs(graph)
+    graphNodeIndex, graph_size2 = graph.identify_graphs(progBar=True)
+    
+    for e in range(graph.nedge):
+       edge = graph.get_edge(e)
+       if edge.npoints>2:
+           #radii[edge.i0:edge.i1] = np.mean(radii[edge.i0:edge.i1])
+           pass
+    graph.set_data(radii,name='Radius')
+    #graph.plot(fixed_radius=0.2,cmap_range=[0.,.1],cmap='gray')
+    return graph
 
 def main():
     #path_root = r'C:\Users\simon\SWS Dropbox\Simon Walker-Samuel\retinas - GIULIA'
@@ -114,6 +329,15 @@ def main():
     ftype = '.png'
     #files = ['PDR_case_9_Angio (12mmx12mm)_2-15-2019_14-26-22_OS_sn2159_FlowCube_z_enface_fake.png']
     files = ['1.2.276.0.75.2.2.44.79497678600052.20180702120449820.210035586_SuperficialAngioEnface__BSCR_P01_fake.png']
+    make_binary = False
+    
+    path_root = r'C:\Users\simon\Desktop\turing2'
+    groups = ['']
+    ftype = '.png'
+    #files = ['PDR_case_9_Angio (12mmx12mm)_2-15-2019_14-26-22_OS_sn2159_FlowCube_z_enface_fake.png']
+    #files = ['im_0.05_0.06111111111111111.png']
+    files = ['im_0.04_0.06125.png']
+    make_binary = True
 
     for group in groups:
         path = join(path_root,group)
@@ -138,6 +362,12 @@ def main():
 
                 data = io.imread(join(path,f))[:,:,channelInd]
                 data = skimage.transform.resize(data, (500, 500)) * 255
+                #breakpoint()
+                if make_binary:
+                    binary_threshold = 128
+                    data[data>=binary_threshold] = 255
+                    data[data<binary_threshold] = 0
+                
                 #print(data.shape,data[...,0].max(),data[...,1].max(),data[...,2].max())
                 img = Image.open(join(path,f))
                 #breakpoint()
@@ -196,183 +426,8 @@ def main():
                 else:
                     blur = data>40
                     
-                from skimage.morphology import skeletonize
                 blur = blur / np.max(blur)
-                skeleton = skeletonize(blur)
-
-                plt.imsave(join(opath,f.replace('.tif','_mask.png')),(blur*255).astype('int'))
-                plt.imsave(join(opath,f.replace('.tif','_skeleton.png')),(skeleton*255/np.max(skeleton)).astype('int'))
-                #plt.imsave(join(opath,f.replace('.tif','_enface.png')),(enface).astype('int'))
-                
-                import scipy
-                dist = scipy.ndimage.distance_transform_edt(blur) #np.abs(blur-1.))
-                rad = skeleton * dist
-                
-                from pymira import midline_to_graph
-                skeleton3d = np.expand_dims(skeleton,axis=-1)
-                m2g = midline_to_graph.Midline2Graph(skeleton3d.astype('float'))
-                edgepoints, edgeconn = m2g.convert()  
-                
-                edgepoints = edgepoints[:,:2]
-                
-                # Remove self-connected points
-                edgeconns = arr([x for x in edgeconn if x[0]!=x[1]])
-                
-                # Convert to node & edge format
-                unq,count = np.unique(edgeconn,return_counts=True)
-                all_nodes = np.linspace(0,edgepoints.shape[0]-1,edgepoints.shape[0],dtype='int')
-                node_count = np.zeros(edgepoints.shape[0],dtype='int') 
-                node_count[np.in1d(all_nodes,unq)] = count
-                count = node_count
-                    
-                nodes_edgeinds = np.where(count!=2)[0]
-                nodes = edgepoints[nodes_edgeinds]
-                nnode = nodes.shape[0]
-                
-                edges = []
-                edgepoint_inds = []
-
-                edge_visited = np.zeros(edgeconn.shape[0],dtype='bool')
-                for i in range(nnode):
-                    # Find which edges the current node is connected to
-                    cur_conns0 = np.where( ((edgeconn[:,0]==nodes_edgeinds[i]) | (edgeconn[:,1]==nodes_edgeinds[i])) & (edge_visited==False))
-                    #cur_conns = cur_conns[0][~np.in1d(cur_conns[0],cur_edges[j])]
-                    cur_conns0 = cur_conns0[0]
-                    nconn = len(cur_conns0)
-                    
-                    if nconn>0:
-                        term = np.zeros(nconn,dtype='bool')
-                        edge_invalid = np.zeros(nconn,dtype='bool')
-                    
-                        #edge_visited[cur_conns[0]] = True
-                        cur_edges = [[x] for x in cur_conns0]
-                        #cur_edgepoint = [edgepoints[x] for x in cur_edges]
-                        
-                        # Initialise the edgepoint lists
-                        cur_edgepoint_ind = [[nodes_edgeinds[i]] for _ in cur_conns0]
-                        # Add in the first connection
-                        for j in range(nconn):
-                            if edgeconn[cur_conns0[j],0]!=cur_edgepoint_ind[j][-1] and edgeconn[cur_conns0[j],1]==cur_edgepoint_ind[j][-1]:
-                                cur_edgepoint_ind[j].append(edgeconn[cur_conns0[j],0])
-                            elif edgeconn[cur_conns0[j],1]!=cur_edgepoint_ind[j][-1] and edgeconn[cur_conns0[j],0]==cur_edgepoint_ind[j][-1]:
-                                cur_edgepoint_ind[j].append(edgeconn[cur_conns0[j],1])
-                            else:
-                                breakpoint()
-                        
-                            #cur_edgepoint_ind[j].append( [edgeconn[x,0] if edgeconn[x,0]!=cur_edgepoint_ind[j][-1] else edgeconn[x,1] for x in cur_conns0][0] )
-                            if count[cur_edgepoint_ind[j][-1]]!=2:
-                                term[j] = True
-             
-                        # Walk edges until another node is encountered
-                        itcount = 0
-                        while True:
-                            for j in range(nconn):
-                                if term[j]==False:
-                                    cur_conns = np.where( ((edgeconn[:,0]==cur_edgepoint_ind[j][-1]) | (edgeconn[:,1]==cur_edgepoint_ind[j][-1])) & (edge_visited==False) )
-                                    cur_conns = cur_conns[0][~np.in1d(cur_conns[0],cur_edges[j])]
-                                    if len(cur_conns)==1:
-                                        #breakpoint()
-                                        if edgeconn[cur_conns,0]!=cur_edgepoint_ind[j][-1] and edgeconn[cur_conns,1]==cur_edgepoint_ind[j][-1]:
-                                            cur_edgepoint_ind[j].append(edgeconn[cur_conns,0][0])
-                                        elif edgeconn[cur_conns,1]!=cur_edgepoint_ind[j][-1] and edgeconn[cur_conns,0]==cur_edgepoint_ind[j][-1]:
-                                            cur_edgepoint_ind[j].append(edgeconn[cur_conns,1][0])
-                                        else:
-                                            breakpoint()
-                                        cur_edges[j].append(cur_conns[0])
-                                        edge_visited[cur_conns[0]] = True
-                                        
-                                        if count[cur_edgepoint_ind[j][-1]]!=2:
-                                            term[j] = True
-                                    elif len(cur_conns)>1:
-                                        #raise
-                                        breakpoint()
-                                    else:
-                                        edge_invalid[j] = True
-                                        term[j] = True
-                                        #edge_visited[arr(cur_edges[j])] = False
-                                        #breakpoint()
-
-                            if np.all(term):
-                                break
-                            elif itcount>1000:
-                                print(f'Itcount>1000!')
-                                breakpoint()
-                            else:
-                                #cur_edgepoint_ind = next_edgepoint_ind
-                                pass
-                            itcount += 1
-                            
-                        #breakpoint() 
-                        for j,e in enumerate(cur_edges): 
-                            if not edge_invalid[j]:        
-                                edges.append(e)   
-                        for j,e in enumerate(cur_edgepoint_ind): 
-                            if not edge_invalid[j]:
-                                edgepoint_inds.append(e) 
-
-                unvisited_edges = edgeconn[edge_visited==False]
-                fig = plt.figure()
-                
-                for i,e in enumerate(edgeconn):
-                    if edge_visited[i]==False:
-                        ec0 = edgepoints[e[0]]
-                        ec1 = edgepoints[e[1]]
-                        #plt.plot([ec0[0],ec1[0]],[ec0[1],ec1[1]],c='r')
-                        
-                conns = np.zeros([len(edgepoint_inds),2],dtype='int')
-                for i,e in enumerate(edgepoint_inds):
-                    ec = edgepoints[e]
-                    #plt.plot(ec[ :,0],ec[:,1],c='b')
-                    try:
-                        conns[i,0] = np.where(nodes_edgeinds==e[0])[0]
-                        conns[i,1] = np.where(nodes_edgeinds==e[-1])[0]
-                    except Exception as err:
-                        print(err)
-                        breakpoint()
-
-                nedgepoints = arr([len(x) for x in edgepoint_inds])
-                edgepoint_inds = [x for y in edgepoint_inds for x in y]
-                edgepoints = edgepoints[edgepoint_inds]
-                
-                #plt.show()
-
-                radii = dist[edgepoints[:,0],edgepoints[:,1]]
-                radii *= resolution[0]
-                
-                nodes3d = np.zeros([nodes.shape[0],3])
-                nodes3d[:,:2] = nodes
-                nodes3d[:,0] *= resolution[0]
-                nodes3d[:,1] *= resolution[1]
-                #nodes3d[:,2] *= resolution[1]
-                edgepoints3d = np.zeros([edgepoints.shape[0],3]) 
-                edgepoints3d[:,:2] = edgepoints
-                edgepoints3d[:,0] *= resolution[0]
-                edgepoints3d[:,1] *= resolution[1]
-                #edgepoints3d[:,2] *= resolution[1]
-                
-                graph = spatialgraph.SpatialGraph(initialise=True,scalars=['Radius'])      
-                graph.set_definition_size('VERTEX',nodes.shape[0])
-                graph.set_definition_size('EDGE',conns.shape[0])
-                graph.set_definition_size('POINT',edgepoints.shape[0])
-                graph.set_data(nodes3d,name='VertexCoordinates')
-                graph.set_data(conns,name='EdgeConnectivity')
-                graph.set_data(nedgepoints,name='NumEdgePoints')
-                graph.set_data(edgepoints3d,name='EdgePointCoordinates')
-                graph.set_data(radii,name='Radius')
-                graph.set_graph_sizes()
-
-                graphNodeIndex, graph_size = graph.identify_graphs(progBar=True)
-                ed = spatialgraph.Editor()
-                graph = ed.remove_graphs_smaller_than(graph,20) #identify_graphs(graph)
-                graphNodeIndex, graph_size2 = graph.identify_graphs(progBar=True)
-                
-                for e in range(graph.nedge):
-                   edge = graph.get_edge(e)
-                   if edge.npoints>2:
-                       #radii[edge.i0:edge.i1] = np.mean(radii[edge.i0:edge.i1])
-                       pass
-                graph.set_data(radii,name='Radius')
-                graph.plot(fixed_radius=0.2,cmap_range=[0.,.1],cmap='gray')
+                graph = skeletonize(blur)
                 breakpoint()
 
                 #from vessel_sim.retina_cco import retina_inject

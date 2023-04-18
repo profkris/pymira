@@ -28,12 +28,12 @@ class TubePlot(object):
                          min_radius=0.,domain_radius=None,radius_scale=1.,fixed_radius=None,domain_centre=None,radius_based_resolution=True,cyl_res=10,edge_filter=None,node_filter=None,
                          cmap_range=[None,None],bgcolor=[0.,0.,0.],cmap=None,win_width=6000,win_height=6000,grab_file=None,
                          edge_highlight=[],node_highlight=[],highlight_color=[1,1,1],scalar_color_name=None,log_color=False,
-                         show=True,block=True,engine='open3d',domain=None,domain_type='cylinder',ignore_domain=False):
+                         show=True,block=True,engine='open3d',domain=None,domain_type='cylinder',ignore_domain=False,additional_meshes=None):
         self.vis = None
         self.graph = graph
         self.cylinders = cylinders
         self.cylinders_combined = cylinders_combined
-        self.additional_meshes = None
+        self.additional_meshes = additional_meshes
         
         # Minimum vessel radius to plot (scalar)
         self.min_radius = min_radius
@@ -328,6 +328,16 @@ class TubePlot(object):
             self.vis.add_geometry(self.additional_meshes)
         else:
             self.additional_meshes += cyl
+        self.update()
+        
+    def add_mesh(self,mesh,color=arr([1.,1.,1.]),**kwargs):
+        mesh.paint_uniform_color(color)
+        # For now, add it in to the combined mesh. TODO: Have a dedicated set of additional meshes
+        if self.additional_meshes is None:
+            self.additional_meshes = mesh
+            self.vis.add_geometry(self.additional_meshes)
+        else:
+            self.additional_meshes += mesh
         self.update()
         
     def add_point_cloud(self,points,color=arr([1.,1.,1.]),**kwargs):

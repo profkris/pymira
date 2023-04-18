@@ -1564,8 +1564,9 @@ class Editor(object):
         for i,u in enumerate(unqNodeIndices):
             sInds = np.where(edgeConn_ed==u)
             newIndex = newInds[i]
-            edgeConn_ed_ref[sInds[0][:],sInds[1][:]] = newIndex #newInds[i]
-            edgeConn_was[sInds[0][:],sInds[1][:]] = u
+            if len(sInds[0])>0:
+                edgeConn_ed_ref[sInds[0][:],sInds[1][:]] = newIndex #newInds[i]
+                edgeConn_was[sInds[0][:],sInds[1][:]] = u
         edgeConn_ed = edgeConn_ed_ref
 
         # Modify edgepoint number array
@@ -1610,7 +1611,7 @@ class Editor(object):
                 scalar_names.append(f['name'])
         if len(scalars)==0:
             scalars = None
-        
+
         nodeCoords_ed,edgeConn_ed,nedgepoints_ed,edgeCoords_ed,scalars,info = self._del_nodes(nodes_to_delete,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=scalars)
         
         node_scalars = graph.get_node_scalars()
@@ -1876,8 +1877,8 @@ class Editor(object):
                         break
                     node_inds = np.concatenate(next_nodes)
 
-            # Aggregate identified edges containing inline nodes
-            if count>0:
+            # Aggregate identified edges containing inline nodes (will remove loops!)
+            if count>0 and len(start_or_end_node)>0:
                 consolodated_edges = np.concatenate(consolodated_edges)
                 start_or_end_node = np.concatenate(start_or_end_node)
                 
@@ -2599,6 +2600,8 @@ class Editor(object):
         
         graph.set_definition_size('POINT',pts_interp.shape[0])   
         graph.set_graph_sizes()  
+        
+        return graph
         
     def insert_nodes_in_edges(self,graph,interp_resolution=None,interp_radius_factor=None,filter=None):
         
