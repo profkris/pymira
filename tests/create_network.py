@@ -9,6 +9,29 @@ import numpy as np
 arr = np.asarray
 from pymira import spatialgraph
 
+def segment():
+
+    #nodes = [[317,1215,781],
+    #         [370,1221,822],
+    #        ]
+            
+    #nodes = [[306,1174,968],
+    #         [445,1149,1273],
+    #        ]
+    nodes = [ [0,0,0],[0,-100,0] ]
+            
+    connectivity = [[0,1],
+                    ]
+                    
+    vessel_type = [0,
+                   ]                    
+                    
+    edgeradii = [ 5.,
+                 ] 
+                
+    return nodes, connectivity, edgeradii, vessel_type
+    
+
 def bifurcation():
 
     nodes = [[0,0,0],
@@ -186,8 +209,85 @@ def custom_graph():
                  ] 
                  
     return nodes, connectivity, edgeradii, vessel_type
+
+def kidney_cco():
+    # Kidney CCO
+    nodes = [[500,1600,1000], # origin
+             [500,1400,1000], # origin
+             [317,1215,781],
+             [370,1221,822],
+             [306,1174,968],
+             [445,1149,1273],
+            ]
+            
+    nodes = arr(nodes)
     
-nodes, connectivity, edgeradii, vessel_type = double_bifurcation_reconnected()
+    
+
+    connectivity = [[0,1],
+                    [1,2],
+                    [1,3],
+                    [1,4],
+                    [1,5],
+                    ]            
+                    
+    # Extended into mesh...  
+    for conn in connectivity[1:]:      
+        i0,i1 = conn
+        dir1 = nodes[i1,:]-nodes[i0,:]
+        l1 = np.linalg.norm(dir1)
+        nodes[i1,:] = nodes[i0,:] + dir1*1.5  
+                    
+    vessel_type = [0,
+                   0,
+                   0,
+                   0,
+                   0,
+                   ]                    
+                    
+    edgeradii = [ 30.,
+                  10.,
+                  10.,
+                  10.,
+                  10,
+                 ] 
+    return nodes, connectivity, edgeradii, vessel_type
+    
+def kidney_cco_simple():
+    # Kidney CCO
+    nodes = [[500,1300,1000], # origin
+             [445,1149,1000]
+            ]
+            
+    nodes = arr(nodes)
+    
+    connectivity = [[0,1],
+                    ]            
+                    
+    # Extended into mesh...  
+    for conn in connectivity:      
+        i0,i1 = conn
+        dir1 = nodes[i1,:]-nodes[i0,:]
+        l1 = np.linalg.norm(dir1)
+        nodes[i1,:] = nodes[i0,:] + dir1*1.6
+        print(l1,dir1)
+                    
+    vessel_type = [0,
+                   ]                    
+                    
+    edgeradii = [ 20.,
+                 ] 
+    return nodes, connectivity, edgeradii, vessel_type    
+    
+#nodes, connectivity, edgeradii, vessel_type = double_bifurcation_reconnected()
+#nodes, connectivity, edgeradii, vessel_type = bifurcation()
+#nodes, connectivity, edgeradii, vessel_type = segment()
+nodes, connectivity, edgeradii, vessel_type = kidney_cco()
+#nodes, connectivity, edgeradii, vessel_type = kidney_cco_simple()
+
+nodes = arr(nodes)
+#nodes[:,0] -= 250
+#nodes = -nodes
                 
 edgepoints,nedgepoints,radii,category = [],[],[],[]
 for i,conn in enumerate(connectivity):
@@ -226,7 +326,16 @@ graph.set_data(category,name='VesselType')
 graph.sanity_check(deep=True)
 
 #graph._print()
-ofile = '/mnt/data2/retinasim/data/cco_circ_domain/graph/test_network.am'
-graph.plot_graph()
+ofile = '/mnt/data2/kidney_cco/segment1.am'
+tp = graph.plot_graph(show=False,block=False)
+gmesh_artery = tp.cylinders_combined
+ofile2 = ofile.replace('.am','.ply')
+import open3d as o3d
+o3d.io.write_triangle_mesh(ofile2,gmesh_artery)
+tp.destroy_window()
 graph.write(ofile)
 print(f'Saved as {ofile}')
+
+# Convert to JSON
+from pymira.amirajson import convert
+convert(ofile)

@@ -73,6 +73,13 @@ def csv2amira(filepath, ofile='', sanity_check=True):
             
 if __name__=='__main__':
 
-    for v in ['artery','vein']:
-        filepath = r"C:\Users\simon\vascular_networks\vascular-ucl-collab\Retina\data\retina_{}.csv".format(v)
-        csv2amira(filepath)#, ofile=opath)
+    filepath = '/mnt/data2/hv_end.csv'
+    csv2amira(filepath)#, ofile=opath)
+    graph = spatialgraph.SpatialGraph()
+    graph.read(filepath.replace('.csv','.csv.am'))
+    graph.export_mesh(ofile=filepath.replace('.csv','.ply'))
+
+    if False:
+        for v in ['artery','vein']:
+            filepath = r"C:\Users\simon\vascular_networks\vascular-ucl-collab\Retina\data\retina_{}.csv".format(v)
+            csv2amira(filepath)#, ofile=opath)

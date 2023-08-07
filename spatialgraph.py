@@ -227,6 +227,18 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 
         return True
         
+    def export_mesh(self,vessel_type=None,radius_scale=1,min_radius=0,ofile=''):
+        if vessel_type is not None:
+            vtypeEdge = self.point_scalars_to_edge_scalars(name='VesselType')
+            tp = self.plot_graph(show=False,block=False,min_radius=min_radius,edge_filter=vtypeEdge==vessel_type,cyl_res=10,radius_scale=radius_scale)
+        else:
+            tp = self.plot_graph(show=False,block=False,min_radius=min_radius,cyl_res=10,radius_scale=radius_scale)
+        gmesh = tp.cylinders_combined
+        import open3d as o3d
+        o3d.io.write_triangle_mesh(ofile,gmesh)
+        tp.destroy_window()
+        print(f'Mesh written to {ofile}')
+        
     def set_graph_sizes(self):
         """
         Ensure consistency between data size fields and the data itself
@@ -2589,7 +2601,8 @@ class Editor(object):
                 # Check nodes match!
                 if not np.all(pts_interp[-ninterp]==coords[conn[0]]) or not np.all(pts_interp[-1]==coords[conn[1]]) or \
                    not np.all(pts_interp[-ninterp]==pts[0]) or not np.all(pts_interp[-1]==pts[-1]):
-                    breakpoint()
+                    #breakpoint()
+                    pass
 
         pts_interp = arr(pts_interp)
         graph.set_data(pts_interp,name='EdgePointCoordinates')

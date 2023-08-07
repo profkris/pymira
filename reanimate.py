@@ -121,6 +121,7 @@ def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2,in
     edgeConnectivity = graph.get_data('EdgeConnectivity')
     nedgePoints = graph.get_data('NumEdgePoints')
     edgePointCoordinates = graph.get_data('EdgePointCoordinates')
+    flow = graph.point_scalars_to_edge_scalars(name='Flow')
     
     rad_field = graph.get_radius_field()
     thickness = graph.point_scalars_to_edge_scalars(name=rad_field['name'])
@@ -133,6 +134,9 @@ def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2,in
     nseg = edgeConnectivity.shape[0]
     npoint = edgePointCoordinates.shape[0]
     #nnod = nvertex
+    
+    if flow is None:
+        flow = np.ones(nseg)
 
     maxEdge = np.max(edgePointCoordinates,axis=0)
     maxVertex = np.max(vertexCoordinates,axis=0)
@@ -158,15 +162,12 @@ def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2,in
         handle.write(f"{nseg}	total number of segments\n")
         handle.write(f"SegName Type StartNode EndNode Diam   Flow[nl/min]    Hd\n");
 
-        flow = 1.
+        #flow = 1.
         diammax = -1.
         for i in trange(nseg):
             segnodname1 = edgeConnectivity[i,0] + 1
             segnodname2 = edgeConnectivity[i,1] + 1
-            diam = np.max([2.*thickness[i],4.])
-            if diam > diammax:
-                diammax = diam
-                idiammax = i
+            diam = 2.*thickness[i] #np.max([2.*thickness[i],4.])
                                 
             # Convert vessel type codes
             if vessType[i]==0: # artery
@@ -175,16 +176,20 @@ def export_dat(graph,ofile,network_name='anon',remove_intermediate=True,nbc=2,in
                 vt = 2
             elif vessType[i]==1: # vein
                 vt = 3
+            else:
+                vt = 5
                 
             # Calculate lengths
             if include_length:
                 i0 = np.sum(nedgePoints[:i])
                 pts = edgePointCoordinates[i0:i0+nedgePoints[i]]
                 length = np.sum([np.linalg.norm(pts[j]-pts[j-1]) for j in range(1,pts.shape[0])])
-                handle.write(f"{i+1} {vt} {segnodname1} {segnodname2} {diam} {length} {flow} {0.45}\n")
+                handle.write(f"{i+1} {vt} {segnodname1} {segnodname2} {diam} {length} {flow[i]} {0.45}\n")
             else:
-                handle.write(f"{i+1} {vt} {segnodname1} {segnodname2} {diam} {flow} {0.45}\n")
-            
+                handle.write(f"{i+1} {vt} {segnodname1} {segnodname2} {diam} {flow[i]} {0.45}\n")
+        
+        idiammax = np.argmax(2.*thickness)
+        diammax = np.max(2.*thickness)
         print(f"Max diameter = {diammax}, idx = {idiammax}")
 
         handle.write(f"{nnod}   number of nodes\n")
