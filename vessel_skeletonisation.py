@@ -16,6 +16,10 @@ import scipy
 from skimage.filters import meijering, sato, frangi, hessian
 from pymira import spatialgraph
 
+"""
+3D vessel skeletonisation from binary images
+"""
+
 def calculate_vesselness(im):
 
     print('Calculating vesselness')
@@ -319,24 +323,12 @@ def skeletonize(image,resolution=None):
     return graph
 
 def main():
-    #path_root = r'C:\Users\simon\SWS Dropbox\Simon Walker-Samuel\retinas - GIULIA'
-    #groups = ['control','diabetic','KO control'] #,'KO diabetic']
-    #groups = ['KO diabetic']
-    #ftype = '.tif'
+
     
-    path_root = '/mnt/data2/OCT_nii_cube/cycleGAN_seg'
+    path_root = 'PATH' 
     groups = ['']
     ftype = '.png'
-    #files = ['PDR_case_9_Angio (12mmx12mm)_2-15-2019_14-26-22_OS_sn2159_FlowCube_z_enface_fake.png']
-    files = ['1.2.276.0.75.2.2.44.79497678600052.20180702120449820.210035586_SuperficialAngioEnface__BSCR_P01_fake.png']
-    make_binary = False
-    
-    path_root = r'C:\Users\simon\Desktop\turing2'
-    groups = ['']
-    ftype = '.png'
-    #files = ['PDR_case_9_Angio (12mmx12mm)_2-15-2019_14-26-22_OS_sn2159_FlowCube_z_enface_fake.png']
-    #files = ['im_0.05_0.06111111111111111.png']
-    files = ['im_0.04_0.06125.png']
+    files = ['FILE.png']
     make_binary = True
 
     for group in groups:
