@@ -267,15 +267,12 @@ if __name__=='__main__':
     conv = 'a2d' #'a2d'
     
     if conv=='a2d': # export
-        fname = '/mnt/data2/retinasim/cco/graph/retina_cco_voronoicap_1av.am'
-        fname = r'C:\Users\simon\Downloads\retina_cco_a2v.am'
+        fname = '/PATH/AMIRA_FILENAME.am'
         ofile = fname.replace('.am','.dat')
-        
         amira2dat(fname,ofile=ofile,remove_intermediate=False,nbc=2)
     elif conv=='d2a': # import
-        fname ='/mnt/ml/anaconda_envs/vessel_growth_38/lib/python3.8/site-packages/Reanimate/Build_Data/SolvedBloodFlow.txt'
-        #ofile = '/mnt/data2/retinasim/cco/graph/retina_cco_voronoicap_1av_reanimate.am'
-        ofile = '/mnt/data2/retinasim/cco/graph/retina_cco_a2v_2_reanimate.am'
+        fname ='/PATH/Reanimate/Build_Data/SolvedBloodFlow.txt'
+        ofile = '/OUTPUT_PATH/SPATIALGRAPH.am'
         
         dat2amira(fname,ofile=ofile,plot=False)
 
