@@ -159,16 +159,3 @@ class Midline2Graph(object):
         
         plt.show()
                         
-if __name__=='__main__':
-
-    if True:
-        mfile = '/mnt/data2/normal4_export4_volume_graph_128/volume_midline/t0p0000_b2p0000_bprandom_res1_dim128_centre264494_n1763520.npz'
-        data = np.load(mfile)
-        midline = data['image']
-    else:
-        midline = np.zeros([64,64,64])
-        midline[32,32,:] = 1
-        midline[32,16,:] = 1
-    
-    m2g = Midline2Graph(midline.astype('float'))
-    m2g.convert()
