@@ -120,11 +120,4 @@ def combine_cco(path,mFiles,ofile):
         graph.write(join(path,ofile))
     
     return graph
-    
-def test_plot_cco():
-    path = '/mnt/data2/retinasim/cco/graph'
-    f = 'retina_cco.am'
-    graph = sp.SpatialGraph()
-    graph.read(join(path,f))
-    graph.plot_graph()
 

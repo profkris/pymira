@@ -34,6 +34,9 @@ def convert(filepath,opath=None,ofilename=None):
         json.dump(o, handle, indent=4)
         
     return f
+<<<<<<< HEAD
     
 if __name__=='__main__':
     convert('/mnt/data2/kidney_cco/segment3.am')
+=======
+>>>>>>> d1893a032f78e4c3cdb9400601b2199635c20698
