@@ -73,7 +73,7 @@ def csv2amira(filepath, ofile='', sanity_check=True):
             
 if __name__=='__main__':
 
-    filepath = '/mnt/data2/hv_end.csv'
+    filepath = '/mnt/data2/pv_end.csv'
     csv2amira(filepath)#, ofile=opath)
     graph = spatialgraph.SpatialGraph()
     graph.read(filepath.replace('.csv','.csv.am'))
