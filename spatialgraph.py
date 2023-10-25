@@ -216,7 +216,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
     def read(self,*args,**kwargs):
         """
-        Read spatial graph from .am Amira file
+        Read spatial graph from .am Amira (or JSON) file
         """
         if args[0].endswith('.json'):
             self.read_json(args[0])
@@ -263,14 +263,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
                                   nelements=1,nentries=[0])
                 self.set_data(arr(v),name=k)
         
-    def export_mesh(self,vessel_type=None,radius_scale=1,min_radius=0,ofile=''):
+    def export_mesh(self,vessel_type=None,radius_scale=1,min_radius=0,ofile='',resolution=10):
         if vessel_type is not None:
             vtypeEdge = self.point_scalars_to_edge_scalars(name='VesselType')
-            tp = self.plot_graph(show=False,block=False,min_radius=min_radius,edge_filter=vtypeEdge==vessel_type,cyl_res=10,radius_scale=radius_scale)
+            tp = self.plot_graph(show=False,block=False,min_radius=min_radius,edge_filter=vtypeEdge==vessel_type,cyl_res=resolution,radius_scale=radius_scale,radius_based_resolution=False)
         else:
-            tp = self.plot_graph(show=False,block=False,min_radius=min_radius,cyl_res=10,radius_scale=radius_scale)
+            tp = self.plot_graph(show=False,block=False,min_radius=min_radius,cyl_res=resolution,radius_scale=radius_scale,radius_based_resolution=False)
         gmesh = tp.cylinders_combined
         import open3d as o3d
+        gmesh.compute_vertex_normals()
         o3d.io.write_triangle_mesh(ofile,gmesh)
         tp.destroy_window()
         print(f'Mesh written to {ofile}')
