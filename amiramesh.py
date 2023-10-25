@@ -655,26 +655,3 @@ class AmiraMesh(object):
         print(('File size:',fileSize)) 
         print(('% read = ',bytesRead*100./float(fileSize)))
         print(('count: ',count)) 
-        
-
-        
-#if __name__ == "__main__":
-#    from pymira import amiramesh
-#    reload(amiramesh)
-#    am = amiramesh.AmiraMesh()
-#    # Binary
-#    am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\lsm2-files\LSM2_rec2.labels'
-#    # Spatial graph
-#    #am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\LSM2_bgrem_frangi_response_skel.SptGraph.am'
-#    #am_file = r'G:\OPT\2016.02.VDA_2 lectins\#1\Flow2Amira.am'
-#    #
-#    #am_file = r'G:\OPT\19.09.2016 Subcuts Tom\LSM2\LSM2_mask.am'
-##    am.close_error(am_file)
-#    try:
-#        tmp = am.read(am_file)
-#        print tmp
-#        am.close_error(am_file)
-#        import pdb
-#        pdb.set_trace()
-#    except Exception,e:
-#        print e

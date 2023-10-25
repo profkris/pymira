@@ -120,21 +120,4 @@ def combine_cco(path,mFiles,ofile):
         graph.write(join(path,ofile))
     
     return graph
-    
-def test_plot_cco():
-    path = '/mnt/data2/retinasim/cco/graph'
-    f = 'retina_cco.am'
-    graph = sp.SpatialGraph()
-    graph.read(join(path,f))
-    graph.plot_graph()
 
-if __name__=='__main__':
-    path = '/mnt/data2/retinasim/cco/graph'
-    mFiles = [  'retina_artery_upper_cco.csv.am',
-                'retina_vein_upper_cco.csv.am',
-                'retina_artery_lower_cco.csv.am',
-                'retina_vein_lower_cco.csv.am',
-             ]
-    ofile = 'retina_cco.am'
-    combine_cco(path,mFiles,ofile)
-    test_plot_cco()

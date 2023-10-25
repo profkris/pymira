@@ -786,6 +786,3 @@ class PlotGraph(Graph):
         
         self.update_3d_display_visibility(event,new_status)
         
-if __name__=='__main__':
-    graph_file = '/mnt/data2/retinasim/graph/t0.1000_b2.0000_bpalternate.am'
-    plgr = PlotGraph(graph_file)

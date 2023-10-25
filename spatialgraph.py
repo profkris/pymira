@@ -164,7 +164,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
             
         return graph_copy
             
-    def initialise(self,scalars=None,node_scalars=None):
+    def initialise(self,scalars=[],node_scalars=[]):
     
         """
         Set default fields 
@@ -218,14 +218,62 @@ class SpatialGraph(amiramesh.AmiraMesh):
         """
         Read spatial graph from .am Amira file
         """
-        if not amiramesh.AmiraMesh.read(self,*args,**kwargs):
-            return False
-        if self.get_parameter_value("ContentType")!="HxSpatialGraph":
-            print('Warning: File is not an Amira SpatialGraph!')
+        if args[0].endswith('.json'):
+            self.read_json(args[0])
+        else:
+            if not amiramesh.AmiraMesh.read(self,*args,**kwargs):
+                return False
+            if "HxSpatialGraph" not in self.get_parameter_value("ContentType"):
+                print('Warning: File is not an Amira SpatialGraph!')
+                pass
 
         self.set_graph_sizes()
                 
         return True
+        
+                
+    def read_json(self,filename):
+    
+        import json
+        
+        with open(filename, 'r') as json_file:
+            data = json.load(json_file)
+            
+        req = ['VertexCoordinates','EdgeConnectivity','NumEdgePoints','EdgePointCoordinates']
+        if not np.all([x in list(data.keys()) for x in req]):
+            print('Invalid JSON file format!')
+            return
+            
+        self.initialise()
+            
+        for k,v in zip(data.keys(),data.values()):
+            if k in req:
+                vals = arr(v)
+                self.set_data(vals,name=k)
+                if k=='VertexCoordinates':
+                    self.set_definition_size('VERTEX',vals.shape[0])
+                elif k=='EdgeConnectivity':                    
+                    self.set_definition_size('EDGE',vals.shape[0])
+                elif k=='EdgePointCoordinates':                    
+                    self.set_definition_size('POINT',vals.shape[0])   
+            else:
+                # Assume for now that all additional fields are point scalars...
+                self.add_field(name=k,marker=self.generate_next_marker(),
+                                  definition='POINT',type='float',
+                                  nelements=1,nentries=[0])
+                self.set_data(arr(v),name=k)
+        
+    def export_mesh(self,vessel_type=None,radius_scale=1,min_radius=0,ofile='',cyl_res=10):
+        if vessel_type is not None:
+            vtypeEdge = self.point_scalars_to_edge_scalars(name='VesselType')
+            tp = self.plot_graph(show=False,block=False,min_radius=min_radius,edge_filter=vtypeEdge==vessel_type,cyl_res=cyl_res,radius_scale=radius_scale)
+        else:
+            tp = self.plot_graph(show=False,block=False,min_radius=min_radius,cyl_res=cyl_res,radius_scale=radius_scale)
+        gmesh = tp.cylinders_combined
+        import open3d as o3d
+        o3d.io.write_triangle_mesh(ofile,gmesh)
+        tp.destroy_window()
+        print(f'Mesh written to {ofile}')
         
     def set_graph_sizes(self):
         """
@@ -2589,7 +2637,8 @@ class Editor(object):
                 # Check nodes match!
                 if not np.all(pts_interp[-ninterp]==coords[conn[0]]) or not np.all(pts_interp[-1]==coords[conn[1]]) or \
                    not np.all(pts_interp[-ninterp]==pts[0]) or not np.all(pts_interp[-1]==pts[-1]):
-                    breakpoint()
+                    #breakpoint()
+                    pass
 
         pts_interp = arr(pts_interp)
         graph.set_data(pts_interp,name='EdgePointCoordinates')
