@@ -27,7 +27,7 @@ class AmiraMesh(object):
         self.fileRead = False
         self.dataFieldCount = 0
         self.header = None
-        self.dataTypes = ['float','double','byte','int','long','binary']
+        self.dataTypes = ['float','double','byte','int','long','binary','bool']
         self.filename = None
         self.dir = None
         

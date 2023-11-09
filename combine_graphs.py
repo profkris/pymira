@@ -74,6 +74,7 @@ def combine_graphs(graph1,graph2):
     graph1.nedge = nconn1+nconn2
     graph1.set_definition_size('POINT',npoints1+npoints2)
     graph1.nedgepoints = npoints1+npoints2
+    graph1.set_graph_sizes()
     return graph1
     
 def combine_cco(path,mFiles,ofile):
