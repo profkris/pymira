@@ -269,6 +269,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
             tp = self.plot_graph(show=False,block=False,min_radius=min_radius,edge_filter=vtypeEdge==vessel_type,cyl_res=resolution,radius_scale=radius_scale,radius_based_resolution=False)
         else:
             tp = self.plot_graph(show=False,block=False,min_radius=min_radius,cyl_res=resolution,radius_scale=radius_scale,radius_based_resolution=False)
+
         gmesh = tp.cylinders_combined
         import open3d as o3d
         gmesh.compute_vertex_normals()

@@ -325,11 +325,30 @@ def skeletonize(image,resolution=None):
 def main():
 
     
+<<<<<<< HEAD
+    path_root = r'/mnt/data2/OCT_nii_cube/cycleGAN_seg'
+    path_root = r'Z:\OCT_nii_cube\cycleGAN_seg'
+    path_root = r'C:\Users\simon\SWS Dropbox\Simon Walker-Samuel\cycleGAN_seg'
+    groups = ['']
+    ftype = '.png'
+    files = ['PDR_case_9_Angio (12mmx12mm)_2-15-2019_14-26-22_OS_sn2159_FlowCube_z_enface_fake.png']
+    #files = ['1.2.276.0.75.2.2.44.79497678600052.20180702120449820.210035586_SuperficialAngioEnface__BSCR_P01_fake.png']
+    make_binary = False
+    
+    #path_root = r'C:\Users\simon\Desktop\turing2'
+    #groups = ['']
+    #ftype = '.png'
+    #files = ['PDR_case_9_Angio (12mmx12mm)_2-15-2019_14-26-22_OS_sn2159_FlowCube_z_enface_fake.png']
+    #files = ['im_0.05_0.06111111111111111.png']
+    #files = ['im_0.04_0.06125.png']
+    #make_binary = True
+=======
     path_root = 'PATH' 
     groups = ['']
     ftype = '.png'
     files = ['FILE.png']
     make_binary = True
+>>>>>>> 20550aaae8e1351c4b4472e0f2ee4a4292f049ed
 
     for group in groups:
         path = join(path_root,group)
@@ -420,7 +439,67 @@ def main():
                     
                 blur = blur / np.max(blur)
                 graph = skeletonize(blur)
-                breakpoint()
+                #breakpoint()
+                
+                if True:
+                    from vessel_sim.retina_cco.retina_create_surface import create_surface
+                    from vessel_sim.retina_cco.retina_project_graph_to_surface import project_to_surface
+                    surface_path = join(path_root,'surface')
+                    if not os.path.exists(surface_path):
+                        os.mkdir(surface_path)
+                    ofile = join(surface_path,'retina_surface.ply')
+                    plot_file = ofile.replace('.ply','_profile.png')
+                    
+                    radii = graph.get_data('Radius')
+                    nodes = graph.get_data('VertexCoordinates')
+                    edgepoints =  graph.get_data('EdgePointCoordinates')
+                    pixel_size = [20.,20.,20.]
+                    radii *= pixel_size[0]
+                    nodes[:,0] *= pixel_size[0]
+                    nodes[:,1] *= pixel_size[1]
+                    nodes[:,2] *= pixel_size[2]
+                    edgepoints[:,0] *= pixel_size[0]
+                    edgepoints[:,1] *= pixel_size[1]
+                    edgepoints[:,2] *= pixel_size[2]
+                    
+                    # Swap x-y
+                    nodes_rot = nodes.copy()
+                    nodes_rot[:,0],nodes_rot[:,1] = nodes[:,1],nodes[:,0]
+                    edgepoints_rot = edgepoints.copy()
+                    edgepoints_rot[:,0],edgepoints_rot[:,1] = edgepoints[:,1],edgepoints[:,0]
+                    
+                    graph.set_data(nodes_rot,name='VertexCoordinates')
+                    graph.set_data(edgepoints_rot,name='EdgePointCoordinates')
+                    graph.set_data(radii,name='Radius')
+                    
+                    from vessel_sim.retina_cco.retina_lsystem import Eye
+                    eye = Eye()
+                    centre = edgepoints[np.argmax(radii)]
+                    eye.optic_disc_centre = centre
+                    eye.macula_centre = eye.macula_centre + centre
+                    if True:
+                        create_surface(path=None,ofile=ofile,plot=True,plot_file=plot_file,vessel_depth=1000.,add_simplex_noise=False,eye=eye,project=True)
+                    
+                    vfile = join(surface_path,'retina_surface_vessels.ply')
+                    ofile = '' #os.path.join(gpath,f.replace(ftype,'_proj.am'))
+                    graphProj = project_to_surface(graph=graph,eye=eye,vfile=vfile,plot=False,interpolate=False,ofile=ofile,write_mesh=False,iterp_resolution=10.,filter=False)
+
+                    mesh = o3d.io.read_triangle_mesh(vfile)
+                    
+                    eye.domain[2] = [-100.,100.]
+                    graphProj.plot(domain=eye.domain,cmap='gray',cmap_range=[-50,50],radius_scale=0.5,additional_meshes=mesh)
+                    breakpoint()
+                else:  
+                    radii = graph.get_data('Radius')
+                    nodes = graph.get_data('VertexCoordinates')
+                    edgepoints =  graph.get_data('EdgePointCoordinates')
+                    centre = edgepoints[np.argmax(radii)]
+                    dist = np.linalg.norm(edgepoints[:,:2]-centre[:2],axis=1)
+                    edgepoints[:,2] = np.square(dist/40.)
+                    dist = np.linalg.norm(nodes[:,:2]-centre[:2],axis=1)
+                    nodes[:,2] = np.square(dist/40.)
+                    graph.set_data(nodes,name='VertexCoordinates')
+                    graph.set_data(edgepoints,name='EdgePointCoordinates')
 
                 #from vessel_sim.retina_cco import retina_inject
                 #marker = graph.generate_next_marker()

@@ -38,9 +38,10 @@ def combine_graphs(graph1,graph2):
     # Common fields
     fields = list(set(graph1.fieldNames).intersection(graph2.fieldNames))
     
-    add_fields = list(set(fields) - set(req_fields))
+    #add_fields = list(set(fields) - set(req_fields))
     #breakpoint()
     
+    # Get data sizes
     for fName in req_fields:
         f1 = graph1.get_field(fName)
         f2 = graph2.get_field(fName)
@@ -54,6 +55,7 @@ def combine_graphs(graph1,graph2):
             nconn1 = f1['data'].shape[0]
             nconn2 = f2['data'].shape[0]
     
+    # Combine fields
     for fName in fields:
         f1 = graph1.get_field(fName)
         f2 = graph2.get_field(fName)
@@ -74,6 +76,7 @@ def combine_graphs(graph1,graph2):
     graph1.nedge = nconn1+nconn2
     graph1.set_definition_size('POINT',npoints1+npoints2)
     graph1.nedgepoints = npoints1+npoints2
+    graph1.set_graph_sizes()
     return graph1
     
 def combine_cco(path,mFiles,ofile):

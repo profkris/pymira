@@ -35,7 +35,7 @@ def convert(filepath,opath=None,ofilename=None):
         json.dump(o, handle, indent=4)
         
     return f
-    
+
 def main():
     parser = argparse.ArgumentParser(description="amirajson argument parser")
 
@@ -60,3 +60,4 @@ def main():
 
 if __name__=='__main__':
     main()
+
