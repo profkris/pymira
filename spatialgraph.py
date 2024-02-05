@@ -757,7 +757,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         assert edgeIndex>=0
         assert edgeIndex<nedge
-        chase
+        #chase
         npoints = nedgepoints[edgeIndex]
         start_index = np.sum(nedgepoints[:edgeIndex])
         end_index = start_index + npoints
