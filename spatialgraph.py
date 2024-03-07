@@ -32,9 +32,18 @@ def update_array_index(vals,inds,keep):
     new_inds_lookup = np.zeros(npoints,dtype='int')-1
     new_inds_lookup[~np.in1d(old_inds,del_inds)] = np.linspace(0,npoints-del_inds.shape[0]-1,npoints-del_inds.shape[0])
     # Create a new index array using updated index lookup table
-    new_inds = new_inds_lookup[inds] 
-    # Remove -1 values that reference deleted nodes
-    new_inds = new_inds[(new_inds[:,0]>=0) & (new_inds[:,1]>=0)]
+    if inds.dtype!=np.object:
+        new_inds = new_inds_lookup[inds] 
+        # Remove -1 values that reference deleted nodes
+        new_inds = new_inds[(new_inds[:,0]>=0) & (new_inds[:,1]>=0)]
+    else: # Nested list
+        new_inds = []
+        #valid = np.ones(len(inds),dtype='bool')
+        for i in inds:
+            nxt = new_inds_lookup[i]
+            if np.all(nxt>=0):
+                new_inds.append(nxt)
+    
     return vals[keep],new_inds,new_inds_lookup
     
 def delete_vertices(graph,keep_nodes,return_lookup=False): # #verts,edges,keep_nodes):
@@ -1712,7 +1721,7 @@ class Editor(object):
 
         # Mark which edgepoints to keep / delete
         keepEdgePoint = np.zeros(nedgepoint,dtype='bool') + True
-        for edgeIndex in edges_to_delete:
+        for edgeIndex in tqdm(edges_to_delete):
             npoints = nedgepoints[edgeIndex]
             strt = np.sum(nedgepoints[0:edgeIndex])
             fin = strt + npoints
@@ -1735,7 +1744,8 @@ class Editor(object):
         
         #Check for any other scalar fields
         scalars = [f for f in graph.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
-        for sc in scalars:
+        print('Updating scalars...')
+        for sc in tqdm(scalars):
             #data_ed = np.delete(sc['data'],edgepoints_to_delete[0],axis=0)
             data = sc['data']
             data_ed = data[keepEdgePoint==True]

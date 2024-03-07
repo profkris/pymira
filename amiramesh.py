@@ -102,11 +102,15 @@ class AmiraMesh(object):
                 dtype = np.dtype('i')
             elif curField['type']=='byte':
                 dtype = np.dtype('byte')
+            elif curField['type']=='bool':
+                dtype = np.dtype('bool')
             else: # Default to float
                 dtype = np.dtype('f')
             try:
                 curData = np.asarray(curData) #,dtype=dtype)
                 curData = np.reshape(curData,curField['shape'])
+                if str(dtype).lower() not in ['byte','bool']:
+                    curData = curData.astype('float')
                 curField['data'] = curData.astype(dtype)
             except Exception as e:
                 if not quiet:
