@@ -602,7 +602,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 
         return edgeInd
         
-    def constrain_nodes(self,xrange=[None,None],yrange=[None,None],zrange=[None,None],no_copy=True):
+    def constrain_nodes(self,xrange=[None,None],yrange=[None,None],zrange=[None,None],no_copy=True,keep_stradling_edges=False):
     
         """
         Delete all nodes outside a rectangular region
@@ -635,11 +635,32 @@ class SpatialGraph(amiramesh.AmiraMesh):
         zrange = [np.max([r[2][0],zrange[0]]),np.min([r[2][1],zrange[1]])]
         
         # Mark which nodes to keep / delete
-        keepNode = np.zeros(nnode,dtype='bool') + True
+        keepNode = np.ones(nnode,dtype='bool')
         for i in range(nnode):
             x,y,z = nodeCoords[i,:]
             if x<xrange[0] or x>xrange[1] or y<yrange[0] or y>yrange[1] or z<zrange[0] or z>zrange[1]:
                 keepNode[i] = False
+                
+        # Keep edges that straddle the boundary
+        if keep_stradling_edges:
+            keepNodeEdit = keepNode.copy()
+            ec = self.get_data('EdgeConnectivity')
+            ch = 0
+            for i,kn in enumerate(keepNode):
+                if kn==True:
+                    conns = np.empty([0])
+                    inds0 = np.where(ec[:,0]==i)
+                    if len(inds0[0])>0:
+                        conns = np.concatenate([conns,ec[inds0[0],1]])
+                    inds1 = np.where(ec[:,1]==i)
+                    if len(inds1[0])>0:
+                        conns = np.concatenate([conns,ec[inds1[0],0]])
+                    conns = conns.astype('int')
+                    if np.any(keepNode[conns]==False):
+                        keepNodeEdit[conns] = True
+                        ch += 1
+            if ch>0:
+                keepNode = keepNodeEdit
                 
         nodes_to_delete = np.where(keepNode==False)
         nodes_to_keep = np.where(keepNode==True)
