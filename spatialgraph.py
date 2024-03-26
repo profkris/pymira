@@ -239,7 +239,36 @@ class SpatialGraph(amiramesh.AmiraMesh):
         self.set_graph_sizes()
                 
         return True
+            
+    def remove_edges(self,edge_inds_to_remove):
+        gv = GVars(self)
+        gv.remove_edges(edge_inds_to_remove)
+        graph = gv.set_in_graph()
+   
+    def remove_loops(self):  
+        duplicate_edges = self.get_duplicated_edges()
+        edgeconn = self.get_data('EdgeConnectivity')
+        sind = np.where(duplicate_edges>0)
+        rads = self.point_scalars_to_edge_scalars(name='thickness')
         
+        rem_edge = []
+        for ei in np.unique(duplicate_edges):
+            if ei>0:
+                stmp = np.where(duplicate_edges==ei)
+                edges = []
+                for s in stmp[0]:
+                    edges.extend([self.get_edge(s)])
+                # Self-connection - remove
+                if len(edges)==1:
+                    rem_edge.extend([edges[0].index])
+                else:
+                    edgeRads = rads[stmp[0]]
+                    lengths = arr([np.sum(np.linalg.norm(e.coordinates[:-1]-e.coordinates[1:])) for e in edges])
+                    vols = np.pi*np.power(edgeRads,2)*lengths
+                    mx = np.argmax(vols)
+                    inds = np.linspace(0,len(vols)-1,len(vols),dtype='int')
+                    rem_edge.extend(stmp[0][inds[inds!=mx]])
+        self.remove_edges(arr(rem_edge))
                 
     def read_json(self,filename):
     
@@ -1050,7 +1079,22 @@ class SpatialGraph(amiramesh.AmiraMesh):
             v_outlet_edge = edgeconn[v_outlet_edge_ind]
             v_outlet_node = v_outlet_edge[node_count[v_outlet_edge]==1][0]
         
-        return a_inlet_node,v_outlet_node  
+        return a_inlet_node,v_outlet_node 
+
+    def get_duplicated_edges(self):
+        edges = self.get_data('EdgeConnectivity')
+        #duplicate_edges = np.zeros(edges.shape[0],dtype='int')
+        duplicate_edge_index = np.zeros(edges.shape[0],dtype='int')
+        dind = 1
+        for i,x in enumerate(edges): 
+            s1 = np.where( (edges[:,0]==x[0]) & (edges[:,1]==x[1]) & (duplicate_edge_index==0) )[0]
+            s2 = np.where( (edges[:,1]==x[0]) & (edges[:,0]==x[1]) & (duplicate_edge_index==0) )[0]
+            if len(s1)+len(s2)>1:
+                duplicate_edge_index[s1] = dind
+                duplicate_edge_index[s2] = dind
+                dind += 1
+        
+        return duplicate_edge_index
 
     def test_treelike(self, inlet=None, outlet=None, euler=True, ignore_type=False):
 
@@ -1113,10 +1157,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
             
         gc = self.get_node_count()
         vt = self.edge_scalar_to_node_scalar('VesselType')
+        #if vt is None:
+        #    vt = np.zeros(self.nedge)
         edges = self.get_data('EdgeConnectivity')
         
         # Euler: Arterial nodes
         if euler:
+            if vt is None:
+                if self.nnode!=self.nedge+1:
+                    print(f'Euler criterion failed ({self.nnode} nodes, {self.nedge} edges)')              
             if ignore_type:
                 n_anode = np.sum((vt==0) | (vt==1))
             else:
@@ -1148,11 +1197,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         if n_vnode<n_vedges+1:
                             print(f'Euler criterion failed (venous, too many edges! {n_vnode} nodes, {n_vedges} edges)')
                         return False
-            
-        duplicate_edges = np.zeros(edges.shape[0],dtype='int')
-        for i,x in enumerate(edges): 
-            duplicate_edges[i] = len(np.where( (edges[:,0]==x[0]) & (edges[:,1]==x[1]))[0]) + len(np.where( (edges[:,1]==x[0]) & (edges[:,0]==x[1]))[0])
-        if np.any(duplicate_edges>1):
+         
+        duplicate_edges = self.get_duplicated_edges()
+        if np.any(duplicate_edges>0):
             print(f'Duplicated edges!')
             return False
                 
@@ -1526,6 +1573,216 @@ class SpatialGraph(amiramesh.AmiraMesh):
         tp = TubePlot(self, **kwargs)
 
         return tp 
+        
+    def identify_graphs(self):
+        inlet,outlet = self.identify_inlet_outlet()
+        curnodes = [inlet]
+        
+        graphInd = np.zeros(self.nnode,dtype='int')
+        curGraph = 1
+        graphInd[inlet] = curGraph
+        
+        while True:
+            visited_nodes,visited_edges = curnodes.copy(),[]
+
+            while True:
+                n_edge_added = 0
+                nextnodes = []
+                for node in curnodes:
+                    connected_nodes,connected_edges = self.connected_nodes(node)
+                    connected_nodes = [x for x in connected_nodes if x not in visited_nodes]
+                    connected_edges = [x for x in connected_edges if x not in visited_edges]
+                    
+                    if len(connected_edges)>0:
+                        graphInd[arr(connected_nodes)] = curGraph
+                    
+                        nextnodes.extend(connected_nodes)
+                        visited_nodes.extend(connected_nodes)
+                        visited_edges.extend(connected_edges)
+                        
+                        n_edge_added += 1
+                if n_edge_added==0:
+                    break
+                else:
+                    curnodes = nextnodes
+            
+            if np.all(graphInd>0):
+                break
+            else:
+                curGraph += 1
+                sind = np.where(graphInd==0)[0]
+                curnodes = np.random.choice(sind)
+                graphInd[curnodes] = curGraph
+                curnodes = [curnodes]
+                
+        return graphInd
+        
+    def identify_loops(self):
+    
+        inlet,outlet = self.identify_inlet_outlet()
+        paths = [[inlet]]
+        edgepaths = [[-1]]
+        visited_nodes,visited_edges = arr(paths.copy()).flatten(),[]
+        loops = []
+
+        while True:
+            n_edge_added = 0
+            nextpaths = paths.copy()
+            nextedgepaths = edgepaths.copy()
+            for i,path in enumerate(paths):
+                node = path[-1]
+                connected_nodes,connected_edges = self.connected_nodes(node)
+                connected_node_inds = np.where(connected_nodes!=node)[0]
+                connected_nodes = connected_nodes[connected_node_inds]
+                connected_edges = connected_edges[connected_node_inds]
+
+                # Look for nodes already visited by other paths
+                l = arr([[n,e] for n,e in zip(connected_nodes,connected_edges) if n in visited_nodes and e not in visited_edges ])                
+                if len(l)>0:
+                    # Find where else node occurs
+                    for j,path0 in enumerate(paths):
+                        if i!=j:
+                            mtch = [x for x in path0 if x in l[:,0]]
+                            if len(mtch)>0:
+                                nodepath1 = arr(paths[i]+l[:,0].tolist())
+                                nodepath2 = arr(paths[j])
+                                edgepath1 = arr(edgepaths[i]+l[:,1].tolist())
+                                edgepath2 = arr(edgepaths[j])
+                                # Find earliest common node
+                                mnlen = np.min([len(nodepath1),len(nodepath2)])
+                                eca = [k for k,x in enumerate(range(mnlen)) if nodepath1[k]!=nodepath2[k]][0]
+                                n1 = np.where(nodepath1==l[:,0])
+                                n2 = np.where(nodepath2==l[:,0])
+                                loop = np.hstack([edgepath1[eca:n1[0][0]+1],edgepath2[eca:n2[0][0]+1]])
+                                loops.append(loop)
+                                
+                                #self.plot(fixed_radius=0.5,edge_highlight=loop)
+                                #breakpoint()
+
+                connected_node_inds = [k for k,x in enumerate(connected_nodes) if x not in visited_nodes]
+                connected_nodes = connected_nodes[connected_node_inds]
+                connected_edges = connected_edges[connected_node_inds]
+                if len(connected_nodes)>0:
+                    #breakpoint()
+                    nextpaths[i].extend([connected_nodes[0]])
+                    nextedgepaths[i].extend([connected_edges[0]])
+                    #nextedgepaths[i].extend()
+                    if len(connected_nodes)>1:
+                        for j,cn in enumerate(connected_nodes):
+                            if j>0:
+                                pathC = path.copy()
+                                epathC = edgepaths[i].copy()
+                                nextpaths.append(pathC[:-1]+[cn])
+                                nextedgepaths.append(epathC[:-1]+[connected_edges[j]])
+                    visited_nodes = np.concatenate([arr(visited_nodes).flatten(),connected_nodes])
+                    visited_edges = np.concatenate([arr(visited_edges).flatten(),connected_edges])
+                    
+                    n_edge_added += 1
+            if n_edge_added==0:
+                break
+            else:
+                paths = nextpaths
+                edgepaths = nextedgepaths
+        return loops
+
+    def calculate_ranks(self):
+        #if not self.test_treelike():
+        #    return 0
+
+        inlet,outlet = self.identify_inlet_outlet()
+        curnodes = [inlet]
+        visited_nodes,visited_edges = curnodes.copy(),[]
+        
+        ranks = np.zeros(self.nedge,dtype='int')
+        curRank = 1
+
+        while True:
+            n_edge_added = 0
+            nextnodes = []
+            for node in curnodes:
+                connected_nodes,connected_edges = self.connected_nodes(node)
+                connected_nodes = [x for x in connected_nodes if x not in visited_nodes]
+                connected_edges = [x for x in connected_edges if x not in visited_edges]
+                
+                if len(connected_edges)>0:
+                    ranks[arr(connected_edges)] = curRank
+                
+                    nextnodes.extend(connected_nodes)
+                    visited_nodes.extend(connected_nodes)
+                    visited_edges.extend(connected_edges)
+                    
+                    n_edge_added += 1
+            if n_edge_added==0:
+                break
+            else:
+                curRank += 1
+                curnodes = nextnodes
+
+        if 'Ranks' in self.fieldNames:
+            self.set_data(ranks,name='Ranks')
+        else:
+            f = self.add_field(name='Ranks',data=ranks,type='int',shape=[ranks.shape[0]])  
+            
+    def get_edges_connected_to_edge(self, edgeInd):
+    
+        edge = self.get_edge(edgeInd)
+        # Edges connected to start node
+        es = self.get_edges_containing_node(edge.start_node_index)
+        es = es[es!=edgeInd]
+        # Edges connected to end node
+        ee = self.get_edges_containing_node(edge.end_node_index)
+        ee = ee[ee!=edgeInd]
+        
+        return [es,ee]
+
+    def get_subgraph_by_rank(self,edgeInd):
+    
+        # Get subgraph consisting of edges with a higher rank than the supplied edge
+        
+        if not self.test_treelike():
+            return
+            
+        edge = self.get_edge(edgeInd)   
+
+        ranks = self.get_data('Ranks')
+        if ranks is None:
+            self.calculate_ranks()
+            ranks = self.get_data('Ranks')
+          
+        # Starting rank      
+        r0 = ranks[edgeInd]
+        edgeStore = [edgeInd]
+        
+        es,ee = self.get_edges_connected_to_edge(edgeInd) 
+        es = np.concatenate([es,ee])
+        esr = ranks[es]        
+        
+        # Get edges with a higher rank than starting edge
+        es = es[esr>r0]
+        edgeStore.extend(es)
+        
+        curEdges = es
+        
+        while True:
+            # Get all connected edges and find their ranks
+            nadded,nextEdges = 0,[]
+            for ce in curEdges:
+                es,ee = self.get_edges_connected_to_edge(ce) 
+                es = np.concatenate([es,ee])
+                es = [x for x in es if x not in edgeStore]
+
+                if len(es)>0:                
+                    edgeStore.extend(es)
+                    nadded += len(es)
+                    nextEdges.extend(es)
+                
+            if nadded==0:
+                break
+            else: 
+                curEdges = nextEdges
+        
+        return edgeStore
+        
 
 class Editor(object):
 
@@ -1785,15 +2042,14 @@ class Editor(object):
         
     def remove_disconnected_nodes(self,graph):
         nodeCoords = graph.get_data('VertexCoordinates')
-        nodeInds = np.arange(0,nodeCoords.shape[0]-1)
-        edgeConn = graph.get_data('EdgeConnectivity')
-        
-        zero_conn = [x for x in nodeInds if x not in edgeConn]
-        if len(zero_conn)==0:
+        gc = graph.get_node_count()
+
+        zero_conn = np.where(gc==0)
+        if len(zero_conn[0])==0:
             return graph
             
-        graph = self.delete_nodes(graph,zero_conn)
-        print(('{} isolated nodes removed'.format(len(zero_conn))))
+        graph = self.delete_nodes(graph,zero_conn[0])
+        print(('{} isolated nodes removed'.format(len(zero_conn[0]))))
         return graph
         
     def remove_selfconnected_edges(self,graph):
@@ -3179,6 +3435,7 @@ class GVars(object):
         self.node_ptr += 1
         if self.node_ptr>=self.nodecoords.shape[0]:
             self.preallocate_nodes(self.n_all,set_pointer_to_start=False)
+            
     def append_nodes(self,nodes,update_pointer=False):
         # Create new slots for an array containing multiple node coordinates
         self.nodecoords = np.vstack([self.nodecoords,nodes])
