@@ -15,6 +15,7 @@ import os
 from tqdm import tqdm, trange # progress bar
 import matplotlib as mpl
 from matplotlib import pyplot as plt
+import copy
 
 def update_array_index(vals,inds,keep):
     # Updates/offets indices for an array (vals) to exclude values in a flag array (keep)
@@ -1574,6 +1575,26 @@ class SpatialGraph(amiramesh.AmiraMesh):
 
         return tp 
         
+    def smooth_radii(self,window=5,order=3,mode='savgol'):
+    
+        from scipy.signal import savgol_filter
+        
+        rad_field_name = self.get_radius_field_name()
+        radius = self.get_data(rad_field_name)
+
+        for e in range(self.nedge):
+            edge = self.get_edge(e)
+            rads = radius[edge.i0:edge.i1]
+            x = np.cumsum(np.linalg.norm(edge.coordinates[1:]-edge.coordinates[:-1],axis=1))
+            if len(rads)>window:
+                if mode=='savgol':
+                    radius[edge.i0:edge.i1] = savgol_filter(rads, window, order)
+                elif mode=='movingav':
+                    box = np.ones(window)/window
+                    radius[edge.i0:edge.i1] = np.convolve(rads, box, mode='same')
+        
+        self.set_data(radius,name=rad_field_name)
+        
     def identify_graphs(self):
         inlet,outlet = self.identify_inlet_outlet()
         curnodes = [inlet]
@@ -1593,11 +1614,11 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     connected_nodes = [x for x in connected_nodes if x not in visited_nodes]
                     connected_edges = [x for x in connected_edges if x not in visited_edges]
                     
-                    if len(connected_edges)>0:
+                    if len(connected_nodes)>0:
                         graphInd[arr(connected_nodes)] = curGraph
-                    
                         nextnodes.extend(connected_nodes)
                         visited_nodes.extend(connected_nodes)
+                    if len(connected_edges)>0:
                         visited_edges.extend(connected_edges)
                         
                         n_edge_added += 1
@@ -1617,18 +1638,22 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 
         return graphInd
         
-    def identify_loops(self):
+    def identify_loops(self, return_paths=False,store_ranks=True):
     
         inlet,outlet = self.identify_inlet_outlet()
         paths = [[inlet]]
         edgepaths = [[-1]]
         visited_nodes,visited_edges = arr(paths.copy()).flatten(),[]
         loops = []
+        ranks = np.zeros(self.nedge,dtype='int')
 
+        count = -1
         while True:
+            count += 1
             n_edge_added = 0
-            nextpaths = paths.copy()
-            nextedgepaths = edgepaths.copy()
+            nextpaths = copy.deepcopy(paths)
+            nextedgepaths = copy.deepcopy(edgepaths)
+
             for i,path in enumerate(paths):
                 node = path[-1]
                 connected_nodes,connected_edges = self.connected_nodes(node)
@@ -1642,17 +1667,18 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     # Find where else node occurs
                     for j,path0 in enumerate(paths):
                         if i!=j:
-                            mtch = [x for x in path0 if x in l[:,0]]
+                            mtch = [x for x in path0 if x==l[0,0]]
                             if len(mtch)>0:
-                                nodepath1 = arr(paths[i]+l[:,0].tolist())
+                                nodepath1 = arr(paths[i]+[l[0,0]])
                                 nodepath2 = arr(paths[j])
-                                edgepath1 = arr(edgepaths[i]+l[:,1].tolist())
+                                edgepath1 = arr(edgepaths[i]+[l[0,1]])
                                 edgepath2 = arr(edgepaths[j])
                                 # Find earliest common node
                                 mnlen = np.min([len(nodepath1),len(nodepath2)])
                                 eca = [k for k,x in enumerate(range(mnlen)) if nodepath1[k]!=nodepath2[k]][0]
-                                n1 = np.where(nodepath1==l[:,0])
-                                n2 = np.where(nodepath2==l[:,0])
+                                n1 = np.where(nodepath1==l[0,0])
+                                n2 = np.where(nodepath2==l[0,0])
+                                
                                 loop = np.hstack([edgepath1[eca:n1[0][0]+1],edgepath2[eca:n2[0][0]+1]])
                                 loops.append(loop)
                                 
@@ -1666,12 +1692,19 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     #breakpoint()
                     nextpaths[i].extend([connected_nodes[0]])
                     nextedgepaths[i].extend([connected_edges[0]])
-                    #nextedgepaths[i].extend()
+                    
+                    # Record ranks
+                    parent_edge = edgepaths[i][-1]
+                    if parent_edge<0:
+                        ranks[connected_edges] = 1
+                    else:
+                        ranks[connected_edges] = ranks[parent_edge] + 1
+
                     if len(connected_nodes)>1:
                         for j,cn in enumerate(connected_nodes):
                             if j>0:
-                                pathC = path.copy()
-                                epathC = edgepaths[i].copy()
+                                pathC = copy.deepcopy(path)
+                                epathC = copy.deepcopy(edgepaths[i])
                                 nextpaths.append(pathC[:-1]+[cn])
                                 nextedgepaths.append(epathC[:-1]+[connected_edges[j]])
                     visited_nodes = np.concatenate([arr(visited_nodes).flatten(),connected_nodes])
@@ -1679,11 +1712,23 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     
                     n_edge_added += 1
             if n_edge_added==0:
+                paths = copy.deepcopy(nextpaths)
+                edgepaths = copy.deepcopy(nextedgepaths)
                 break
             else:
-                paths = nextpaths
-                edgepaths = nextedgepaths
-        return loops
+                paths = copy.deepcopy(nextpaths)
+                edgepaths = copy.deepcopy(nextedgepaths)
+                
+        if store_ranks==True:
+            if 'Ranks' in self.fieldNames:
+                self.set_data(ranks,name='Ranks')
+            else:
+                f = self.add_field(name='Ranks',data=ranks,type='int',shape=[ranks.shape[0]])  
+                
+        if return_paths==True:
+            return loops, paths, edgepaths
+        else:
+            return loops
 
     def calculate_ranks(self):
         #if not self.test_treelike():
