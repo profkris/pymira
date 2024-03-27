@@ -107,7 +107,7 @@ def identify_graphs(graph):
             break
     return node_graph_index
     
-def skeletonize(image,resolution=None):
+def skeletonize(image,resolution=arr([1.,1.,1.,]),offset=arr([0.,0.,0.])):
 
     from skimage.morphology import skeletonize as skel
     skeleton = skel(image)
@@ -121,7 +121,9 @@ def skeletonize(image,resolution=None):
     rad = skeleton * dist
     
     from pymira import midline_to_graph
-    skeleton3d = np.expand_dims(skeleton,axis=-1)
+    # 2D to 3D
+    #skeleton3d = np.expand_dims(skeleton,axis=-1)
+    skeleton3d = skeleton.copy()
     m2g = midline_to_graph.Midline2Graph(skeleton3d.astype('float'))
     edgepointsInt, edgeconn = m2g.convert() 
 
@@ -129,14 +131,14 @@ def skeletonize(image,resolution=None):
     edgepoints = nodes[edgeconn].reshape([2*edgeconn.shape[0],3])
     nedgepoints = np.zeros(edgeconn.shape[0],dtype='int') + 2
     
-    radii_node = dist[edgepointsInt[:,0],edgepointsInt[:,1]]
+    radii_node = dist[edgepointsInt[:,0],edgepointsInt[:,1],edgepointsInt[:,2]]
+    
     radii = radii_node[edgeconn].reshape([2*edgeconn.shape[0]])
     if resolution is not None:
         radii *= resolution[0]
-        nodes[:,0] *= resolution[0]
-        nodes[:,1] *= resolution[1]
-        edgepoints[:,0] *= resolution[0]
-        edgepoints[:,1] *= resolution[1]
+        for i in range(3):
+            nodes[:,i] = (nodes[:,i]*resolution[i]) + offset[i]
+            edgepoints[:,i] = (edgepoints[:,i]*resolution[i]) + offset[i]
     
     graph = spatialgraph.SpatialGraph(initialise=True,scalars=['Radius'])      
     graph.set_definition_size('VERTEX',nodes.shape[0])
@@ -148,6 +150,8 @@ def skeletonize(image,resolution=None):
     graph.set_data(edgepoints,name='EdgePointCoordinates')
     graph.set_data(radii,name='Radius')
     graph.set_graph_sizes()
+    
+    breakpoint()
     
     ed = spatialgraph.Editor()
     #breakpoint()
@@ -321,11 +325,39 @@ def skeletonize(image,resolution=None):
     graph.set_data(radii,name='Radius')
     #graph.plot(fixed_radius=0.2,cmap_range=[0.,.1],cmap='gray')
     return graph
+    
+def extract_segment():
+
+    import rasterio
+ 
+    path_root = 'C:\\Users\\simon\\Desktop\\lung-files'
+    files = ['Vessels_and_airways.tif']
+    ftype = '.tif'
+    resolution = arr([200.21,200.076,200.])
+    mincoord = arr([75.1016,75.0391,75.])
+    
+    path = join(path_root,'')
+    opath = os.path.join(path,'screengrabs')
+    if not os.path.exists(opath):
+        os.mkdir(opath)
+    gpath = os.path.join(opath,'graph')
+    if not os.path.exists(gpath):
+        os.mkdir(gpath)
+
+    f = files[0]
+    data = io.imread(join(path,f))
+    with rasterio.open(join(path,f)) as src:
+        tr = src.transform
+    
+    airways = data==2
+    airways = airways.astype('uint8')
+    graph = skeletonize(airways,resolution=resolution) #,offset=mincoord)
+    
+    breakpoint()
+    graph.write(join(path,'airways_skel.am'))
 
 def main():
 
-    
-<<<<<<< HEAD
     path_root = r'/mnt/data2/OCT_nii_cube/cycleGAN_seg'
     path_root = r'Z:\OCT_nii_cube\cycleGAN_seg'
     path_root = r'C:\Users\simon\SWS Dropbox\Simon Walker-Samuel\cycleGAN_seg'
@@ -342,13 +374,17 @@ def main():
     #files = ['im_0.05_0.06111111111111111.png']
     #files = ['im_0.04_0.06125.png']
     #make_binary = True
-=======
-    path_root = 'PATH' 
-    groups = ['']
-    ftype = '.png'
-    files = ['FILE.png']
-    make_binary = True
->>>>>>> 20550aaae8e1351c4b4472e0f2ee4a4292f049ed
+    
+    path_root = 'C:\\Users\\simon\\Desktop\\lung-files'
+    files = ['Vessels_and_airways.tif']
+    ftype = '.tif'
+    breakpoint()
+
+    #path_root = 'PATH' 
+    #groups = ['']
+    #ftype = '.png'
+    #files = ['FILE.png']
+    #make_binary = True
 
     for group in groups:
         path = join(path_root,group)
@@ -532,5 +568,6 @@ def main():
             #    print(e)
             
 if __name__=='__main__':
-    main()
+    #main()
     #check_resolution()
+    extract_segment()
