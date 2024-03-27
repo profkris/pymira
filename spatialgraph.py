@@ -32,7 +32,7 @@ def update_array_index(vals,inds,keep):
     new_inds_lookup = np.zeros(npoints,dtype='int')-1
     new_inds_lookup[~np.in1d(old_inds,del_inds)] = np.linspace(0,npoints-del_inds.shape[0]-1,npoints-del_inds.shape[0])
     # Create a new index array using updated index lookup table
-    if inds.dtype!=np.object:
+    if type(inds) is not list and inds.dtype!=object:
         new_inds = new_inds_lookup[inds] 
         # Remove -1 values that reference deleted nodes
         new_inds = new_inds[(new_inds[:,0]>=0) & (new_inds[:,1]>=0)]
