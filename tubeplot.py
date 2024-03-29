@@ -4,7 +4,7 @@ norm = np.linalg.norm
 import open3d as o3d
 import pyvista as pv
 from tqdm import tqdm, trange
-from vessel_sim import geometry
+from pymira import geometry
 
 def align_vector_to_another(a=np.array([0, 0, 1]), b=np.array([1, 0, 0])):
     """

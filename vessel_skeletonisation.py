@@ -420,14 +420,7 @@ def main():
                     
                 blur = blur / np.max(blur)
                 graph = skeletonize(blur)
-                breakpoint()
 
-                #from vessel_sim.retina_cco import retina_inject
-                #marker = graph.generate_next_marker()
-                #vesselType = np.zeros(graph.nedgepoint,dtype='int')
-                #graph.add_field(name='VesselType',marker=marker,definition='POINT',type='float',nelements=1,data=vesselType)
-                #graph2 = retina_inject.crawl(graph,calculate_conc=False,plot=False,arteries_only=True) #,ofilename=ofilename)
-                
                 ofile = os.path.join(gpath,f.replace(ftype,'.am'))
                 graph.write(ofile)
                 print(f'Graph saved to {ofile}')
