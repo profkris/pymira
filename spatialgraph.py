@@ -15,6 +15,7 @@ import os
 from tqdm import tqdm, trange # progress bar
 import matplotlib as mpl
 from matplotlib import pyplot as plt
+import copy
 
 def update_array_index(vals,inds,keep):
     # Updates/offets indices for an array (vals) to exclude values in a flag array (keep)
@@ -32,9 +33,18 @@ def update_array_index(vals,inds,keep):
     new_inds_lookup = np.zeros(npoints,dtype='int')-1
     new_inds_lookup[~np.in1d(old_inds,del_inds)] = np.linspace(0,npoints-del_inds.shape[0]-1,npoints-del_inds.shape[0])
     # Create a new index array using updated index lookup table
-    new_inds = new_inds_lookup[inds] 
-    # Remove -1 values that reference deleted nodes
-    new_inds = new_inds[(new_inds[:,0]>=0) & (new_inds[:,1]>=0)]
+    if inds.dtype!=np.object:
+        new_inds = new_inds_lookup[inds] 
+        # Remove -1 values that reference deleted nodes
+        new_inds = new_inds[(new_inds[:,0]>=0) & (new_inds[:,1]>=0)]
+    else: # Nested list
+        new_inds = []
+        #valid = np.ones(len(inds),dtype='bool')
+        for i in inds:
+            nxt = new_inds_lookup[i]
+            if np.all(nxt>=0):
+                new_inds.append(nxt)
+    
     return vals[keep],new_inds,new_inds_lookup
     
 def delete_vertices(graph,keep_nodes,return_lookup=False): # #verts,edges,keep_nodes):
@@ -164,7 +174,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
             
         return graph_copy
             
-    def initialise(self,scalars=None,node_scalars=None):
+    def initialise(self,scalars=[],node_scalars=[]):
     
         """
         Set default fields 
@@ -216,25 +226,92 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
     def read(self,*args,**kwargs):
         """
-        Read spatial graph from .am Amira file
+        Read spatial graph from .am Amira (or JSON) file
         """
-        if not amiramesh.AmiraMesh.read(self,*args,**kwargs):
-            return False
-        if self.get_parameter_value("ContentType")!="HxSpatialGraph":
-            print('Warning: File is not an Amira SpatialGraph!')
+        if args[0].endswith('.json'):
+            self.read_json(args[0])
+        else:
+            if not amiramesh.AmiraMesh.read(self,*args,**kwargs):
+                return False
+            if "HxSpatialGraph" not in self.get_parameter_value("ContentType"):
+                print('Warning: File is not an Amira SpatialGraph!')
+                pass
 
         self.set_graph_sizes()
                 
         return True
+            
+    def remove_edges(self,edge_inds_to_remove):
+        gv = GVars(self)
+        gv.remove_edges(edge_inds_to_remove)
+        graph = gv.set_in_graph()
+   
+    def remove_loops(self):  
+        duplicate_edges = self.get_duplicated_edges()
+        edgeconn = self.get_data('EdgeConnectivity')
+        sind = np.where(duplicate_edges>0)
+        rads = self.point_scalars_to_edge_scalars(name='thickness')
         
-    def export_mesh(self,vessel_type=None,radius_scale=1,min_radius=0,ofile=''):
+        rem_edge = []
+        for ei in np.unique(duplicate_edges):
+            if ei>0:
+                stmp = np.where(duplicate_edges==ei)
+                edges = []
+                for s in stmp[0]:
+                    edges.extend([self.get_edge(s)])
+                # Self-connection - remove
+                if len(edges)==1:
+                    rem_edge.extend([edges[0].index])
+                else:
+                    edgeRads = rads[stmp[0]]
+                    lengths = arr([np.sum(np.linalg.norm(e.coordinates[:-1]-e.coordinates[1:])) for e in edges])
+                    vols = np.pi*np.power(edgeRads,2)*lengths
+                    mx = np.argmax(vols)
+                    inds = np.linspace(0,len(vols)-1,len(vols),dtype='int')
+                    rem_edge.extend(stmp[0][inds[inds!=mx]])
+        self.remove_edges(arr(rem_edge))
+                
+    def read_json(self,filename):
+    
+        import json
+        
+        with open(filename, 'r') as json_file:
+            data = json.load(json_file)
+            
+        req = ['VertexCoordinates','EdgeConnectivity','NumEdgePoints','EdgePointCoordinates']
+        if not np.all([x in list(data.keys()) for x in req]):
+            print('Invalid JSON file format!')
+            return
+            
+        self.initialise()
+            
+        for k,v in zip(data.keys(),data.values()):
+            if k in req:
+                vals = arr(v)
+                self.set_data(vals,name=k)
+                if k=='VertexCoordinates':
+                    self.set_definition_size('VERTEX',vals.shape[0])
+                elif k=='EdgeConnectivity':                    
+                    self.set_definition_size('EDGE',vals.shape[0])
+                elif k=='EdgePointCoordinates':                    
+                    self.set_definition_size('POINT',vals.shape[0])   
+            else:
+                # Assume for now that all additional fields are point scalars...
+                self.add_field(name=k,marker=self.generate_next_marker(),
+                                  definition='POINT',type='float',
+                                  nelements=1,nentries=[0])
+                self.set_data(arr(v),name=k)
+        
+    def export_mesh(self,vessel_type=None,radius_scale=1,min_radius=0,ofile='',resolution=10):
         if vessel_type is not None:
             vtypeEdge = self.point_scalars_to_edge_scalars(name='VesselType')
-            tp = self.plot_graph(show=False,block=False,min_radius=min_radius,edge_filter=vtypeEdge==vessel_type,cyl_res=10,radius_scale=radius_scale)
+            tp = self.plot_graph(show=False,block=False,min_radius=min_radius,edge_filter=vtypeEdge==vessel_type,cyl_res=resolution,radius_scale=radius_scale,radius_based_resolution=False)
         else:
-            tp = self.plot_graph(show=False,block=False,min_radius=min_radius,cyl_res=10,radius_scale=radius_scale)
+            tp = self.plot_graph(show=False,block=False,min_radius=min_radius,cyl_res=resolution,radius_scale=radius_scale,radius_based_resolution=False)
+
         gmesh = tp.cylinders_combined
         import open3d as o3d
+        gmesh.compute_vertex_normals()
         o3d.io.write_triangle_mesh(ofile,gmesh)
         tp.destroy_window()
         print(f'Mesh written to {ofile}')
@@ -555,7 +632,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 
         return edgeInd
         
-    def constrain_nodes(self,xrange=[None,None],yrange=[None,None],zrange=[None,None],no_copy=True):
+    def constrain_nodes(self,xrange=[None,None],yrange=[None,None],zrange=[None,None],no_copy=True,keep_stradling_edges=False):
     
         """
         Delete all nodes outside a rectangular region
@@ -588,11 +665,32 @@ class SpatialGraph(amiramesh.AmiraMesh):
         zrange = [np.max([r[2][0],zrange[0]]),np.min([r[2][1],zrange[1]])]
         
         # Mark which nodes to keep / delete
-        keepNode = np.zeros(nnode,dtype='bool') + True
+        keepNode = np.ones(nnode,dtype='bool')
         for i in range(nnode):
             x,y,z = nodeCoords[i,:]
             if x<xrange[0] or x>xrange[1] or y<yrange[0] or y>yrange[1] or z<zrange[0] or z>zrange[1]:
                 keepNode[i] = False
+                
+        # Keep edges that straddle the boundary
+        if keep_stradling_edges:
+            keepNodeEdit = keepNode.copy()
+            ec = self.get_data('EdgeConnectivity')
+            ch = 0
+            for i,kn in enumerate(keepNode):
+                if kn==True:
+                    conns = np.empty([0])
+                    inds0 = np.where(ec[:,0]==i)
+                    if len(inds0[0])>0:
+                        conns = np.concatenate([conns,ec[inds0[0],1]])
+                    inds1 = np.where(ec[:,1]==i)
+                    if len(inds1[0])>0:
+                        conns = np.concatenate([conns,ec[inds1[0],0]])
+                    conns = conns.astype('int')
+                    if np.any(keepNode[conns]==False):
+                        keepNodeEdit[conns] = True
+                        ch += 1
+            if ch>0:
+                keepNode = keepNodeEdit
                 
         nodes_to_delete = np.where(keepNode==False)
         nodes_to_keep = np.where(keepNode==True)
@@ -719,7 +817,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         assert edgeIndex>=0
         assert edgeIndex<nedge
-        chase
+        #chase
         npoints = nedgepoints[edgeIndex]
         start_index = np.sum(nedgepoints[:edgeIndex])
         end_index = start_index + npoints
@@ -982,7 +1080,22 @@ class SpatialGraph(amiramesh.AmiraMesh):
             v_outlet_edge = edgeconn[v_outlet_edge_ind]
             v_outlet_node = v_outlet_edge[node_count[v_outlet_edge]==1][0]
         
-        return a_inlet_node,v_outlet_node  
+        return a_inlet_node,v_outlet_node 
+
+    def get_duplicated_edges(self):
+        edges = self.get_data('EdgeConnectivity')
+        #duplicate_edges = np.zeros(edges.shape[0],dtype='int')
+        duplicate_edge_index = np.zeros(edges.shape[0],dtype='int')
+        dind = 1
+        for i,x in enumerate(edges): 
+            s1 = np.where( (edges[:,0]==x[0]) & (edges[:,1]==x[1]) & (duplicate_edge_index==0) )[0]
+            s2 = np.where( (edges[:,1]==x[0]) & (edges[:,0]==x[1]) & (duplicate_edge_index==0) )[0]
+            if len(s1)+len(s2)>1:
+                duplicate_edge_index[s1] = dind
+                duplicate_edge_index[s2] = dind
+                dind += 1
+        
+        return duplicate_edge_index
 
     def test_treelike(self, inlet=None, outlet=None, euler=True, ignore_type=False):
 
@@ -1045,10 +1158,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
             
         gc = self.get_node_count()
         vt = self.edge_scalar_to_node_scalar('VesselType')
+        #if vt is None:
+        #    vt = np.zeros(self.nedge)
         edges = self.get_data('EdgeConnectivity')
         
         # Euler: Arterial nodes
         if euler:
+            if vt is None:
+                if self.nnode!=self.nedge+1:
+                    print(f'Euler criterion failed ({self.nnode} nodes, {self.nedge} edges)')              
             if ignore_type:
                 n_anode = np.sum((vt==0) | (vt==1))
             else:
@@ -1080,11 +1198,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         if n_vnode<n_vedges+1:
                             print(f'Euler criterion failed (venous, too many edges! {n_vnode} nodes, {n_vedges} edges)')
                         return False
-            
-        duplicate_edges = np.zeros(edges.shape[0],dtype='int')
-        for i,x in enumerate(edges): 
-            duplicate_edges[i] = len(np.where( (edges[:,0]==x[0]) & (edges[:,1]==x[1]))[0]) + len(np.where( (edges[:,1]==x[0]) & (edges[:,0]==x[1]))[0])
-        if np.any(duplicate_edges>1):
+         
+        duplicate_edges = self.get_duplicated_edges()
+        if np.any(duplicate_edges>0):
             print(f'Duplicated edges!')
             return False
                 
@@ -1458,6 +1574,260 @@ class SpatialGraph(amiramesh.AmiraMesh):
         tp = TubePlot(self, **kwargs)
 
         return tp 
+        
+    def smooth_radii(self,window=5,order=3,mode='savgol'):
+    
+        from scipy.signal import savgol_filter
+        
+        rad_field_name = self.get_radius_field_name()
+        radius = self.get_data(rad_field_name)
+
+        for e in range(self.nedge):
+            edge = self.get_edge(e)
+            rads = radius[edge.i0:edge.i1]
+            x = np.cumsum(np.linalg.norm(edge.coordinates[1:]-edge.coordinates[:-1],axis=1))
+            if len(rads)>window:
+                if mode=='savgol':
+                    radius[edge.i0:edge.i1] = savgol_filter(rads, window, order)
+                elif mode=='movingav':
+                    box = np.ones(window)/window
+                    radius[edge.i0:edge.i1] = np.convolve(rads, box, mode='same')
+        
+        self.set_data(radius,name=rad_field_name)
+        
+    def identify_graphs(self):
+        inlet,outlet = self.identify_inlet_outlet()
+        curnodes = [inlet]
+        
+        graphInd = np.zeros(self.nnode,dtype='int')
+        curGraph = 1
+        graphInd[inlet] = curGraph
+        
+        while True:
+            visited_nodes,visited_edges = curnodes.copy(),[]
+
+            while True:
+                n_edge_added = 0
+                nextnodes = []
+                for node in curnodes:
+                    connected_nodes,connected_edges = self.connected_nodes(node)
+                    connected_nodes = [x for x in connected_nodes if x not in visited_nodes]
+                    connected_edges = [x for x in connected_edges if x not in visited_edges]
+                    
+                    if len(connected_nodes)>0:
+                        graphInd[arr(connected_nodes)] = curGraph
+                        nextnodes.extend(connected_nodes)
+                        visited_nodes.extend(connected_nodes)
+                    if len(connected_edges)>0:
+                        visited_edges.extend(connected_edges)
+                        
+                        n_edge_added += 1
+                if n_edge_added==0:
+                    break
+                else:
+                    curnodes = nextnodes
+            
+            if np.all(graphInd>0):
+                break
+            else:
+                curGraph += 1
+                sind = np.where(graphInd==0)[0]
+                curnodes = np.random.choice(sind)
+                graphInd[curnodes] = curGraph
+                curnodes = [curnodes]
+                
+        return graphInd
+        
+    def identify_loops(self, return_paths=False,store_ranks=True):
+    
+        inlet,outlet = self.identify_inlet_outlet()
+        paths = [[inlet]]
+        edgepaths = [[-1]]
+        visited_nodes,visited_edges = arr(paths.copy()).flatten(),[]
+        loops = []
+        ranks = np.zeros(self.nedge,dtype='int')
+
+        count = -1
+        while True:
+            count += 1
+            n_edge_added = 0
+            nextpaths = copy.deepcopy(paths)
+            nextedgepaths = copy.deepcopy(edgepaths)
+
+            for i,path in enumerate(paths):
+                node = path[-1]
+                connected_nodes,connected_edges = self.connected_nodes(node)
+                connected_node_inds = np.where(connected_nodes!=node)[0]
+                connected_nodes = connected_nodes[connected_node_inds]
+                connected_edges = connected_edges[connected_node_inds]
+
+                # Look for nodes already visited by other paths
+                l = arr([[n,e] for n,e in zip(connected_nodes,connected_edges) if n in visited_nodes and e not in visited_edges ])                
+                if len(l)>0:
+                    # Find where else node occurs
+                    for j,path0 in enumerate(paths):
+                        if i!=j:
+                            mtch = [x for x in path0 if x==l[0,0]]
+                            if len(mtch)>0:
+                                nodepath1 = arr(paths[i]+[l[0,0]])
+                                nodepath2 = arr(paths[j])
+                                edgepath1 = arr(edgepaths[i]+[l[0,1]])
+                                edgepath2 = arr(edgepaths[j])
+                                # Find earliest common node
+                                mnlen = np.min([len(nodepath1),len(nodepath2)])
+                                eca = [k for k,x in enumerate(range(mnlen)) if nodepath1[k]!=nodepath2[k]][0]
+                                n1 = np.where(nodepath1==l[0,0])
+                                n2 = np.where(nodepath2==l[0,0])
+                                
+                                loop = np.hstack([edgepath1[eca:n1[0][0]+1],edgepath2[eca:n2[0][0]+1]])
+                                loops.append(loop)
+                                
+                                #self.plot(fixed_radius=0.5,edge_highlight=loop)
+                                #breakpoint()
+
+                connected_node_inds = [k for k,x in enumerate(connected_nodes) if x not in visited_nodes]
+                connected_nodes = connected_nodes[connected_node_inds]
+                connected_edges = connected_edges[connected_node_inds]
+                if len(connected_nodes)>0:
+                    #breakpoint()
+                    nextpaths[i].extend([connected_nodes[0]])
+                    nextedgepaths[i].extend([connected_edges[0]])
+                    
+                    # Record ranks
+                    parent_edge = edgepaths[i][-1]
+                    if parent_edge<0:
+                        ranks[connected_edges] = 1
+                    else:
+                        ranks[connected_edges] = ranks[parent_edge] + 1
+
+                    if len(connected_nodes)>1:
+                        for j,cn in enumerate(connected_nodes):
+                            if j>0:
+                                pathC = copy.deepcopy(path)
+                                epathC = copy.deepcopy(edgepaths[i])
+                                nextpaths.append(pathC[:-1]+[cn])
+                                nextedgepaths.append(epathC[:-1]+[connected_edges[j]])
+                    visited_nodes = np.concatenate([arr(visited_nodes).flatten(),connected_nodes])
+                    visited_edges = np.concatenate([arr(visited_edges).flatten(),connected_edges])
+                    
+                    n_edge_added += 1
+            if n_edge_added==0:
+                paths = copy.deepcopy(nextpaths)
+                edgepaths = copy.deepcopy(nextedgepaths)
+                break
+            else:
+                paths = copy.deepcopy(nextpaths)
+                edgepaths = copy.deepcopy(nextedgepaths)
+                
+        if store_ranks==True:
+            if 'Ranks' in self.fieldNames:
+                self.set_data(ranks,name='Ranks')
+            else:
+                f = self.add_field(name='Ranks',data=ranks,type='int',shape=[ranks.shape[0]])  
+                
+        if return_paths==True:
+            return loops, paths, edgepaths
+        else:
+            return loops
+
+    def calculate_ranks(self):
+        #if not self.test_treelike():
+        #    return 0
+
+        inlet,outlet = self.identify_inlet_outlet()
+        curnodes = [inlet]
+        visited_nodes,visited_edges = curnodes.copy(),[]
+        
+        ranks = np.zeros(self.nedge,dtype='int')
+        curRank = 1
+
+        while True:
+            n_edge_added = 0
+            nextnodes = []
+            for node in curnodes:
+                connected_nodes,connected_edges = self.connected_nodes(node)
+                connected_nodes = [x for x in connected_nodes if x not in visited_nodes]
+                connected_edges = [x for x in connected_edges if x not in visited_edges]
+                
+                if len(connected_edges)>0:
+                    ranks[arr(connected_edges)] = curRank
+                
+                    nextnodes.extend(connected_nodes)
+                    visited_nodes.extend(connected_nodes)
+                    visited_edges.extend(connected_edges)
+                    
+                    n_edge_added += 1
+            if n_edge_added==0:
+                break
+            else:
+                curRank += 1
+                curnodes = nextnodes
+
+        if 'Ranks' in self.fieldNames:
+            self.set_data(ranks,name='Ranks')
+        else:
+            f = self.add_field(name='Ranks',data=ranks,type='int',shape=[ranks.shape[0]])  
+            
+    def get_edges_connected_to_edge(self, edgeInd):
+    
+        edge = self.get_edge(edgeInd)
+        # Edges connected to start node
+        es = self.get_edges_containing_node(edge.start_node_index)
+        es = es[es!=edgeInd]
+        # Edges connected to end node
+        ee = self.get_edges_containing_node(edge.end_node_index)
+        ee = ee[ee!=edgeInd]
+        
+        return [es,ee]
+
+    def get_subgraph_by_rank(self,edgeInd):
+    
+        # Get subgraph consisting of edges with a higher rank than the supplied edge
+        
+        if not self.test_treelike():
+            return
+            
+        edge = self.get_edge(edgeInd)   
+
+        ranks = self.get_data('Ranks')
+        if ranks is None:
+            self.calculate_ranks()
+            ranks = self.get_data('Ranks')
+          
+        # Starting rank      
+        r0 = ranks[edgeInd]
+        edgeStore = [edgeInd]
+        
+        es,ee = self.get_edges_connected_to_edge(edgeInd) 
+        es = np.concatenate([es,ee])
+        esr = ranks[es]        
+        
+        # Get edges with a higher rank than starting edge
+        es = es[esr>r0]
+        edgeStore.extend(es)
+        
+        curEdges = es
+        
+        while True:
+            # Get all connected edges and find their ranks
+            nadded,nextEdges = 0,[]
+            for ce in curEdges:
+                es,ee = self.get_edges_connected_to_edge(ce) 
+                es = np.concatenate([es,ee])
+                es = [x for x in es if x not in edgeStore]
+
+                if len(es)>0:                
+                    edgeStore.extend(es)
+                    nadded += len(es)
+                    nextEdges.extend(es)
+                
+            if nadded==0:
+                break
+            else: 
+                curEdges = nextEdges
+        
+        return edgeStore
+        
 
 class Editor(object):
 
@@ -1674,7 +2044,7 @@ class Editor(object):
 
         # Mark which edgepoints to keep / delete
         keepEdgePoint = np.zeros(nedgepoint,dtype='bool') + True
-        for edgeIndex in edges_to_delete:
+        for edgeIndex in tqdm(edges_to_delete):
             npoints = nedgepoints[edgeIndex]
             strt = np.sum(nedgepoints[0:edgeIndex])
             fin = strt + npoints
@@ -1697,7 +2067,8 @@ class Editor(object):
         
         #Check for any other scalar fields
         scalars = [f for f in graph.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
-        for sc in scalars:
+        print('Updating scalars...')
+        for sc in tqdm(scalars):
             #data_ed = np.delete(sc['data'],edgepoints_to_delete[0],axis=0)
             data = sc['data']
             data_ed = data[keepEdgePoint==True]
@@ -1716,15 +2087,14 @@ class Editor(object):
         
     def remove_disconnected_nodes(self,graph):
         nodeCoords = graph.get_data('VertexCoordinates')
-        nodeInds = np.arange(0,nodeCoords.shape[0]-1)
-        edgeConn = graph.get_data('EdgeConnectivity')
-        
-        zero_conn = [x for x in nodeInds if x not in edgeConn]
-        if len(zero_conn)==0:
+        gc = graph.get_node_count()
+
+        zero_conn = np.where(gc==0)
+        if len(zero_conn[0])==0:
             return graph
             
-        graph = self.delete_nodes(graph,zero_conn)
-        print(('{} isolated nodes removed'.format(len(zero_conn))))
+        graph = self.delete_nodes(graph,zero_conn[0])
+        print(('{} isolated nodes removed'.format(len(zero_conn[0]))))
         return graph
         
     def remove_selfconnected_edges(self,graph):
@@ -3110,6 +3480,7 @@ class GVars(object):
         self.node_ptr += 1
         if self.node_ptr>=self.nodecoords.shape[0]:
             self.preallocate_nodes(self.n_all,set_pointer_to_start=False)
+            
     def append_nodes(self,nodes,update_pointer=False):
         # Create new slots for an array containing multiple node coordinates
         self.nodecoords = np.vstack([self.nodecoords,nodes])

@@ -27,7 +27,7 @@ class AmiraMesh(object):
         self.fileRead = False
         self.dataFieldCount = 0
         self.header = None
-        self.dataTypes = ['float','double','byte','int','long','binary']
+        self.dataTypes = ['float','double','byte','int','long','binary','bool']
         self.filename = None
         self.dir = None
         
@@ -102,11 +102,15 @@ class AmiraMesh(object):
                 dtype = np.dtype('i')
             elif curField['type']=='byte':
                 dtype = np.dtype('byte')
+            elif curField['type']=='bool':
+                dtype = np.dtype('bool')
             else: # Default to float
                 dtype = np.dtype('f')
             try:
                 curData = np.asarray(curData) #,dtype=dtype)
                 curData = np.reshape(curData,curField['shape'])
+                if str(dtype).lower() not in ['byte','bool']:
+                    curData = curData.astype('float')
                 curField['data'] = curData.astype(dtype)
             except Exception as e:
                 if not quiet:
@@ -324,6 +328,7 @@ class AmiraMesh(object):
                                     fieldName = fieldType.replace(fieldDataType,'',1).strip()
                                     nel = 1
                             except Exception as e:
+                                breakpoint()
                                 raise Exception(e)
                                 #breakpoint()
                                 #return None

@@ -1,4 +1,5 @@
 import csv
+import argparse
 import numpy as np
 from pymira import spatialgraph
 
@@ -70,12 +71,38 @@ def csv2amira(filepath, ofile='', sanity_check=True):
     graph.write(ofile)
     print('Converted {} to {}'.format(filepath,ofile))
     return ofile
+    
+def main():
+    parser = argparse.ArgumentParser(description="csv2amira argument parser")
+
+    # Add arguments
+    parser.add_argument("filename", type=str, help="JSON filepath")
+    parser.add_argument("-o","--opath", type=str, default=None, help="AM filepath")
+    parser.add_argument("-s","--stl", type=bool, default=True, help="STL")
+    
+    args = parser.parse_args()
+    
+    # Access the parsed arguments
+    filename = args.filename
+    ofile = args.opath
+    stl = args.stl
+    
+    if ofile is None:
+        ofile = filename.lower().replace('.csv','.am')
+    csv2amira(filename,ofile=ofile)
+
+    if stl is True:
+        graph = spatialgraph.SpatialGraph()
+        graph.read(ofile)
+        graph.export_mesh(ofile=ofile.replace('.am','.ply'),resolution=10)
             
 if __name__=='__main__':
 
-    filepath = '/mnt/data2/hv_end.csv'
-    csv2amira(filepath)#, ofile=opath)
-    graph = spatialgraph.SpatialGraph()
-    graph.read(filepath.replace('.csv','.csv.am'))
-    graph.export_mesh(ofile=filepath.replace('.csv','.ply'))
+    main()
+    #for f in ['pv_end.csv','hv_end.csv']:
+    #    filepath = f'/mnt/data2/{f}'
+    #    csv2amira(filepath)#, ofile=opath)
+    #    graph = spatialgraph.SpatialGraph()
+    #    graph.read(filepath.replace('.csv','.csv.am'))
+    #    graph.export_mesh(ofile=filepath.replace('.csv','.ply'),resolution=10)
 
