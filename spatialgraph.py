@@ -1085,11 +1085,11 @@ class SpatialGraph(amiramesh.AmiraMesh):
     def get_duplicated_edges(self):
         edges = self.get_data('EdgeConnectivity')
         #duplicate_edges = np.zeros(edges.shape[0],dtype='int')
-        duplicate_edge_index = np.zeros(edges.shape[0],dtype='int')
-        dind = 1
-        for i,x in enumerate(edges): 
-            s1 = np.where( (edges[:,0]==x[0]) & (edges[:,1]==x[1]) & (duplicate_edge_index==0) )[0]
-            s2 = np.where( (edges[:,1]==x[0]) & (edges[:,0]==x[1]) & (duplicate_edge_index==0) )[0]
+        duplicate_edge_index = np.zeros(edges.shape[0],dtype='int') - 1
+        dind = 0
+        for i,x in enumerate(tqdm(edges)): 
+            s1 = np.where( (edges[:,0]==x[0]) & (edges[:,1]==x[1]) & (duplicate_edge_index==-1) )[0]
+            s2 = np.where( (edges[:,1]==x[0]) & (edges[:,0]==x[1]) & (duplicate_edge_index==-1) )[0]
             if len(s1)+len(s2)>1:
                 duplicate_edge_index[s1] = dind
                 duplicate_edge_index[s2] = dind
@@ -1231,6 +1231,43 @@ class SpatialGraph(amiramesh.AmiraMesh):
             return False,arr(degen_nodes).flatten()
         else:
             return True,arr(degen_nodes).flatten()
+            
+    def get_degenerate_nodes(self):
+    
+        """
+        Find degenerate nodes
+        Return an array with nnode elements, with value equal to the first node with a degenerate coordinate identified (or -1 if not degenerate)
+        """
+    
+        degen_nodes = np.zeros(self.nnode,dtype='int') - 1
+        nodecoords = self.get_data('VertexCoordinates')
+        
+        for i,c1 in enumerate(tqdm(nodecoords)):
+            if degen_nodes[i]<0:
+                sind = np.where((nodecoords[:,0]==c1[0]) & (nodecoords[:,1]==c1[1]) & (nodecoords[:,2]==c1[2]))
+                if len(sind[0])>1:
+                    degen_nodes[sind[0]] = i
+        return degen_nodes
+            
+    def scale_graph(self,tr=np.identity(4),radius_index=0):
+    
+        nodes = self.get_data('VertexCoordinates')
+        ones = np.ones([nodes.shape[0],1])
+        nodesH = np.hstack([nodes,ones])
+        edgepoints = self.get_data('EdgePointCoordinates')
+        ones = np.ones([edgepoints.shape[0],1])
+        edgepointsH = np.hstack([edgepoints,ones])
+        rads = self.get_data('Radius')
+        
+        nodes = (tr @ nodesH.T).T[:,:3]
+        edgepoints = (tr @ edgepointsH.T).T[:,:3]
+        
+        # TODO - proper treatment of radii based on orientation of vessel relative to transform axes
+        # For now, just scale by one of the transform scalars
+        rads = np.abs(rads * tr[radius_index,radius_index])
+        self.set_data(nodes,name='VertexCoordinates')
+        self.set_data(edgepoints,name='EdgePointCoordinates')
+        self.set_data(rads,name='Radius')
                     
     def identify_graphs(self,progBar=False,ignore_node=None,ignore_edge=None,verbose=False,add_scalar=True):
 

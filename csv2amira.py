@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 from pymira import spatialgraph
 
-def csv2amira(filepath, ofile='', sanity_check=True):
+def csv2amira(filepath, ofile='', sanity_check=True,quiet=True):
     start_coords, end_coords, radii = [], [], []
     with open(filepath, 'r') as fh:
         reader = csv.reader(fh)
@@ -69,7 +69,9 @@ def csv2amira(filepath, ofile='', sanity_check=True):
     if ofile=='':
         ofile = filepath+'.am'
     graph.write(ofile)
-    print('Converted {} to {}'.format(filepath,ofile))
+    
+    if quiet==False:
+        print('Converted {} to {}'.format(filepath,ofile))
     return ofile
     
 def main():
@@ -97,12 +99,5 @@ def main():
         graph.export_mesh(ofile=ofile.replace('.am','.ply'),resolution=10)
             
 if __name__=='__main__':
-
     main()
-    #for f in ['pv_end.csv','hv_end.csv']:
-    #    filepath = f'/mnt/data2/{f}'
-    #    csv2amira(filepath)#, ofile=opath)
-    #    graph = spatialgraph.SpatialGraph()
-    #    graph.read(filepath.replace('.csv','.csv.am'))
-    #    graph.export_mesh(ofile=filepath.replace('.csv','.ply'),resolution=10)
 
