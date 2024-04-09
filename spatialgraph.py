@@ -1729,10 +1729,69 @@ class SpatialGraph(amiramesh.AmiraMesh):
             return loops, paths, edgepaths
         else:
             return loops
+            
+    def estimate_murray(self):
+    
+        if not self.test_treelike():
+            return None
+            
+        ranks = self.get_data('Ranks')
+        if ranks is None:
+            self.calculate_ranks()
+            ranks = self.get_data('Ranks')
+        radii = self.get_radius_data()
+ 
+        ranks_unq = np.sort(np.unique(ranks))
+        rad_r0,rad_r1,a = [],[],[]
+        for r0 in ranks_unq:
+            sind = np.where(ranks==r0)
+            for e in sind[0]:
+                e0 = self.get_edge(e)  
+                cedges = np.hstack(self.get_edges_connected_to_edge(e0.index))
+                cedges = cedges[ranks[cedges]>r0]
+                e1 = [self.get_edge(e) for e in cedges]
+                crad = [np.median(radii[edge.i0:edge.i1]) for edge in e1]
+                if len(crad)==2:
+                    rad_r0.append(np.median(radii[e0.i0:e0.i1]))
+                    rad_r1.append(np.max([crad[0],crad[1]]))
+                    a.append(np.min([crad[0],crad[1]]) / np.max([crad[0],crad[1]]))
+                
+                # r0^m = r1^m + r2^m
+                # r0^m = r1^m + (a.r1)^m
+                # r0^m = r1^m + a^m.r1^m
+                # r0^m = r1^m (1 + a^m)
+                # m.log(r0) = m.log(r1) + log(1 + a^m)
+                # log(r0) = log(r1) + log(1 + a^m)/m
+                # intercept = log(1+a^m)/m
+                # If a=1: intercept = log(2)/m
+                # m = log(2)/intercept
+                
+        breakpoint()
+        X = np.log10(rad_r1).reshape(-1, 1)
+        Y = np.log10(rad_r0)
+        
+        from sklearn.linear_model import LinearRegression
+        model = LinearRegression()
+        model.fit(X,Y)
+
+        # Print the coefficients
+        print("Slope (coefficients):", model.coef_)
+        print("Intercept:", model.intercept_)
+        y = model.coef_*X + model.intercept_
+        
+        m = np.log(2)/model.intercept_
+        print("Murray:", m)
+        
+        plt.scatter(X,Y)
+        plt.plot(X,y)
+        plt.show()
 
     def calculate_ranks(self):
         #if not self.test_treelike():
         #    return 0
+        
+        loops = self.identify_loops(store_ranks=True)
+        return
 
         inlet,outlet = self.identify_inlet_outlet()
         curnodes = [inlet]
