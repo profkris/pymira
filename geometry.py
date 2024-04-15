@@ -25,7 +25,10 @@ xaxis,yaxis,zaxis = arr([1.,0.,0.]), arr([0.,1.,0.]), arr([0.,0.,1.])
 def segments_intersect_2d(A,B,C,D):
 
     from shapely.geometry import Point, LineString
-
+    
+    if np.any(np.isnan(A)) or np.any(np.isnan(B)) or np.any(np.isnan(C)) or np.any(np.isnan(D)):
+        return False, None
+        
     try:
         p1 = Point(A[0],A[1])
         p2 = Point(B[0],B[1])

@@ -2,7 +2,7 @@ import numpy as np
 arr = np.asarray
 norm = np.linalg.norm
 import open3d as o3d
-import pyvista as pv
+#import pyvista as pv
 from tqdm import tqdm, trange
 from pymira import geometry
 
@@ -67,8 +67,8 @@ class TubePlot(object):
         self.edge_filter = edge_filter
         self.node_filter = node_filter
         
-        # Backend (open3d or pyvista)
-        self.engine = engine
+        # Backend (open3d) (pyvista no longer supported!)
+        self.engine = 'open3d' #engine
         # Colour range for edges [None,None]
         self.cmap_range = cmap_range
         # Background colour
@@ -294,7 +294,8 @@ class TubePlot(object):
                 if self.engine=='open3d':
                     cyl.paint_uniform_color(cols[i])
                 elif self.engine=='pyvista':
-                    cyl['color'] = np.zeros(cyl.n_points) + self.edge_color[i]
+                    pass
+                    #cyl['color'] = np.zeros(cyl.n_points) + self.edge_color[i]
             
         self.combine_cylinders()
         
@@ -432,16 +433,17 @@ class TubePlot(object):
                                     self.cylinders[i0+j] = cyl
                                     
                                 elif self.engine=='pyvista':
-                                    poly = pv.PolyData()
-                                    poly.points = coords
-                                    the_cell = np.arange(0, len(coords), dtype=np.int_)
-                                    the_cell = np.insert(the_cell, 0, len(coords))
-                                    poly.lines = the_cell
-                                    poly['radius'] = rads
-                                    #tube = poly.tube(radius=rads[0],n_sides=3) # scalars='stuff', 
-                                    tube = pv.Spline(coords, coords.shape[0]).tube(radius=rads[0])
-                                    #tube['color'] = np.linspace(1,1,tube.n_points)
-                                    self.cylinders[i0+j] = tube
+                                    pass
+                                    #poly = pv.PolyData()
+                                    #poly.points = coords
+                                    #the_cell = np.arange(0, len(coords), dtype=np.int_)
+                                    #the_cell = np.insert(the_cell, 0, len(coords))
+                                    #poly.lines = the_cell
+                                    #poly['radius'] = rads
+                                    ##tube = poly.tube(radius=rads[0],n_sides=3) # scalars='stuff', 
+                                    #tube = pv.Spline(coords, coords.shape[0]).tube(radius=rads[0])
+                                    ##tube['color'] = np.linspace(1,1,tube.n_points)
+                                    #self.cylinders[i0+j] = tube
                                     
                                 excl = False
                 
@@ -472,10 +474,11 @@ class TubePlot(object):
                 self.vis.add_geometry(self.cylinders_combined)
                 
         elif self.engine=='pyvista':
-            blocks = pv.MultiBlock(self.cylinders[self.cylinder_inds].tolist())
-            self.cylinders_combined = blocks.combine()
-            self.vis.add_mesh(self.cylinders_combined, smooth_shading=True, scalar_bar_args={'title':self.scalar_color_name}) # scalars='length', 
-            self.vis.show()
+            pass
+            #blocks = pv.MultiBlock(self.cylinders[self.cylinder_inds].tolist())
+            #self.cylinders_combined = blocks.combine()
+            #self.vis.add_mesh(self.cylinders_combined, smooth_shading=True, scalar_bar_args={'title':self.scalar_color_name}) # scalars='length', 
+            #self.vis.show()
         
     def create_plot_window(self,bgcolor=None,win_width=None,win_height=None):
     
@@ -498,8 +501,9 @@ class TubePlot(object):
             opt = self.vis.get_render_option()
             opt.background_color = np.asarray(self.bgcolor)
         elif self.engine=='pyvista':
-            self.vis = pv.Plotter(window_size=[self.win_width,self.win_height])
-            self.vis.set_background(self.bgcolor)
+            pass
+            #self.vis = pv.Plotter(window_size=[self.win_width,self.win_height])
+            #self.vis.set_background(self.bgcolor)
         
     def _show_plot(self):
         if self.vis is not None:
