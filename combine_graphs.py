@@ -38,9 +38,6 @@ def combine_graphs(graph1,graph2):
     # Common fields
     fields = list(set(graph1.fieldNames).intersection(graph2.fieldNames))
     
-    #add_fields = list(set(fields) - set(req_fields))
-    #breakpoint()
-    
     graphComb = graph1.copy()
     
     # Get data sizes
@@ -95,7 +92,8 @@ def combine_cco(path,mFiles,ofile):
  
         graph_to_add = sp.SpatialGraph()
         #print('Merging {}'.format(f))
-        graph_to_add.read(join(path,f))
+        #graph_to_add.read(join(path,f))
+        graph_to_add.read(f)
         
         marker = graph_to_add.generate_next_marker()
         if 'artery' in f:
