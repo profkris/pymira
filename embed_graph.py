@@ -1198,9 +1198,9 @@ def main(graph, domain=None, size=[256,256,256], path=None,
 if __name__=='__main__':
 
     # Where to store result (as vessels.nii)
-    output_path = r'C:\Users\simon\Desktop'
+    output_path = r'/INSERT/OUTPUT/PATH'
     # Location of Amira graph file
-    filename = r'C:\Users\simon\SWS Dropbox\Simon Walker-Samuel\RetinaSim\cco_batch_v1\sim00000000\cco\retina_cco.am'
+    filename = r'/FULL/PATH/TO/GRAPH/FILE.am'
     # Spatial extent of embedding ([xmin,xmax],[ymin,ymax],[zmin,zmax])
     domain = np.asarray([[-2000, 2000], [-2000 , 2000], [ -100., 100.]]) 
     # Volume dimensions
