@@ -112,6 +112,58 @@ def delete_vertices(graph,keep_nodes,return_lookup=False): # #verts,edges,keep_n
         return graph, edge_lookup
     else:
         return graph
+        
+def split_artery_vein(graph,gfile=None,capillaries=False):
+
+    # Arterial graph
+    if gfile is None:
+        agraph = graph.copy()
+    else:
+        agraph = spatialgraph.SpatialGraph()
+        agraph.read(gfile)
+    seg_cat = agraph.get_data('VesselType')  
+    epi = agraph.edgepoint_edge_indices()
+    inds = np.where(seg_cat!=0)
+    edges_to_delete = np.unique(epi[inds])
+    from pymira.spatialgraph import GVars
+    gv = GVars(agraph)
+    gv.remove_edges(edges_to_delete)
+    gv.set_in_graph()
+    
+    # Arterial graph
+    if gfile is None:
+        vgraph = graph.copy()
+    else:
+        vgraph = spatialgraph.SpatialGraph()
+        vgraph.read(gfile)
+    seg_cat = vgraph.get_data('VesselType')  
+    epi = vgraph.edgepoint_edge_indices()
+    inds = np.where(seg_cat!=1)
+    edges_to_delete = np.unique(epi[inds])
+    #ed.delete_edges(vgraph,edges_to_delete)
+    gv = GVars(vgraph)
+    gv.remove_edges(edges_to_delete)
+    gv.set_in_graph()
+    
+    # Capillaries
+    if capillaries:
+        if gfile is None:
+            cgraph = graph.copy()
+        else:
+            cgraph = spatialgraph.SpatialGraph()
+            cgraph.read(gfile)
+        seg_cat = cgraph.get_data('VesselType')  
+        epi = cgraph.edgepoint_edge_indices()
+        inds = np.where(seg_cat!=2)
+        edges_to_delete = np.unique(epi[inds])
+        #ed.delete_edges(vgraph,edges_to_delete)
+        gv = GVars(cgraph)
+        gv.remove_edges(edges_to_delete)
+        gv.set_in_graph()
+    
+        return agraph,vgraph,cgraph
+    else:
+        return agraph,vgraph
 
 class SpatialGraph(amiramesh.AmiraMesh):
 
