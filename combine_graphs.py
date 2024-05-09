@@ -38,8 +38,7 @@ def combine_graphs(graph1,graph2):
     # Common fields
     fields = list(set(graph1.fieldNames).intersection(graph2.fieldNames))
     
-    #add_fields = list(set(fields) - set(req_fields))
-    #breakpoint()
+    graphComb = graph1.copy()
     
     # Get data sizes
     for fName in req_fields:
@@ -67,17 +66,17 @@ def combine_graphs(graph1,graph2):
             data = np.concatenate([f1['data'],f2['data']])
         
         #print('Combining {}'.format(fName))
-        graph1.set_data(data,name=fName)
+        graphComb.set_data(data,name=fName)
     
     #print(nnode1,nnode2)
-    graph1.set_definition_size('VERTEX',nnode1+nnode2)
-    graph1.nnode = nnode1+nnode2
-    graph1.set_definition_size('EDGE',nconn1+nconn2)
-    graph1.nedge = nconn1+nconn2
-    graph1.set_definition_size('POINT',npoints1+npoints2)
-    graph1.nedgepoints = npoints1+npoints2
-    graph1.set_graph_sizes()
-    return graph1
+    graphComb.set_definition_size('VERTEX',nnode1+nnode2)
+    graphComb.nnode = nnode1+nnode2
+    graphComb.set_definition_size('EDGE',nconn1+nconn2)
+    graphComb.nedge = nconn1+nconn2
+    graphComb.set_definition_size('POINT',npoints1+npoints2)
+    graphComb.nedgepoints = npoints1+npoints2
+    graphComb.set_graph_sizes()
+    return graphComb
     
 def combine_cco(path,mFiles,ofile):
     
@@ -93,7 +92,8 @@ def combine_cco(path,mFiles,ofile):
  
         graph_to_add = sp.SpatialGraph()
         #print('Merging {}'.format(f))
-        graph_to_add.read(join(path,f))
+        #graph_to_add.read(join(path,f))
+        graph_to_add.read(f)
         
         marker = graph_to_add.generate_next_marker()
         if 'artery' in f:

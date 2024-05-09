@@ -33,7 +33,7 @@ def update_array_index(vals,inds,keep):
     new_inds_lookup = np.zeros(npoints,dtype='int')-1
     new_inds_lookup[~np.in1d(old_inds,del_inds)] = np.linspace(0,npoints-del_inds.shape[0]-1,npoints-del_inds.shape[0])
     # Create a new index array using updated index lookup table
-    if inds.dtype!=np.object:
+    if type(inds) is not list and inds.dtype!=object:
         new_inds = new_inds_lookup[inds] 
         # Remove -1 values that reference deleted nodes
         new_inds = new_inds[(new_inds[:,0]>=0) & (new_inds[:,1]>=0)]
@@ -1137,11 +1137,11 @@ class SpatialGraph(amiramesh.AmiraMesh):
     def get_duplicated_edges(self):
         edges = self.get_data('EdgeConnectivity')
         #duplicate_edges = np.zeros(edges.shape[0],dtype='int')
-        duplicate_edge_index = np.zeros(edges.shape[0],dtype='int')
-        dind = 1
-        for i,x in enumerate(edges): 
-            s1 = np.where( (edges[:,0]==x[0]) & (edges[:,1]==x[1]) & (duplicate_edge_index==0) )[0]
-            s2 = np.where( (edges[:,1]==x[0]) & (edges[:,0]==x[1]) & (duplicate_edge_index==0) )[0]
+        duplicate_edge_index = np.zeros(edges.shape[0],dtype='int') - 1
+        dind = 0
+        for i,x in enumerate(tqdm(edges)): 
+            s1 = np.where( (edges[:,0]==x[0]) & (edges[:,1]==x[1]) & (duplicate_edge_index==-1) )[0]
+            s2 = np.where( (edges[:,1]==x[0]) & (edges[:,0]==x[1]) & (duplicate_edge_index==-1) )[0]
             if len(s1)+len(s2)>1:
                 duplicate_edge_index[s1] = dind
                 duplicate_edge_index[s2] = dind
@@ -1283,6 +1283,43 @@ class SpatialGraph(amiramesh.AmiraMesh):
             return False,arr(degen_nodes).flatten()
         else:
             return True,arr(degen_nodes).flatten()
+            
+    def get_degenerate_nodes(self):
+    
+        """
+        Find degenerate nodes
+        Return an array with nnode elements, with value equal to the first node with a degenerate coordinate identified (or -1 if not degenerate)
+        """
+    
+        degen_nodes = np.zeros(self.nnode,dtype='int') - 1
+        nodecoords = self.get_data('VertexCoordinates')
+        
+        for i,c1 in enumerate(tqdm(nodecoords)):
+            if degen_nodes[i]<0:
+                sind = np.where((nodecoords[:,0]==c1[0]) & (nodecoords[:,1]==c1[1]) & (nodecoords[:,2]==c1[2]))
+                if len(sind[0])>1:
+                    degen_nodes[sind[0]] = i
+        return degen_nodes
+            
+    def scale_graph(self,tr=np.identity(4),radius_index=0):
+    
+        nodes = self.get_data('VertexCoordinates')
+        ones = np.ones([nodes.shape[0],1])
+        nodesH = np.hstack([nodes,ones])
+        edgepoints = self.get_data('EdgePointCoordinates')
+        ones = np.ones([edgepoints.shape[0],1])
+        edgepointsH = np.hstack([edgepoints,ones])
+        rads = self.get_data('Radius')
+        
+        nodes = (tr @ nodesH.T).T[:,:3]
+        edgepoints = (tr @ edgepointsH.T).T[:,:3]
+        
+        # TODO - proper treatment of radii based on orientation of vessel relative to transform axes
+        # For now, just scale by one of the transform scalars
+        rads = np.abs(rads * tr[radius_index,radius_index])
+        self.set_data(nodes,name='VertexCoordinates')
+        self.set_data(edgepoints,name='EdgePointCoordinates')
+        self.set_data(rads,name='Radius')
                     
     def identify_graphs(self,progBar=False,ignore_node=None,ignore_edge=None,verbose=False,add_scalar=True):
 
@@ -1781,69 +1818,10 @@ class SpatialGraph(amiramesh.AmiraMesh):
             return loops, paths, edgepaths
         else:
             return loops
-            
-    def estimate_murray(self):
-    
-        if not self.test_treelike():
-            return None
-            
-        ranks = self.get_data('Ranks')
-        if ranks is None:
-            self.calculate_ranks()
-            ranks = self.get_data('Ranks')
-        radii = self.get_radius_data()
- 
-        ranks_unq = np.sort(np.unique(ranks))
-        rad_r0,rad_r1,a = [],[],[]
-        for r0 in ranks_unq:
-            sind = np.where(ranks==r0)
-            for e in sind[0]:
-                e0 = self.get_edge(e)  
-                cedges = np.hstack(self.get_edges_connected_to_edge(e0.index))
-                cedges = cedges[ranks[cedges]>r0]
-                e1 = [self.get_edge(e) for e in cedges]
-                crad = [np.median(radii[edge.i0:edge.i1]) for edge in e1]
-                if len(crad)==2:
-                    rad_r0.append(np.median(radii[e0.i0:e0.i1]))
-                    rad_r1.append(np.max([crad[0],crad[1]]))
-                    a.append(np.min([crad[0],crad[1]]) / np.max([crad[0],crad[1]]))
-                
-                # r0^m = r1^m + r2^m
-                # r0^m = r1^m + (a.r1)^m
-                # r0^m = r1^m + a^m.r1^m
-                # r0^m = r1^m (1 + a^m)
-                # m.log(r0) = m.log(r1) + log(1 + a^m)
-                # log(r0) = log(r1) + log(1 + a^m)/m
-                # intercept = log(1+a^m)/m
-                # If a=1: intercept = log(2)/m
-                # m = log(2)/intercept
-                
-        breakpoint()
-        X = np.log10(rad_r1).reshape(-1, 1)
-        Y = np.log10(rad_r0)
-        
-        from sklearn.linear_model import LinearRegression
-        model = LinearRegression()
-        model.fit(X,Y)
-
-        # Print the coefficients
-        print("Slope (coefficients):", model.coef_)
-        print("Intercept:", model.intercept_)
-        y = model.coef_*X + model.intercept_
-        
-        m = np.log(2)/model.intercept_
-        print("Murray:", m)
-        
-        plt.scatter(X,Y)
-        plt.plot(X,y)
-        plt.show()
 
     def calculate_ranks(self):
         #if not self.test_treelike():
         #    return 0
-        
-        loops = self.identify_loops(store_ranks=True)
-        return
 
         inlet,outlet = self.identify_inlet_outlet()
         curnodes = [inlet]
