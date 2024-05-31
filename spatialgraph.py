@@ -840,13 +840,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
         """
         Return scalar edge fields
         """
-        return [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1 and f['name']!='EdgePointCoordinates']
+        #return [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1 and f['name']!='EdgePointCoordinates']
+        return [f for f in self.fields if f['shape'][0]==self.nedgepoint and len(f['shape'])==1 and f['name']!='EdgePointCoordinates']
         
     def get_node_scalars(self):
         """
         Return scalar edge fields
         """
-        return [f for f in self.fields if f is not None and f['definition'].lower()=='vertex' and len(f['shape'])==1 and f['name']!='VertexCoordinates']
+        #return [f for f in self.fields if f is not None and f['definition'].lower()=='vertex' and len(f['shape'])==1 and f['name']!='VertexCoordinates']
+        return [f for f in self.fields if f['shape'][0]==self.nnode and len(f['shape'])==1 and f['name']!='VertexCoordinates']
         
     def get_radius_field(self):
         """
@@ -1519,7 +1521,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         nsc = len(scalars)
         scalar_nodes = np.zeros([nsc,nodes.shape[0]]) + np.nan
     
-        for i,conn in enumerate(tqdm(conns)):
+        for i,conn in enumerate(conns):
             npts = int(npoints[i])
             x0 = int(np.sum(npoints[0:i]))
             x1 = x0+npts
