@@ -2911,9 +2911,9 @@ class Editor(object):
         graph.set_data(edgepoints,name='EdgePointCoordinates')
         graph.set_data(nedgepoints,name='NumEdgePoints')
         graph.set_data(radius,name=graph.get_radius_field_name())
-        graph.set_definition_size('VERTEX',nodecoords[0].shape[0])
-        graph.set_definition_size('EDGE',edgeconn[1].shape[0])
-        graph.set_definition_size('POINT',edgepoints[4].shape[0])            
+        graph.set_definition_size('VERTEX',nodecoords.shape[0])
+        graph.set_definition_size('EDGE',edgeconn.shape[0])
+        graph.set_definition_size('POINT',edgepoints.shape[0])            
         graph.set_graph_sizes()
         
         graph = delete_vertices(graph,keep_node)
