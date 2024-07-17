@@ -1257,7 +1257,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         edgepoints = self.get_data('EdgePointCoordinates')
         ones = np.ones([edgepoints.shape[0],1])
         edgepointsH = np.hstack([edgepoints,ones])
-        rads = self.get_data('Radius')
+        rads = self.get_data(self.get_radius_field_name())
         
         nodes = (tr @ nodesH.T).T[:,:3]
         edgepoints = (tr @ edgepointsH.T).T[:,:3]
@@ -1267,7 +1267,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         rads = np.abs(rads * tr[radius_index,radius_index])
         self.set_data(nodes,name='VertexCoordinates')
         self.set_data(edgepoints,name='EdgePointCoordinates')
-        self.set_data(rads,name='Radius')
+        self.set_data(rads,name=self.get_radius_field_name())
                     
     def identify_graphs(self,progBar=False,ignore_node=None,ignore_edge=None,verbose=False,add_scalar=True):
 
