@@ -112,6 +112,64 @@ def delete_vertices(graph,keep_nodes,return_lookup=False): # #verts,edges,keep_n
         return graph, edge_lookup
     else:
         return graph
+        
+def split_artery_vein(graph,gfile=None,capillaries=False):
+
+    # Arterial graph
+    if gfile is None:
+        agraph = graph.copy()
+    else:
+        agraph = spatialgraph.SpatialGraph()
+        agraph.read(gfile)
+    seg_cat = agraph.get_data('VesselType')  
+    epi = agraph.edgepoint_edge_indices()
+    inds = np.where(seg_cat!=0)
+    edges_to_delete = np.unique(epi[inds])
+    from pymira.spatialgraph import GVars
+    gv = GVars(agraph)
+    gv.remove_edges(edges_to_delete)
+    gv.set_in_graph()
+    
+    # Arterial graph
+    if gfile is None:
+        vgraph = graph.copy()
+    else:
+        vgraph = spatialgraph.SpatialGraph()
+        vgraph.read(gfile)
+    seg_cat = vgraph.get_data('VesselType')  
+    epi = vgraph.edgepoint_edge_indices()
+    inds = np.where(seg_cat!=1)
+    edges_to_delete = np.unique(epi[inds])
+    #ed.delete_edges(vgraph,edges_to_delete)
+    gv = GVars(vgraph)
+    gv.remove_edges(edges_to_delete)
+    gv.set_in_graph()
+    
+    ed = Editor()
+    agraph = ed.remove_disconnected_nodes(agraph)
+    vgraph = ed.remove_disconnected_nodes(vgraph)
+    
+    # Capillaries
+    if capillaries:
+        if gfile is None:
+            cgraph = graph.copy()
+        else:
+            cgraph = spatialgraph.SpatialGraph()
+            cgraph.read(gfile)
+        seg_cat = cgraph.get_data('VesselType')  
+        epi = cgraph.edgepoint_edge_indices()
+        inds = np.where(seg_cat!=2)
+        edges_to_delete = np.unique(epi[inds])
+        #ed.delete_edges(vgraph,edges_to_delete)
+        gv = GVars(cgraph)
+        gv.remove_edges(edges_to_delete)
+        gv.set_in_graph()
+        
+        cgraph = ed.remove_disconnected_nodes(cgraph)
+    
+        return agraph,vgraph,cgraph
+    else:
+        return agraph,vgraph
 
 class SpatialGraph(amiramesh.AmiraMesh):
 
@@ -315,6 +373,16 @@ class SpatialGraph(amiramesh.AmiraMesh):
         o3d.io.write_triangle_mesh(ofile,gmesh)
         tp.destroy_window()
         print(f'Mesh written to {ofile}')
+        
+    def change_field_name(self,original_name,new_name):
+    
+        try:
+            ind = self.fieldNames.index(original_name)
+        except:
+            return
+            
+        self.fields[ind]['name'] = new_name
+        self.fieldNames[ind] = new_name
         
     def set_graph_sizes(self):
         """
@@ -772,13 +840,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
         """
         Return scalar edge fields
         """
-        return [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1 and f['name']!='EdgePointCoordinates']
+        #return [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1 and f['name']!='EdgePointCoordinates']
+        return [f for f in self.fields if f['shape'][0]==self.nedgepoint and len(f['shape'])==1 and f['name']!='EdgePointCoordinates']
         
     def get_node_scalars(self):
         """
         Return scalar edge fields
         """
-        return [f for f in self.fields if f is not None and f['definition'].lower()=='vertex' and len(f['shape'])==1 and f['name']!='VertexCoordinates']
+        #return [f for f in self.fields if f is not None and f['definition'].lower()=='vertex' and len(f['shape'])==1 and f['name']!='VertexCoordinates']
+        return [f for f in self.fields if f['shape'][0]==self.nnode and len(f['shape'])==1 and f['name']!='VertexCoordinates']
         
     def get_radius_field(self):
         """
@@ -1451,7 +1521,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         nsc = len(scalars)
         scalar_nodes = np.zeros([nsc,nodes.shape[0]]) + np.nan
     
-        for i,conn in enumerate(tqdm(conns)):
+        for i,conn in enumerate(conns):
             npts = int(npoints[i])
             x0 = int(np.sum(npoints[0:i]))
             x1 = x0+npts
@@ -1498,7 +1568,11 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         scalar_edges[j,i] = data[x0]
         return scalar_edges.squeeze()
  
+    def plot_radius(self,*args,**kwargs):
+        _ = self.plot_histogram(self.get_radius_field_name(),*args,**kwargs)
+ 
     def plot_histogram(self,field_name,*args,**kwargs):
+    
         data = self.get_data(field_name)
         
         import matplotlib.pyplot as plt
@@ -1633,13 +1707,22 @@ class SpatialGraph(amiramesh.AmiraMesh):
         self.set_data(radius,name=rad_field_name)
         
     def identify_graphs(self):
-        inlet,outlet = self.identify_inlet_outlet()
-        curnodes = [inlet]
-        
+    
         graphInd = np.zeros(self.nnode,dtype='int')
         curGraph = 1
-        graphInd[inlet] = curGraph
-        
+    
+        inlet,outlet = self.identify_inlet_outlet()
+        curnodes = []
+        if inlet is not None:
+            curnodes.append(inlet)
+            graphInd[inlet] = curGraph
+        if outlet is not None:
+            curnodes.append(outlet)
+            curGraph += 1
+            graphInd[outlet] = curGraph
+        if len(curnodes)==0:
+            return None
+
         while True:
             visited_nodes,visited_edges = curnodes.copy(),[]
 
@@ -1652,7 +1735,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     connected_edges = [x for x in connected_edges if x not in visited_edges]
                     
                     if len(connected_nodes)>0:
-                        graphInd[arr(connected_nodes)] = curGraph
+                        graphInd[arr(connected_nodes)] = graphInd[node] #curGraph
                         nextnodes.extend(connected_nodes)
                         visited_nodes.extend(connected_nodes)
                     if len(connected_edges)>0:
@@ -1882,7 +1965,7 @@ class Editor(object):
             if len(conns_with_node)==2:
                 pass           
 
-    def _insert_node_in_edge(self, edge_index,edgepoint_index,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=None):
+    def _insert_node_in_edge(self,edge_index,edgepoint_index,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=None):
     
         # Returns the new node index and the two new edges (if any are made)
     
@@ -3758,7 +3841,46 @@ class GVars(object):
                 
         self.graph.remove_field('Filter')
         
-    def insert_node_in_edge(self,edge_index,edgepoint_index):
+    def set_edge(self,edge_index,edgepoints,new_scalar_values):
+    
+        nedgepoints = self.nedgepoints[self.edgeconn_allocated]
+        edgeCoords = self.edgepoints[self.edgepoints_allocated]
+
+        npoints = edgepoints.shape[0]
+        npoints_cur = nedgepoints[int(edge_index)]
+        dif = npoints - npoints_cur
+    
+        if self.edgepoints.shape[0]-self.edgepnt_ptr<=dif:
+            self.preallocate_edgepoints(self.n_all,set_pointer_to_start=False)
+        
+        x0 = int(np.sum(nedgepoints[:int(edge_index)]))
+        x1 = x0 + int(nedgepoints[int(edge_index)])
+        if npoints==npoints_cur:
+            self.edgepoints[self.edgepoints_allocated][x0:x1] = edgepoints
+        elif npoints>npoints_cur:
+            
+            nedgepoints[int(edge_index)] = npoints
+            self.nedgepoints[self.edgeconn_allocated] = nedgepoints
+            # Reallocate existing data  
+            alloc = self.edgepoints_allocated
+            alloc[x1+dif:] = alloc[x1:-dif]
+            alloc[x0:x1+dif] = True
+            self.edgepoints_allocated = alloc
+            edgeCoords = self.edgepoints[self.edgepoints_allocated]
+            edgeCoords[x1+dif:] = edgeCoords[x1:-dif]
+            edgeCoords[x0:x1+dif] = edgepoints
+            self.edgepoints[self.edgepoints_allocated] = edgeCoords
+            for i in range(len(self.scalar_values)):
+                scalars = self.scalar_values[i][self.edgepoints_allocated]
+                scalars[x1+dif:] = scalars[x1:-dif]
+                scalars[x0:x1+dif] = new_scalar_values[i]
+                self.scalar_values[i][self.edgepoints_allocated] = scalars
+        else:
+            breakpoint()
+            
+        
+        
+    def insert_node_in_edge(self,edge_index,edgepoint_index,new_scalar_values=None,node_location_only=False):
     
         # Returns the new node index and the two new edges (if any are made)
         
@@ -3782,11 +3904,35 @@ class GVars(object):
         edge = edgeCoords[x0:x1]
         npoints = edge.shape[0]
         
-        xp = int(edgepoint_index)
-        new_node_coords = edge[xp]
-        
         start_node = edgeConn[edge_index,0]
         end_node = edgeConn[edge_index,1]
+        
+        if npoints==2:
+            # Add an edgepoint halfway along edge if there are only two edgepoints
+            midpoint = np.mean(edge,axis=0)
+            if node_location_only:
+                return midpoint
+            new_edge = np.vstack([edge[0],midpoint,edge[1]])
+            edge_scalar_values = [x[x0:x1] for x in scalars]
+            new_scalar_values = [[x[0],np.mean(x),x[1]] for x in edge_scalar_values]
+            self.set_edge(edge_index,new_edge,new_scalar_values)
+            #nedgepoints[int(edge_index)] += 1
+            edgepoint_index = 1
+            edge = new_edge
+            npoints = 3
+            
+            # Reload data
+            nedgepoints = self.nedgepoints[self.edgeconn_allocated]
+            edgeCoords = self.edgepoints[self.edgepoints_allocated]
+            x0 = int(np.sum(nedgepoints[:int(edge_index)]))
+            x1 = x0 + int(nedgepoints[int(edge_index)])
+            scalars = []
+            for i,sc in enumerate(self.scalar_values):
+                scalars.append(self.scalar_values[i][self.edgepoints_allocated])
+            #breakpoint()
+               
+        xp = int(edgepoint_index)
+        new_node_coords = edge[xp]
         
         if int(edgepoint_index)<npoints-1 and int(edgepoint_index)>0:
             new_edge0 = edge[:xp+1]
