@@ -1584,6 +1584,41 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         scalar_edges[j,i] = data[x0]
         return scalar_edges.squeeze()
  
+    def point_scalars_to_segment_scalars(self,func=np.mean,name=None):
+
+        scalars = self.get_scalars()
+        if name is not None:
+            scalars = [x for x in scalars if x['name']==name]
+            if len(scalars)==0:
+                return None
+    
+        verts = self.get_data('VertexCoordinates')
+        conns = self.get_data('EdgeConnectivity')
+        npoints = self.get_data('NumEdgePoints')
+        nsegpoints = npoints - 1
+        points = self.get_data('EdgePointCoordinates')
+        
+        nsc = len(scalars)
+        nseg = self.nedgepoint - self.nedge
+        scalar_segs = np.zeros([nsc,nseg])
+    
+        for i,conn in enumerate(conns):
+            npts = int(npoints[i])
+            x0 = int(np.sum(npoints[0:i]))
+            x1 = x0+npts
+            s0 = int(np.sum(nsegpoints[0:i]))
+            s1 = s0+int(nsegpoints[i])
+
+            for j,scalar in enumerate(scalars):
+                    
+                data = scalar['data']
+                if data is not None:
+                    if npts>2:
+                        scalar_segs[j,s0:s1] = data[x0:x1-1]
+                    else:
+                        scalar_segs[j,s0] = data[x0]
+        return scalar_segs.squeeze()
+ 
     def plot_radius(self,*args,**kwargs):
         _ = self.plot_histogram(self.get_radius_field_name(),*args,**kwargs)
  
@@ -2808,7 +2843,7 @@ class Editor(object):
         
         return graph
         
-    def filter_graph_by_radius(self,graph,min_filter_radius=5.,filter_clip_radius=None,write=False,ofile='',keep_stubs=False,stub_len=100.,ignore=None):
+    def filter_graph_by_radius(self,graph,min_filter_radius=5.,filter_clip_radius=None,write=False,ofile='',keep_stubs=False,stub_len=100.,ignore=None,return_edge_inds=False):
 
         """
         min_filter_radius: All edges with radii < this value are deleted
@@ -2949,7 +2984,10 @@ class Editor(object):
         if write:
             graph.write(ofile)  
             
-        return graph  
+        if return_edge_inds:
+            return graph,keep_edge
+        else:
+            return graph  
 
     def interpolate_edges(self,graph,interp_resolution=None,interp_radius_factor=None,ninterp=2,filter=None,noise_sd=0.):
         
@@ -2987,7 +3025,7 @@ class Editor(object):
             
                 # If the current edge has only 2 points
                 if npoints[i]==2:  
-                    ninterp = 2    
+                    ninterp = 2 # default   
                     # Find how many additional points to interpolate in (if length>interpolation resolution)
                     if interp_radius_factor is not None and radii is not None:
                         length = np.linalg.norm(pts[1]-pts[0])
@@ -3135,10 +3173,11 @@ class Editor(object):
         return graph
         
     def insert_nodes_in_edges(self,graph,interp_resolution=None,interp_radius_factor=None,filter=None):
-        
+
         """
+        Given an interpolation resolution, insert nodes into edges with even spacing
         """
-        
+
         coords = graph.get_data('VertexCoordinates')
         points = graph.get_data('EdgePointCoordinates')
         npoints = graph.get_data('NumEdgePoints')
@@ -3146,51 +3185,130 @@ class Editor(object):
         radii = graph.get_radius_data()
 
         if filter is None:
-            filter_pts = np.ones(points.shape[0],dtype='bool')
-        else:
-            # Convert from edge to edgepoint
-            filter_pts = np.repeat(filter,npoints)
-            
-        # Add filter field
-        graph.add_field(name='Filter',marker=f'@{len(graph.fields)+1}',definition='POINT',type='bool',nelements=1,nentries=[0])  
-        graph.set_data(filter_pts,name='Filter')
-        
-        print('Inserting nodes in edges...')
+            filter = np.ones(conns.shape[0],dtype='bool')
+                                            
+        gvars = GVars(graph)
+        g_nedgepoints = gvars.nedgepoints[gvars.edgeconn_allocated]
+        g_edgeCoords = gvars.edgepoints[gvars.edgepoints_allocated]
+        g_nodeCoords = gvars.nodecoords[gvars.nodecoords_allocated]
+        g_edgeConn = gvars.edgeconn[gvars.edgeconn_allocated]
+        g_scalars = []
+        for j,sc in enumerate(gvars.scalar_values):
+            g_scalars.append(gvars.scalar_values[j][gvars.edgepoints_allocated]) 
+        g_node_scalars = []
+        for j,sc in enumerate(gvars.node_scalar_values):
+            g_node_scalars.append(gvars.node_scalar_values[j][gvars.nodecoords_allocated])  
 
-        while True:
-            coords = graph.get_data('VertexCoordinates')
-            points = graph.get_data('EdgePointCoordinates')
-            npoints = graph.get_data('NumEdgePoints')
-            conns = graph.get_data('EdgeConnectivity')
-            filter_pts = graph.get_data('Filter')
-            radii = graph.get_radius_data()
-        
-            change = False
+        for i,conn in enumerate(tqdm(conns)):
+
+            if filter[i]==True: # Ignore if filter is False           
             
-            for i,conn in enumerate(tqdm(conns)):
                 i0 = np.sum(npoints[:i])
                 i1 = i0 + npoints[i]
                 pts = points[i0:i1]
-
-                if filter_pts[i0]==True: # Ignore if filter is False           
-                    lengths = arr([np.linalg.norm(pts[j]-pts[j-1]) for j in range(1,npoints[i])])
-                    meanRadius = np.mean(radii[i0:i1])
-                    cur_interp_res = interp_radius_factor*meanRadius
-                    print(i,np.sum(lengths),cur_interp_res)
-                    if np.sum(lengths)>cur_interp_res:
-                        stmp = np.where(np.cumsum(lengths)>=cur_interp_res)
-                        if len(stmp[0])>0 and npoints[i]>2 and (stmp[0][0]+1)<(npoints[i]-1):
-                            # and stmp[0][0]>0 and stmp[0][-1]<npoints[i]-1:
-                            gvars = GVars(graph)
-                            _ = gvars.insert_node_in_edge(i,stmp[0][0]+1)
-                            graph = gvars.set_in_graph()
-                            change = True
-                            print('Change!')
-                            break
-            if not change:
-                break
                 
-        graph.remove_field('Filter')
+                i0p = np.sum(g_nedgepoints[:i])
+                i1p = i0p + g_nedgepoints[i]
+            
+                lengths = np.linalg.norm(pts[1:]-pts[:-1],axis=1) 
+                cumulative_lengths = np.insert(np.cumsum(lengths), 0, 0)
+                total_length = np.sum(lengths)
+                meanRadius = np.mean(radii[i0:i1])
+                cur_interp_res = interp_radius_factor*meanRadius
+
+                if total_length>cur_interp_res:
+                    ninterp = np.clip(total_length/cur_interp_res,1,None).astype('int')
+                    distances = np.linspace(0,total_length,ninterp+2)[1:-1] 
+
+                    segment_index = np.searchsorted(cumulative_lengths, distances, side='right') - 1
+                                                 
+                    # Compute the local fraction along the current segment
+                    segment_start_length = cumulative_lengths[segment_index]
+                    segment_end_length = cumulative_lengths[segment_index + 1]
+                    local_fractions = (distances - segment_start_length) / (segment_end_length - segment_start_length)
+                    
+                    # Interpolate between the two points of the segment
+                    start_point = pts[segment_index]
+                    end_point = pts[segment_index + 1]
+                    interpolated_points = ((1-local_fractions)*start_point.transpose()).transpose() + (local_fractions*end_point.transpose()).transpose() 
+                         
+                    segments = np.linspace(0,pts.shape[0]-1,pts.shape[0],dtype='int')
+                    order = np.concatenate([segments,segment_index+local_fractions])
+                    types = np.zeros(order.shape[0],dtype='int')
+                    types[segments.shape[0]:] = 1
+                    pts_interp = np.vstack([pts,interpolated_points])
+                    srt = np.argsort(order)
+                    order = order[srt]
+                    types = types[srt]
+                    pts_interp = pts_interp[srt]
+                    
+                    int_pts = np.where(types==1)
+                    int_pts = np.concatenate([[0],int_pts[0],[pts_interp.shape[0]]])
+                    new_conns = np.concatenate([[0],np.repeat(int_pts[1:-1],2),[int_pts[-1]]])
+                    new_conns = new_conns.reshape([int(new_conns.shape[0]/2),2])
+                    new_edges = [[] for k in range(new_conns.shape[0])]
+                    for j,cn in enumerate(new_conns): 
+                        new_edges[j] = pts_interp[cn[0]:cn[1]+1]
+                    # Edge node indices
+                    nnodes = g_nodeCoords.shape[0]
+                    new_edgeconns = np.concatenate([[conn[0]],np.repeat(np.linspace(nnodes,nnodes+ninterp-1,ninterp,dtype='int'),2),[conn[1]]])
+                    new_edgeconns = new_edgeconns.reshape([int(new_edgeconns.shape[0]/2),2])
+
+                    # Grab all edge coordinates prior to edge to be split
+                    if i0p>0:
+                        edgeCoords_0 = g_edgeCoords[:i0p]
+                    else:
+                        edgeCoords_0 = []
+                    # Edge coordinates listed after the current edge
+                    if g_edgeCoords.shape[0]>i1p:
+                        edgeCoords_1 = g_edgeCoords[i1p:]
+                    else:
+                        edgeCoords_1 = []
+
+                    # Combine edges together
+                    g_edgeCoords = np.concatenate([x for x in [edgeCoords_0,new_edges[0],edgeCoords_1,np.concatenate(new_edges[1:])] if len(x)>0])
+                    g_nedgepoints = np.concatenate([g_nedgepoints,[ned.shape[0] for ned in new_edges[1:]]])
+                    g_nedgepoints[i] = new_edges[0].shape[0]
+                    g_edgeConn = np.concatenate([g_edgeConn,new_edgeconns[1:]])
+                    g_edgeConn[i] = new_edgeconns[0]
+                    g_nodeCoords = np.concatenate([g_nodeCoords,pts_interp[types==1]])
+
+                    # Sort out scalars
+                    # Make all node scalars equal to the value for the start node
+                    try:
+                        new_node_scalars = [np.repeat(x[conn[i]],ninterp) for x in g_node_scalars]                      
+                        for j,data in enumerate(g_node_scalars):
+                            g_node_scalars[j] = np.concatenate([data,[new_node_scalars[j]]])
+                    except Exception as e:
+                        print(e)
+
+                    for j,data in enumerate(g_scalars):
+                        if i0p>0:
+                            sc_0 = data[:i0p]
+                        else:
+                            sc_0 = []
+                        if data.shape[0]>i1p:
+                            sc_1 = data[i1p:]
+                        else:
+                            sc_1 = []
+                        edata = data[i0p:i1p]
+                        interp_data = np.zeros(pts_interp.shape[0],dtype=data.dtype)
+                        interp_data[types==0] = edata
+                        # Assign interpolated points the value at the start of the segment (maybe interpolate in future?)
+                        interp_data[types==1] = edata[segment_index]
+                        new_sc = [[] for k in range(new_conns.shape[0])]
+                        for k,cn in enumerate(new_conns): 
+                            new_sc[k] = interp_data[cn[0]:cn[1]+1]
+
+                        g_scalars[j] = np.concatenate([x for x in [sc_0,new_sc[0],sc_1,np.concatenate(new_sc[1:])] if len(x)>0])
+
+        if len(g_node_scalars)>0 and g_node_scalars[0].shape[0]!=g_nodeCoords.shape[0]:
+            breakpoint()
+        gvars.set_nodecoords(g_nodeCoords,scalars=g_node_scalars)  
+        gvars.set_edgeconn(g_edgeConn,g_nedgepoints)  
+        gvars.set_edgepoints(g_edgeCoords,scalars=g_scalars)
+        graph = gvars.set_in_graph()
+
         return graph
         
     def add_noise(self,graph,filter=None,radius_factor=2.):
@@ -3908,7 +4026,7 @@ class GVars(object):
             
         
         
-    def insert_node_in_edge(self,edge_index,edgepoint_index,new_scalar_values=None,node_location_only=False,fr=None):
+    def insert_node_in_edge(self,edge_index,edgepoint_index,new_scalar_values=None,node_location_only=False,fr=0.5):
     
         # Returns the new node index and the two new edges (if any are made)
         
@@ -3934,33 +4052,8 @@ class GVars(object):
         
         start_node = edgeConn[edge_index,0]
         end_node = edgeConn[edge_index,1]  
-        
-        if False: #npoints==2:
-            # Add an edgepoint halfway along edge if there are only two edgepoints
-            midpoint = np.mean(edge,axis=0)
-            if node_location_only:
-                return midpoint
-            new_edge = np.vstack([edge[0],midpoint,edge[1]])
-            edge_scalar_values = [x[x0:x1] for x in scalars]
-            new_scalar_values = [[x[0],np.mean(x),x[1]] for x in edge_scalar_values]
-            self.set_edge(edge_index,new_edge,new_scalar_values)
-            #nedgepoints[int(edge_index)] += 1
-            edgepoint_index = 1
-            edge = new_edge
-            npoints = 3
-            
-            # Reload data
-            nedgepoints = self.nedgepoints[self.edgeconn_allocated]
-            edgeCoords = self.edgepoints[self.edgepoints_allocated]
-            x0 = int(np.sum(nedgepoints[:int(edge_index)]))
-            x1 = x0 + int(nedgepoints[int(edge_index)])
-            scalars = []
-            for i,sc in enumerate(self.scalar_values):
-                scalars.append(self.scalar_values[i][self.edgepoints_allocated])
-            #breakpoint()
+
         if fr is not None or npoints==2:
-            if fr is None:
-                fr = 0.5
             dists = np.linalg.norm(edge-edge[0],axis=1) # np.hstack([[0.],np.linalg.norm(edge-edge[0],axis=0)])
             t = np.cumsum(dists)
             new_loc = t[-1]*fr
@@ -4057,27 +4150,9 @@ class GVars(object):
             new_sc1 = data[x0+xp:x1]
             scalars[i] = np.concatenate([x for x in [sc_0,new_sc0.copy(),sc_1,new_sc1.copy()] if len(x)>0 and not np.all(x)==-1])
         
-        #breakpoint()
         self.set_nodecoords(nodeCoords,scalars=node_scalars)  
         self.set_edgeconn(edgeConn,nedgepoints)  
         self.set_edgepoints(edgeCoords,scalars=scalars)
-        
-        #self.nodecoords[:nodeCoords.shape[0]] = nodeCoords
-        #self.edgeconn[:edgeConn.shape[0]] = edgeConn
-        #self.nedgepoints[:nedgepoints.shape[0]] = nedgepoints
-        #self.edgepoints[:edgeCoords.shape[0]] = edgeCoords
-        
-        #self.nodecoords_allocated[:nodeCoords.shape[0]] = True #np.linspace(0,nodeCoords.shape[0]-1,nodeCoords.shape[0],dtype='int')
-        #self.edgeconn_allocated[:edgeConn.shape[0]] = True #np.linspace(0,edgeConn.shape[0]-1,edgeConn.shape[0],dtype='int')
-        #self.edgepoints_allocated[:edgeCoords.shape[0]] = True #np.linspace(0,edgeCoords.shape[0]-1,edgeCoords.shape[0],dtype='int')
-        #self.node_ptr = nodeCoords.shape[0]
-        #self.edge_ptr = edgeConn.shape[0]
-        #self.edgepnt_ptr = edgeCoords.shape[0]
-
-        #for i,sc in enumerate(self.scalar_values):
-        #    self.scalar_values[i][:scalars[i].shape[0]] = scalars[i]
-        #for i,sc in enumerate(self.node_scalar_values):
-        #    self.node_scalar_values[i][:node_scalars[i].shape[0]] = node_scalars[i]
            
         return new_edge0.copy(), new_edge1.copy(), new_node_index, new_conn
         
