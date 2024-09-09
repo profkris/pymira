@@ -2006,7 +2006,86 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 curEdges = nextEdges
         
         return edgeStore
+     
+    def move_node(self,nodeIndex,coords=None,displacement=None):
+    
+        """
+        Move nodeIndex to coords
+        """
+    
+        nodes = self.get_data('VertexCoordinates')
+        edgepoints = self.get_data('EdgePointCoordinates')
+        conn_edges = self.get_edges_containing_node(nodeIndex)
+        old_coords = nodes[nodeIndex]
         
+        for ei in conn_edges:
+            e = self.get_edge(ei)
+            
+            if e.start_node_index==nodeIndex:
+                            
+                if coords is None and displacement is not None:
+                    new_coords = e.start_node_coords + displacement
+                elif coords is None:
+                    new_coords = coords
+                else:
+                    return
+            
+                v0 = e.end_node_coords-old_coords
+                v1 = e.end_node_coords-new_coords
+                dist0 = np.linalg.norm(e.end_node_coords-old_coords)
+                dist1 = np.linalg.norm(e.end_node_coords-new_coords)
+                translated_points = e.coordinates - e.coordinates[-1]
+            else:
+                if np.all(coords) is None and displacement is not None:
+                    new_coords = e.end_node_coords + displacement
+                elif coords is None:
+                    new_coords = coords
+                else:
+                    return
+            
+                v0 = e.start_node_coords-old_coords
+                v1 = e.start_node_coords-new_coords
+                dist0 = np.linalg.norm(e.start_node_coords-old_coords)
+                dist1 = np.linalg.norm(e.start_node_coords-new_coords)
+                translated_points = e.coordinates - e.coordinates[0]
+            
+            scale_factor = dist1 / dist0
+                
+            u0 = v0 / dist0
+            u1 = v1 / dist1
+            rotation_axis = np.cross(u0, u1)
+            axis_magnitude = np.linalg.norm(rotation_axis)
+            
+            if axis_magnitude!=0:
+                rotation_axis /= axis_magnitude  # Normalize the rotation axis
+                angle = np.arccos(np.clip(np.dot(u0, u1), -1.0, 1.0))  # Angle between the two vectors
+                K = np.array([[0, -rotation_axis[2], rotation_axis[1]],[rotation_axis[2], 0, -rotation_axis[0]],[-rotation_axis[1], rotation_axis[0], 0]])
+                R = np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * np.dot(K, K)
+                
+                if e.start_node_index==nodeIndex:
+                    new_points = scale_factor * np.dot(R,translated_points.transpose()).transpose() + e.end_node_coords
+                    new_points[0] = new_coords
+                    new_points[-1] = e.end_node_coords
+                elif e.end_node_index==nodeIndex:
+                    new_points = scale_factor * np.dot(R,translated_points.transpose()).transpose() + e.start_node_coords
+                    new_points[-1] = new_coords
+                    new_points[0] = e.start_node_coords
+                
+                edgepoints[e.i0:e.i1] = new_points
+            nodes[nodeIndex] = new_coords
+            
+            if False:
+                plt.ion()
+                plt.scatter(e.coordinates[:,0],e.coordinates[:,1],c='b')
+                plt.scatter(coords[0],coords[1],c='g')
+                if e.start_node_index==nodeIndex:
+                    plt.scatter(e.coordinates[0,0],e.coordinates[0,1],c='r')
+                elif e.end_node_index==nodeIndex:
+                    plt.scatter(e.coordinates[-1,0],e.coordinates[-1,1],c='r')
+                plt.scatter(new_points[:,0],new_points[:,1],c='orange')
+
+            self.set_data(nodes,name='VertexCoordinates')
+            self.set_data(edgepoints,name='EdgePointCoordinates')
 
 class Editor(object):
 
@@ -3276,11 +3355,12 @@ class Editor(object):
                     # Sort out scalars
                     # Make all node scalars equal to the value for the start node
                     try:
-                        new_node_scalars = [np.repeat(x[conn[i]],ninterp) for x in g_node_scalars]                      
+                        new_node_scalars = [np.repeat(x[conn[0]],ninterp) for x in g_node_scalars]                      
                         for j,data in enumerate(g_node_scalars):
-                            g_node_scalars[j] = np.concatenate([data,[new_node_scalars[j]]])
+                            g_node_scalars[j] = np.concatenate([data,np.concatenate([new_node_scalars[j]])])
                     except Exception as e:
                         print(e)
+                        breakpoint()
 
                     for j,data in enumerate(g_scalars):
                         if i0p>0:
