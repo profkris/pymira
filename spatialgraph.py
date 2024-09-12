@@ -47,7 +47,7 @@ def update_array_index(vals,inds,keep):
     
     return vals[keep],new_inds,new_inds_lookup
     
-def delete_vertices(graph,keep_nodes,return_lookup=False): # #verts,edges,keep_nodes):
+def delete_vertices(graph,keep_nodes,return_lookup=False,return_keep_edge=False): # #verts,edges,keep_nodes):
 
     """
     Efficiently delete vertices as flagged by a boolean array (keep_nodes) and update the indexing of an
@@ -110,6 +110,8 @@ def delete_vertices(graph,keep_nodes,return_lookup=False): # #verts,edges,keep_n
 
     if return_lookup:
         return graph, edge_lookup
+    elif return_keep_edge:
+        return graph, keep_edges
     else:
         return graph
         
@@ -3058,7 +3060,7 @@ class Editor(object):
         graph.set_definition_size('POINT',edgepoints.shape[0])            
         graph.set_graph_sizes()
         
-        graph = delete_vertices(graph,keep_node)
+        graph,keep_edge = delete_vertices(graph,keep_node,return_keep_edge=True)
         
         if write:
             graph.write(ofile)  
