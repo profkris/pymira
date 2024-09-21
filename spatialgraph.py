@@ -1084,18 +1084,25 @@ class SpatialGraph(amiramesh.AmiraMesh):
         lengths = np.linalg.norm(vertexCoordinates[edgeConnectivity[:,1]]-vertexCoordinates[edgeConnectivity[:,0]],axis=1)
         return lengths
         
-    def get_edge_lengths(self):
+    def get_edge_lengths(self,node=False):
     
         edgeconn = self.get_data('EdgeConnectivity') 
         nedgepoints = self.get_data('NumEdgePoints')
         edgeCoords = self.get_data('EdgePointCoordinates')
+        nodes = self.get_data('VertexCoordinates')
         
         lengths = np.zeros(self.nedge)
-        for i in trange(self.nedge):
-            x0 = np.sum(nedgepoints[:i])
-            npts = nedgepoints[i]
-            pts = edgeCoords[x0:x0+npts]
-            lengths[i] = np.sum(np.linalg.norm(pts[:-1]-pts[1:],axis=1))
+        
+        if node==False:
+            for i in trange(self.nedge):
+                x0 = np.sum(nedgepoints[:i])
+                npts = nedgepoints[i]
+                pts = edgeCoords[x0:x0+npts]
+                lengths[i] = np.sum(np.linalg.norm(pts[:-1]-pts[1:],axis=1))
+        else:
+            edge_nodes = nodes[edgeconn]
+            lengths = np.linalg.norm(edge_nodes[:,1]-edge_nodes[:,0],axis=1)
+            
         return lengths
         
     def get_node_count(self,edge_node_lookup=None,restore=False,tmpfile=None,graph_params=None):
@@ -2008,46 +2015,73 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 curEdges = nextEdges
         
         return edgeStore
-     
-    def move_node(self,nodeIndex,coords=None,displacement=None):
-    
-        """
-        Move nodeIndex to coords
-        """
-    
-        nodes = self.get_data('VertexCoordinates')
-        edgepoints = self.get_data('EdgePointCoordinates')
-        conn_edges = self.get_edges_containing_node(nodeIndex)
-        old_coords = nodes[nodeIndex]
         
-        for ei in conn_edges:
-            e = self.get_edge(ei)
+    def _translate_edge_coords(self,nodeIndex,e,coords=None,displacement=None):
+    
+        """
+        nodeIndex: index of node to be moved to new coordinates (coords/displacement)
+        e: edge object
+        coords: new location of nodeIndex (or displacement)
+        """
+    
+        edgepoints = self.get_data('EdgePointCoordinates').copy()
+    
+        if e.start_node_index==nodeIndex:
+            old_coords = e.start_node_coords
+        elif e.end_node_index==nodeIndex:
+            old_coords = e.end_node_coords
+        else:
+            return None
             
+        new_points = e.coordinates.copy()
+        new_coords = old_coords
+        
+        if e.npoints==2:
             if e.start_node_index==nodeIndex:
-                            
                 if coords is None and displacement is not None:
                     new_coords = e.start_node_coords + displacement
-                elif coords is None:
+                elif coords is not None:
+                    new_coords = coords
+                else:
+                    return
+                edgepoints[e.i0] = new_coords
+            elif e.end_node_index==nodeIndex:
+                if coords is None and displacement is not None:
+                    new_coords = e.end_node_coords + displacement
+                elif coords is not None:
+                    new_coords = coords
+                else:
+                    return
+                edgepoints[e.i0+1] = new_coords
+            else:
+                breakpoint()
+        else:
+        
+            if e.start_node_index==nodeIndex:
+                                    
+                if coords is None and displacement is not None:
+                    new_coords = e.start_node_coords + displacement
+                elif coords is not None:
                     new_coords = coords
                 else:
                     return
             
                 v0 = e.end_node_coords-old_coords
                 v1 = e.end_node_coords-new_coords
-                dist0 = np.linalg.norm(e.end_node_coords-old_coords)
+                dist0 = np.linalg.norm(e.end_node_coords-e.start_node_coords)
                 dist1 = np.linalg.norm(e.end_node_coords-new_coords)
                 translated_points = e.coordinates - e.coordinates[-1]
             else:
                 if np.all(coords) is None and displacement is not None:
                     new_coords = e.end_node_coords + displacement
-                elif coords is None:
+                elif coords is not None:
                     new_coords = coords
                 else:
                     return
             
                 v0 = e.start_node_coords-old_coords
                 v1 = e.start_node_coords-new_coords
-                dist0 = np.linalg.norm(e.start_node_coords-old_coords)
+                dist0 = np.linalg.norm(e.start_node_coords-e.end_node_coords)
                 dist1 = np.linalg.norm(e.start_node_coords-new_coords)
                 translated_points = e.coordinates - e.coordinates[0]
             
@@ -2072,9 +2106,36 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     new_points = scale_factor * np.dot(R,translated_points.transpose()).transpose() + e.start_node_coords
                     new_points[-1] = new_coords
                     new_points[0] = e.start_node_coords
-                
-                edgepoints[e.i0:e.i1] = new_points
-            nodes[nodeIndex] = new_coords
+                else:
+                    breakpoint()
+            else:
+                # Rotation angle is zero
+                if scale_factor!=1.:
+                    if e.start_node_index==nodeIndex:
+                        new_points = scale_factor * translated_points + e.end_node_coords
+                    elif e.end_node_index==nodeIndex:
+                        new_points = scale_factor * translated_points + e.start_node_coords
+                        
+            edgepoints[e.i0:e.i1] = new_points
+            
+        self.set_data(edgepoints,name='EdgePointCoordinates')
+        
+        return new_coords
+     
+    def move_node(self,nodeIndex,coords=None,displacement=None):
+    
+        """
+        Move nodeIndex to coords
+        """
+    
+        nodes = self.get_data('VertexCoordinates').copy()
+        #edgepoints = self.get_data('EdgePointCoordinates').copy()
+        conn_edges = self.get_edges_containing_node(nodeIndex)
+        old_coords = nodes[nodeIndex]
+        
+        for ei in conn_edges:
+            e = self.get_edge(ei)
+            new_coords = self._translate_edge_coords(nodeIndex,e,coords=coords,displacement=displacement)
             
             if False:
                 plt.ion()
@@ -2086,8 +2147,10 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     plt.scatter(e.coordinates[-1,0],e.coordinates[-1,1],c='r')
                 plt.scatter(new_points[:,0],new_points[:,1],c='orange')
 
-            self.set_data(nodes,name='VertexCoordinates')
-            self.set_data(edgepoints,name='EdgePointCoordinates')
+        nodes[nodeIndex] = new_coords
+
+        self.set_data(nodes,name='VertexCoordinates')
+        #self.set_data(edgepoints,name='EdgePointCoordinates')
 
 class Editor(object):
 
