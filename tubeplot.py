@@ -152,6 +152,31 @@ class TubePlot(object):
             face = np.nanargmin([norm(x-end_coord) for x in intersection])
             coord = intersection[face,:]
             return coord 
+        elif self.domain_type=='rectangle':
+            # Point on each face
+            # Normal to each face
+            pn = arr([[0.,0.,1.],[0.,-1.,0],[0.,1.,0.],[1.,0.,0.]])
+            intersection = np.zeros([4,3]) * np.nan
+            for i in range(4): 
+                pnt = arr([(x[1]-x[0])/2. for x in self.domain])
+                ind = np.where(pn[i]==1)
+                if len(ind[0])>0:                
+                    pnt[ind[0]] = self.domain[ind[0],0]
+                ind = np.where(pn[i]==-1)
+                if len(ind[0])>0:                
+                    pnt[ind[0]] = self.domain[ind[0],1]
+                    
+                dir = end_coord - start_coord
+                coll,pt = geometry.line_plane_intersection(pnt,pn[i],end_coord,dir)
+                # See if intersection point is inside the domain
+                if pt is not None and self.inside_domain(pt):
+                    intersection[i,:] = pt
+            # Find closest intersection that is on the surface of the cubic domain
+            if np.all(~np.isfinite(intersection)):
+                return None
+            face = np.nanargmin([norm(x-end_coord) for x in intersection])
+            coord = intersection[face,:]
+            return coord 
         else:  
             return None                   
             
@@ -165,6 +190,14 @@ class TubePlot(object):
         # Cuboid domain
         if self.domain_type=='cuboid':
             if np.all(self.domain[:,0]<=coord) and np.all(self.domain[:,1]>=coord):
+                return True, None
+            elif start_coord is not None:
+                dom_int = self.find_domain_intersection(start_coord,coord)
+                return False, dom_int
+            else:
+                return False, None
+        elif self.domain_type=='rectangle':
+            if np.all(self.domain[:2,0]<=coord[:2]) and np.all(self.domain[:2,1]>=coord[:2]):
                 return True, None
             elif start_coord is not None:
                 dom_int = self.find_domain_intersection(start_coord,coord)

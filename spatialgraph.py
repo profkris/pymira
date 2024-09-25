@@ -187,6 +187,10 @@ class SpatialGraph(amiramesh.AmiraMesh):
         self.edgeListPtr = 0
         self.path = path
         
+        self.edge_label_counter = 0
+        self.node_label_counter = 0
+        self.point_label_counter = 0
+        
         if header_from is not None:
             import copy
             self.parameters = copy.deepcopy(header_from.parameters)
@@ -211,6 +215,18 @@ class SpatialGraph(amiramesh.AmiraMesh):
             
     def print(self):
         self.__repr__()
+        
+    def unique_node_label(self):
+        self.node_label_counter += 1
+        return self.node_label_counter
+        
+    def unique_edge_label(self):
+        self.edge_label_counter += 1
+        return self.edge_label_counter
+        
+    def unique_point_label(self):
+        self.point_label_counter += 1
+        return self.point_label_counter
         
     def copy(self):
         graph_copy = SpatialGraph()
@@ -298,6 +314,24 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 pass
 
         self.set_graph_sizes()
+        
+        node_labels = self.get_data('NodeLabel')
+        if node_labels is None:
+            self.node_label_counter = self.nnode
+        else:
+            self.node_label_counter = np.max(node_labels) + 1
+            
+        edge_labels = self.get_data('EdgeLabel')
+        if edge_labels is None:
+            self.edge_label_counter = self.nedge
+        else:
+            self.edge_label_counter = np.max(edge_labels) + 1
+            
+        point_labels = self.get_data('PointLabel')
+        if point_labels is None:
+            self.point_label_counter = self.nedgepoint
+        else:
+            self.point_label_counter = np.max(point_labels) + 1
                 
         return True
             
@@ -2631,6 +2665,7 @@ class Editor(object):
         #edgeconn = edgeconn[~edge_del_flag]
         
         # Add new edges to graph
+        scalar_names = [x['name'] for x in scalars]
         for edge in tqdm(consol_edge):
             new_conn = arr([edge['start_node'],edge['end_node']])
             new_pts = edge['points']
@@ -2647,8 +2682,13 @@ class Editor(object):
             edgeconn = np.vstack((edgeconn,new_conn))
             nedge = np.concatenate((nedge,[new_npts]))
             points = np.vstack((points,new_pts))
+
             for j,sc in enumerate(scalars):
-                new_data = np.concatenate(edge['scalars'][j])[skip_inds]
+                if scalar_names[j]=='EdgeLabel':
+                    new_data = np.concatenate(edge['scalars'][j])[skip_inds]
+                    new_data[:] = graph.unique_edge_label() #  np.min(new_data)
+                else:
+                    new_data = np.concatenate(edge['scalars'][j])[skip_inds]
                 sc['data'] = np.concatenate((sc['data'],new_data))
         
         graph.set_data(edgeconn,name='EdgeConnectivity')
@@ -2662,292 +2702,6 @@ class Editor(object):
         graph = delete_vertices(graph,~node_del_flag,return_lookup=False)
         
         return graph        
-
-    def remove_intermediate_nodesOLD(self,graph,file=None,nodeList=None,path=None):
-        
-        import pickle
-        import os
-
-        print('Generating node list...')
-        nodeList = graph.node_list(path=path)
-        print('Node list complete.')
-        
-        nnode = graph.nnode
-        nedge = graph.nedge        
-        nconn = np.array([node.nconn for node in nodeList])
-        new_nodeList = []
-        new_edgeList = []
-        
-        # Initialise list for mapping old to new node indices
-        node_index_lookup = np.zeros(nnode,dtype='int') - 1
-        edge_index_lookup = np.zeros(nedge,dtype='int') - 1
-        # Mark if a node has become an edge point
-        node_now_edge = np.zeros(nnode,dtype='int')
-        node_converted = np.zeros(nnode,dtype='int')
-        node_edges_checked = np.zeros(nnode,dtype='int')
-        edge_converted = np.zeros(nedge,dtype='int')
-        
-        newNodeCount = 0
-        newEdgeCount = 0
-        
-        for cntr,node in enumerate(nodeList):
-            
-            # Is the current node branching (or terminal)?
-            if (node.nconn==1 or node.nconn>2) and node_now_edge[node.index]==0 and node_edges_checked[node.index]==0:
-                # If so, make a new node object
-                if node_converted[node.index]==0:
-                    print(('NODE (START) {} {} {}'.format(newNodeCount,node.index,node.nconn)))
-                    newNode = Node(index=newNodeCount,coordinates=node.coords,connecting_node=[],old_index=node.index)
-                    # Mark node as having been converted to a new node (rather than an edge)
-                    node_converted[node.index] = 1
-                    new_nodeList.append(newNode)
-                    newNodeIndex = newNodeCount
-                    node_index_lookup[node.index] = newNodeIndex
-                    newNodeCount += 1
-                else:
-                    print(('NODE (START, REVISITED) {} {} {}'.format(newNodeCount,node.index,node.nconn)))
-                    ind = node_index_lookup[node.index]
-                    if ind<0:
-                        import pdb
-                        pdb.set_trace()
-                    newNode = new_nodeList[ind]
-                    newNodeIndex = newNode.index
-                    
-                node_edges_checked[node.index] = 1
-                
-                edges_complete = np.zeros(node.nconn,dtype='bool') + False
-                
-                # Loop through each branch
-                for node_counter,connecting_node_index in enumerate(node.connecting_node):
-
-                    # Initialise variables                    
-                    curNodeIndex = connecting_node_index
-                    endNode = None
-                    visited = [node.index]
-                    visited_edges = []
-
-                    # Compile connecting edges -
-                    connecting_edge = [e for x,e in zip(node.connecting_node,node.edges) if x==connecting_node_index]
-                        
-                    for connEdge in connecting_edge:
-
-                        # Check if edge has already been converted (e.g. the return of a loop)
-                        if edge_converted[connEdge.index]==0:
-                            # Check whether to reverse coordinates in edge
-                            if connEdge.end_node_index==node.index:
-                                reverse_edge_indices = True
-                                ecoords = connEdge.coordinates
-                                ecoords = ecoords[::-1,:]
-                                scalars = [s[::-1] for s in connEdge.scalars]
-                            elif connEdge.start_node_index==node.index:
-                                reverse_edge_indices = False
-                                ecoords = connEdge.coordinates
-                                scalars = connEdge.scalars
-                            else:
-                                import pdb
-                                pdb.set_trace()
-                                
-                            # Create edge object to add points to during walk
-                            print(('EDGE {}'.format(newEdgeCount)))
-                            newEdge = Edge(index=newEdgeCount,start_node_index=newNode.index,
-                                               start_node_coords=newNode.coords,
-                                               coordinates=ecoords,
-                                               npoints=ecoords.shape[0],
-                                               scalars=scalars,
-                                               scalarNames=connEdge.scalarNames)
-                                               
-                            new_edgeList.append(newEdge)
-                            assert len(new_edgeList)==newEdgeCount+1
-                            
-                            edge_index_lookup[connEdge.index] = newEdgeCount
-                            visited_edges.append(connEdge.index)
-                            edge_converted[connEdge.index] = 1
-                            
-                            newEdgeCount += 1
-                        
-                            # Start walking - complete when a branching node is encountered
-                            endFlag = False
-                            
-                            while endFlag is False:
-                                curNode = nodeList[curNodeIndex]
-                                visited.append(curNodeIndex)
-                                
-                                # If it's an intermediate (connecting) node
-                                if curNode.nconn==2:
-                                    # Check which connecting nodes have been visited already
-                                    next_node_index = [x for x in curNode.connecting_node if x not in visited]
-                                    # Get connecting edge (connected to unvisited, unconverted node)
-                                    connecting_edge_walk = [e for x,e in zip(curNode.connecting_node,curNode.edges) if x not in visited and edge_converted[e.index]==0 ]
-                                    # If no unvisited nodes have been identified...
-                                    if len(connecting_edge_walk)==0:
-                                        # Look for branching nodes that have been visited (i.e. loops)
-                                        connecting_edge_walk = [e for x,e in zip(curNode.connecting_node,curNode.edges) if edge_converted[e.index]==0 ]
-                                        if len(connecting_edge_walk)==1:
-                                            foundConn = False
-                                            # Check both start and end node indices
-                                            for i,j in enumerate([connecting_edge_walk[0].start_node_index,connecting_edge_walk[0].end_node_index]):
-                                                if nodeList[j].nconn > 2:
-                                                    #Loop!
-                                                    # Look for a connecting branch point
-                                                    next_node_index = [j]
-                                                    foundConn = True
-                                            # If still nothing found...
-                                            if not foundConn:
-                                                import pdb
-                                                pdb.set_trace()
-                                                
-                                    # If a connected edge has been found...
-                                    if len(connecting_edge_walk)>0:
-                                        # Check whether to reverse edge points
-                                        if connecting_edge_walk[0].end_node_index==curNode.index:
-                                            reverse_edge_indices = True
-                                        elif connecting_edge_walk[0].start_node_index==curNode.index:
-                                            reverse_edge_indices = False
-                                        else:
-                                            import pdb
-                                            pdb.set_trace()
-            
-                                        # Add in connecting edge points
-                                        # Reverse edge coordinates if necessary
-                                        if reverse_edge_indices:
-                                            scalars = [s[::-1] for s in connecting_edge_walk[0].scalars]
-                                            #scalars = [s[1:-1] for s in scalars]
-                                            coords = connecting_edge_walk[0].coordinates
-                                            coords = coords[::-1,:]
-                                            newEdge.add_point(coords,scalars=scalars,remove_last=True)
-                                        else:
-                                            scalars = connecting_edge_walk[0].scalars
-                                            newEdge.add_point(connecting_edge_walk[0].coordinates,
-                                                          scalars=scalars,remove_last=True)
-        
-                                        # Mark that node is now an edge point
-                                        node_now_edge[curNodeIndex] = 1
-            
-                                        # If we've run out of nodes, then quit;
-                                        # Otherwise, walk to the next node
-                                        if len(next_node_index)==0:                                
-                                            endFlag = True
-                                        else:
-                                            curNodeIndex = next_node_index[0]
-                                            edge_converted[connecting_edge_walk[0].index] = 1
-                                            edge_index_lookup[connecting_edge_walk[0].index] = newEdge.index
-                                    else: # No connected edges found
-                                        print('No connected edges...')
-                                        endFlag = True
-                                        
-                                else: # Branch or terminal point
-                                    endFlag = True
-                                    end_node_index = curNode.index
-                                    # Add in final edge coordinates, if necessary
-                                    if not all([x==y for x,y in zip(newEdge.coordinates[-1,:],curNode.coords)]):
-                                        # Reverse edge coordinates if necessary
-                                        if connEdge.start_node_index!=curNode.index:
-                                            scalars = [s[::-1] for s in connEdge.scalars]
-                                            coords = connEdge.coordinates
-                                            coords = coords[::-1,:]
-                                            newEdge.add_point(coords,scalars=scalars,remove_last=True)
-                                        else:
-                                            scalars = connEdge.scalars
-                                            newEdge.add_point(connEdge.coordinates,
-                                                          scalars=scalars,remove_last=True)
-                                    
-                                # Sort out end nodes and edges
-                                if endFlag:
-                                    # Find end node
-                                    if newEdge is None:
-                                        import pdb
-                                        pdb.set_trace()
-                                    # If node has already been visited
-                                    if node_converted[curNodeIndex]==1 and node_now_edge[curNodeIndex]==0:
-                                        end_node_index_new = int(node_index_lookup[end_node_index])
-                                        if end_node_index_new<0:
-                                            import pdb
-                                            pdb.set_trace()
-                                        endNode = new_nodeList[end_node_index_new]
-                                        #print('REVISITED NODE {} (END)'.format(endNode.index))
-                                    # If node hasn't been converted, and isn't an edge
-                                    elif node_now_edge[curNodeIndex]==0:
-                                        print(('NODE (END) {} {}'.format(newNodeCount,curNode.index)))
-                                        end_node_index_new = newNodeCount
-                                        endNode = Node(index=end_node_index_new,coordinates=curNode.coords,connecting_node=[],old_index=curNode.index)
-                                        node_converted[curNodeIndex] = 1
-                                        new_nodeList.append(endNode) #[newNodeCount] = endNode
-                                        node_index_lookup[end_node_index] = newNodeCount
-                                        newNodeCount += 1
-                                    else:
-                                        import pdb
-                                        pdb.set_trace()
-                                        
-                                    try:
-                                        stat = newEdge.complete_edge(endNode.coords,end_node_index_new)
-                                        if stat!=0:
-                                            import pdb
-                                            pdb.set_trace()
-                                        print(('EDGE COMPLETE: end node {}'.format(endNode.index)))
-                                    except Exception as e:
-                                        print(e)
-                                        import pdb
-                                        pdb.set_trace()
-                                        
-                                    res = newNode.add_edge(newEdge)
-                                    if not res:
-                                        import pdb
-                                        pdb.set_trace()
-                                    if endNode.index!=newNode.index:
-                                        res = endNode.add_edge(newEdge,reverse=True)
-                                        if not res:
-                                            import pdb
-                                            pdb.set_trace()
-                                    
-                                    edges_complete[node_counter] = True
-                                    
-                                    break
-                        else: # Edge has already been converted
-                            newEdgeIndex = edge_index_lookup[connEdge.index]
-                            if newEdgeIndex<0:
-                                import pdb
-                                pdb.set_trace()
-                            newEdge = new_edgeList[newEdgeIndex]
-                            if newEdge.start_node_index==newNode.index:
-                                res = newNode.add_edge(newEdge)
-                                if not res:
-                                    print(('Error: Edge {} is already attached to node {}'.format(newEdge.index,newNode.index)))
-                            elif newEdge.end_node_index==newNode.index:
-                                res = newNode.add_edge(newEdge,reverse=True)
-                                if not res:
-                                    print(('Error: Edge {} is already attached to node {}'.format(newEdge.index,newNode.index)))
-                            else:
-                                import pdb
-                                pdb.set_trace()
-                            edges_complete[node_counter] = True
-                        
-#                    if edges_complete[node_counter]==False:
-#                        import pdb
-#                        pdb.set_trace()
-                        
-#                if newNode.nconn==2:
-#                    import pdb
-#                    pdb.set_trace()
-#                if newNode.nconn!=node.nconn:
-#                    import pdb
-#                    pdb.set_trace()
-#                    #assert endNode is not None
-#                if not all(edges_complete):
-#                    import pdb
-#                    pdb.set_trace()
-
-        #return new_nodeList
-        #se = np.where(edge_converted==0)
-        #elu = np.where(edge_index_lookup<0)
-        #incomplete_edges = [e for e in new_edgeList if e.complete is False]
-        #incomp = np.where(edge_converted==0)
-        #node2 = [n for n in new_nodeList if n.nconn==2]
-
-        new_nedge = newEdgeCount
-        new_nnode = newNodeCount
-        
-        new_graph = graph.node_list_to_graph(new_nodeList)
-        return new_graph
         
     def largest_graph(self, graph):
 
@@ -2987,6 +2741,83 @@ class Editor(object):
         
         return graph
         
+    def filter_graph(self,graph,parameter='Radii',min_value=None,max_value=None,clip_value=None,write=False,ofile='',keep_stubs=False,stub_len=100.,ignore=None,return_edge_inds=False):
+
+        """
+        min_value: All edges with radii < this value are deleted
+        clip_value: All edges with radii < this value and > min_value are set to clip_value    
+        """
+
+        #nodecoords, edgeconn, edgepoints, nedgepoints, radius, category, mlp = get_graph_fields(graph)
+        
+        nodecoords = graph.get_data('VertexCoordinates')
+        edgeconn = graph.get_data('EdgeConnectivity')
+        edgepoints = graph.get_data('EdgePointCoordinates')
+        nedgepoints = graph.get_data('NumEdgePoints')
+        paramVals = graph.get_data(parameter)
+        scalars = graph.get_scalars()
+        nscalars = graph.get_node_scalars()
+        
+        nedges = edgeconn.shape[0]
+        nnode = nodecoords.shape[0]
+
+        # List all edge indices
+        inds = np.linspace(0,edgeconn.shape[0]-1,edgeconn.shape[0],dtype='int')
+        # Define which edge each edgepoint belongs to
+        edge_inds = np.repeat(inds,nedgepoints)
+        if clip_value is not None:
+            clip_edge_inds = np.where((paramVals>=clip_value) & (paramVals<=min_value))
+            paramVals[clip_edge_inds] = min_value
+        else:
+            clip_edge_inds = [[]]
+        
+        if min_value is not None and max_value is not None:      
+            del_edge_inds = np.where((paramVals<min_value) | (paramVals>max_value))        
+        elif min_value is None and max_value is not None:
+            del_edge_inds = np.where((paramVals>max_value))        
+        elif min_value is not None and max_value is None:
+            del_edge_inds = np.where((paramVals<min_value))   
+        elif min_value is None and max_value is None:
+            return graph
+
+        #print(f'{len(clip_edge_inds[0])} edges with {parameter}>{clip_value} and {parameter}<{min_filter_radius} clipped.')
+        #print(f'{len(del_edge_inds[0])} edges with {parameter}<{min_filter_radius} clipped.')
+
+        # Find unique edge index references
+        keep_edge = np.ones(edgeconn.shape[0],dtype='bool')
+        # Convert to segments
+        del_inds = np.unique(edge_inds[del_edge_inds])
+        keep_edge[del_inds] = False
+        
+        if ignore is not None:
+            keep_edge[ignore] = True
+        
+        keep_inds = np.where(keep_edge)[0]
+        # Define nodes to keep positively (i.e. using the keep_inds rather than del_inds) so that nodes are retained that appear in edges that aren't flagged for deletion
+        node_keep_inds = np.unique(edgeconn[keep_inds].flatten())
+        keep_node = np.zeros(nodecoords.shape[0],dtype='bool')
+        keep_node[node_keep_inds] = True
+        
+        graph.set_data(nodecoords,name='VertexCoordinates')
+        graph.set_data(edgeconn,name='EdgeConnectivity')
+        graph.set_data(edgepoints,name='EdgePointCoordinates')
+        graph.set_data(nedgepoints,name='NumEdgePoints')
+        graph.set_data(paramVals,name=parameter)
+        graph.set_definition_size('VERTEX',nodecoords.shape[0])
+        graph.set_definition_size('EDGE',edgeconn.shape[0])
+        graph.set_definition_size('POINT',edgepoints.shape[0])            
+        graph.set_graph_sizes()
+        
+        graph,keep_edge = delete_vertices(graph,keep_node,return_keep_edge=True)
+        
+        if write:
+            graph.write(ofile)  
+            
+        if return_edge_inds:
+            return graph,keep_edge
+        else:
+            return graph  
+            
     def filter_graph_by_radius(self,graph,min_filter_radius=5.,filter_clip_radius=None,write=False,ofile='',keep_stubs=False,stub_len=100.,ignore=None,return_edge_inds=False):
 
         """
@@ -3150,6 +2981,7 @@ class Editor(object):
         scalar_data = [x['data'] for x in scalars]
         scalar_type = [str(x.dtype) for x in scalar_data]
         scalar_data_interp = [[] for x in scalars]
+        scalar_names = [x['name'] for x in scalars]
         
         if filter is None:
             filter = np.ones(conns.shape[0],dtype='bool')
@@ -3267,18 +3099,21 @@ class Editor(object):
                         
                     for j,sd in enumerate(scalar_data):
                         sdc = sd[i0:i1]
-                        if 'float' in scalar_type[j]:
-                            scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0]))
-                        elif 'int' in scalar_type[j]:
-                            #breakpoint()
-                            if sdc[0]==sdc[-1]:
-                                scalar_data_interp[j].extend(np.zeros(ninterp)+sdc[0])
-                            else:
-                                scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0],dtype='int'))
-                        elif 'bool' in scalar_type[j]:
-                            scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],ninterp,dtype='bool')) 
+                        if scalar_names[j]=='EdgeLabel':
+                            scalar_data_interp[j].extend(np.repeat(sdc[0],pcur.shape[0]))
                         else:
-                            breakpoint()
+                            if 'float' in scalar_type[j]:
+                                scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0]))
+                            elif 'int' in scalar_type[j]:
+                                #breakpoint()
+                                if sdc[0]==sdc[-1]:
+                                    scalar_data_interp[j].extend(np.zeros(ninterp)+sdc[0])
+                                else:
+                                    scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0],dtype='int'))
+                            elif 'bool' in scalar_type[j]:
+                                scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],ninterp,dtype='bool')) 
+                            else:
+                                breakpoint()
                     
                     npoints_interp[i] = ninterp
                     
@@ -3336,12 +3171,14 @@ class Editor(object):
         g_edgeCoords = gvars.edgepoints[gvars.edgepoints_allocated]
         g_nodeCoords = gvars.nodecoords[gvars.nodecoords_allocated]
         g_edgeConn = gvars.edgeconn[gvars.edgeconn_allocated]
-        g_scalars = []
+        g_scalars,g_scalar_names = [],[]
         for j,sc in enumerate(gvars.scalar_values):
             g_scalars.append(gvars.scalar_values[j][gvars.edgepoints_allocated]) 
-        g_node_scalars = []
+            g_scalar_names.append(gvars.scalars[j]['name']) 
+        g_node_scalars,g_node_scalar_names = [],[]
         for j,sc in enumerate(gvars.node_scalar_values):
             g_node_scalars.append(gvars.node_scalar_values[j][gvars.nodecoords_allocated])  
+            g_node_scalar_names.append(gvars.node_scalars[j]['name'])
 
         for i,conn in enumerate(tqdm(conns)):
 
@@ -3420,7 +3257,9 @@ class Editor(object):
                     # Sort out scalars
                     # Make all node scalars equal to the value for the start node
                     try:
-                        new_node_scalars = [np.repeat(x[conn[0]],ninterp) for x in g_node_scalars]                      
+                        new_node_scalars = [np.repeat(x[conn[0]],ninterp) for x in g_node_scalars]   
+                        if 'NodeLabel' in g_node_scalar_names:
+                            new_node_scalars[g_node_scalar_names.index('NodeLabel')] = [graph.unique_node_label() for _ in range(ninterp)]                        
                         for j,data in enumerate(g_node_scalars):
                             g_node_scalars[j] = np.concatenate([data,np.concatenate([new_node_scalars[j]])])
                     except Exception as e:
@@ -3443,7 +3282,10 @@ class Editor(object):
                         interp_data[types==1] = edata[segment_index]
                         new_sc = [[] for k in range(new_conns.shape[0])]
                         for k,cn in enumerate(new_conns): 
-                            new_sc[k] = interp_data[cn[0]:cn[1]+1]
+                            if g_scalar_names[j]=='EdgeLabel':
+                                new_sc[k] = np.repeat(graph.unique_edge_label(),interp_data[cn[0]:cn[1]+1].shape[0])
+                            else:
+                                new_sc[k] = interp_data[cn[0]:cn[1]+1]
 
                         g_scalars[j] = np.concatenate([x for x in [sc_0,new_sc[0],sc_1,np.concatenate(new_sc[1:])] if len(x)>0])
 
@@ -4179,12 +4021,14 @@ class GVars(object):
         edgeConn = self.edgeconn[self.edgeconn_allocated]
         nedgepoints = self.nedgepoints[self.edgeconn_allocated]
         edgeCoords = self.edgepoints[self.edgepoints_allocated]
-        scalars = []
+        scalars,scalar_names = [],[]
         for i,sc in enumerate(self.scalar_values):
             scalars.append(self.scalar_values[i][self.edgepoints_allocated])
-        node_scalars = []
+            scalar_names.append(self.scalars[i]['name'])
+        node_scalars,node_scalar_names = [],[]
         for i,sc in enumerate(self.node_scalar_values):
             node_scalars.append(self.node_scalar_values[i][self.nodecoords_allocated])
+            node_scalar_names.append(self.node_scalars[i]['name'])
     
         nnode = len(nodeCoords)
         nedge = len(edgeConn)
@@ -4280,6 +4124,8 @@ class GVars(object):
         
         # Sort out scalars
         for i,data in enumerate(node_scalars):
+            if node_scalar_names[i]=='NodeLabel':
+                new_node_scalars[i] = self.graph.unique_node_label()
             node_scalars[i] = np.concatenate([data,[new_node_scalars[i]]])
             
         for i,data in enumerate(scalars):
@@ -4292,7 +4138,11 @@ class GVars(object):
             else:
                 sc_1 = []
             new_sc0 = data[x0:x0+xp+1]
-            new_sc1 = data[x0+xp:x1]
+                        
+            if scalar_names[i]=='EdgeLabel':
+                new_sc1 = np.repeat(self.graph.unique_edge_label(),data[x0+xp:x1].shape[0])
+            else:
+                new_sc1 = data[x0+xp:x1]
             scalars[i] = np.concatenate([x for x in [sc_0,new_sc0.copy(),sc_1,new_sc1.copy()] if len(x)>0 and not np.all(x)==-1])
         
         self.set_nodecoords(nodeCoords,scalars=node_scalars)  
