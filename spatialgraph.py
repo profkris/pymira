@@ -1225,6 +1225,49 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 dind += 1
         
         return duplicate_edge_index
+        
+    def check_artery_vein_classification(self):
+        # Check artery/vein classification
+        # Assumes two seperate graphs, one for arteries (=0) one for veins (=1)
+        gr = self.identify_graphs()
+        # Check that there are only two graphs
+        ugr = np.unique(gr)
+        if not np.all(np.in1d(ugr,[1,2])):
+            return -3
+        # Check that veins and arteries are in separate graphs
+        vtn = self.point_scalars_to_node_scalars(name='VesselType')
+        chk_a = np.all(gr[vtn==0]==gr[vtn==0][0])
+        chk_v = np.all(gr[vtn==1]==gr[vtn==1][0])
+        if not chk_a:
+            return -1
+        if not chk_v:
+            return -2
+        return 0
+        
+    def remove_subsidiary_graphs(self):
+        # Removes all but the largest arterial graph and the largest venous graph
+        
+        vtn = self.point_scalars_to_node_scalars(name='VesselType')
+        nvt = np.unique(vtn)
+        
+        gr = self.identify_graphs()
+        # Check that there are only two graphs
+        ugr,cnt = np.unique(gr,return_counts=True)
+        
+        gr_type = arr([vtn[gr==u][0] for u in ugr])
+        
+        cnt_a = cnt.copy()
+        cnt_a[gr_type!=0] = 0
+        a_keep = np.nanargmax(cnt_a)
+        cnt_v = cnt.copy()
+        cnt_v[gr_type!=1] = 0
+        v_keep = np.nanargmax(cnt_v)
+
+        keep_node = np.zeros(self.nnode,dtype='bool')
+        keep_node[gr[a_keep]] = True
+        keep_node[gr[v_keep]] = True
+        
+        _ = delete_vertices(self,keep_node)
 
     def test_treelike(self, inlet=None, outlet=None, euler=True, ignore_type=False):
 
@@ -2705,7 +2748,7 @@ class Editor(object):
         
     def largest_graph(self, graph):
 
-        graphNodeIndex, graph_size = graph.identify_graphs(progBar=True)
+        graphNodeIndex, graph_size = graph.identify_graphs()
         unq_graph_indices, graph_size = np.unique(graphNodeIndex, return_counts=True)
         largest_graph_index = np.argmax(graph_size)
         node_indices = np.arange(graph.nnode)
@@ -4042,24 +4085,31 @@ class GVars(object):
         start_node = edgeConn[edge_index,0]
         end_node = edgeConn[edge_index,1]  
 
+        # Calculate location of insertion point, and create a new edge point where new node will subsequently be created
         if fr is not None or npoints==2:
-            dists = np.linalg.norm(edge-edge[0],axis=1) # np.hstack([[0.],np.linalg.norm(edge-edge[0],axis=0)])
+            # Calculate distance along the edge
+            dists = np.linalg.norm(edge-edge[0],axis=1)
             t = np.cumsum(dists)
+            # Calculate insertion point
             new_loc = t[-1]*fr
             s0 = np.where(t<=new_loc)[0][-1]
             s1 = np.where(t>=new_loc)[0][0]
             s0fr = dists[s0]/t[-1]
             s1fr = dists[s1]/t[-1]
             sfr = fr - s0fr
-            #direction = (edge[s1] - edge[s0]) / np.linalg.norm((edge[s1] - edge[s0]))
             newpoint = edge[s0] + (edge[s1] - edge[s0])*sfr
             
+            # Option to return locaiton only and bypass creation of new edge and node
             if node_location_only:
                 return newpoint
             
+            # Insert new point into edge
             new_edge = np.vstack([edge[:s0+1],newpoint,edge[s1:]])
+            # Get current scalar values
             edge_scalar_values = [x[x0:x1] for x in scalars]
+            # Insert additional vlaue for new node
             new_scalar_values = [np.hstack([x[:s0+1],[x[s0]],x[s1:]]) for x in edge_scalar_values]
+            print(new_scalar_values)
             self.set_edge(edge_index,new_edge,new_scalar_values)
             edgepoint_index = s0 + 1
             edge = new_edge
@@ -4139,8 +4189,9 @@ class GVars(object):
                 sc_1 = []
             new_sc0 = data[x0:x0+xp+1]
                         
-            if scalar_names[i]=='EdgeLabel':
-                new_sc1 = np.repeat(self.graph.unique_edge_label(),data[x0+xp:x1].shape[0])
+            if scalar_names[i]=='EdgeLabel': 
+                new_lab = self.graph.unique_edge_label()
+                new_sc1 = np.repeat(new_lab,data[x0+xp:x1].shape[0])
             else:
                 new_sc1 = data[x0+xp:x1]
             scalars[i] = np.concatenate([x for x in [sc_0,new_sc0.copy(),sc_1,new_sc1.copy()] if len(x)>0 and not np.all(x)==-1])
