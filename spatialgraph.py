@@ -217,12 +217,24 @@ class SpatialGraph(amiramesh.AmiraMesh):
         self.__repr__()
         
     def unique_node_label(self):
+        nl = self.get_data('NodeLabel')
         self.node_label_counter += 1
-        return self.node_label_counter
+        nxt = self.node_label_counter
+        if nl is not None:
+            if nxt in nl:
+                nxt = np.max(nl) + 1
+                self.node_label_counter = nxt
+        return nxt
         
     def unique_edge_label(self):
+        el = self.get_data('EdgeLabel')
         self.edge_label_counter += 1
-        return self.edge_label_counter
+        nxt = self.edge_label_counter
+        if el is not None:
+            if nxt in el:
+                nxt = np.max(el) + 1
+                self.edge_label_counter = nxt
+        return nxt
         
     def unique_point_label(self):
         self.point_label_counter += 1
@@ -4109,7 +4121,7 @@ class GVars(object):
             edge_scalar_values = [x[x0:x1] for x in scalars]
             # Insert additional vlaue for new node
             new_scalar_values = [np.hstack([x[:s0+1],[x[s0]],x[s1:]]) for x in edge_scalar_values]
-            print(new_scalar_values)
+            #print(new_scalar_values)
             self.set_edge(edge_index,new_edge,new_scalar_values)
             edgepoint_index = s0 + 1
             edge = new_edge
