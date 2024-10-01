@@ -1272,10 +1272,10 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         cnt_a = cnt.copy()
         cnt_a[gr_type!=0] = 0
-        a_keep = np.nanargmax(cnt_a)
+        a_keep = gr[np.nanargmax(cnt_a)]
         cnt_v = cnt.copy()
         cnt_v[gr_type!=1] = 0
-        v_keep = np.nanargmax(cnt_v)
+        v_keep = gr[np.nanargmax(cnt_v)]
 
         keep_node = np.zeros(self.nnode,dtype='bool')
         keep_node[gr==a_keep] = True
