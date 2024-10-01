@@ -1265,6 +1265,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
         gr = self.identify_graphs()
         # Check that there are only two graphs
         ugr,cnt = np.unique(gr,return_counts=True)
+        if len(ugr)<=2:
+            return
         
         gr_type = arr([vtn[gr==u][0] for u in ugr])
         
@@ -1276,8 +1278,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
         v_keep = np.nanargmax(cnt_v)
 
         keep_node = np.zeros(self.nnode,dtype='bool')
-        keep_node[gr[a_keep]] = True
-        keep_node[gr[v_keep]] = True
+        keep_node[gr==a_keep] = True
+        keep_node[gr==v_keep] = True
         
         _ = delete_vertices(self,keep_node)
 
