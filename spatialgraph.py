@@ -518,8 +518,6 @@ class SpatialGraph(amiramesh.AmiraMesh):
             newData = np.asarray(coordinates)
             self.set_definition_size('VERTEX',[1,newData.shape])
         self.set_data(newData,name='VertexCoordinates')
-        
-        nodeCoords = None # free memory (necessary?)
     
     def add_node_connection(self,startNode,endNode,edge):
         """
@@ -3785,6 +3783,13 @@ class GVars(object):
             self.preallocate_nodes(self.n_all,set_pointer_to_start=False)
         self.nodecoords[self.node_ptr] = node
         self.nodecoords_allocated[self.node_ptr] = True
+        
+        if len(new_scalar_vals)==0:
+            node_scalar_names = [x['name'] for x in  self.node_scalars]
+            new_scalar_vals = [x['data'][0] for x in self.node_scalars]   
+            if 'NodeLabel' in node_scalar_names:
+                new_scalar_vals[node_scalar_names.index('NodeLabel')] = self.graph.unique_node_label()                      
+        
         for i,sc in enumerate(self.node_scalar_values):
             self.node_scalar_values[i][self.node_ptr] = new_scalar_vals[i]
         self.node_ptr += 1
@@ -3879,6 +3884,13 @@ class GVars(object):
         self.edgepoints_allocated[self.edgepnt_ptr:self.edgepnt_ptr+npts] = True
         if edgeInd>=0:
             self.nedgepoints[edgeInd] = npts
+            
+        if len(new_scalar_vals)==0:
+            scalar_names = [x['name'] for x in  self.scalars]
+            new_scalar_vals = [x['data'][0] for x in self.scalars]   
+            if 'EdgeLabel' in scalar_names:
+                new_scalar_vals[scalar_names.index('EdgeLabel')] = self.graph.unique_edge_label()                      
+            
         for i,sc in enumerate(self.scalar_values):
             dt = self.scalar_values[i].dtype
             self.scalar_values[i][self.edgepnt_ptr:self.edgepnt_ptr+npts] = np.zeros(npts,dtype=dt)+new_scalar_vals[i]
@@ -4067,9 +4079,7 @@ class GVars(object):
                 self.scalar_values[i][self.edgepoints_allocated] = scalars
         else:
             breakpoint()
-            
-        
-        
+
     def insert_node_in_edge(self,edge_index,edgepoint_index,new_scalar_values=None,node_location_only=False,fr=0.5):
     
         # Returns the new node index and the two new edges (if any are made)
