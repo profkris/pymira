@@ -2043,7 +2043,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         if 'Ranks' in self.fieldNames:
             self.set_data(ranks,name='Ranks')
         else:
-            f = self.add_field(name='Ranks',data=ranks,type='int',shape=[ranks.shape[0]])  
+            f = self.add_field(name='Ranks',definition='EDGE',data=ranks,type='int',shape=[ranks.shape[0]])  
             
     def get_edges_connected_to_edge(self, edgeInd):
     
