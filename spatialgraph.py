@@ -2056,6 +2056,14 @@ class SpatialGraph(amiramesh.AmiraMesh):
         ee = ee[ee!=edgeInd]
         
         return [es,ee]
+        
+    def get_nodes_connected_to_node(self, nodeInd):
+       
+        edgeconn = self.get_data('EdgeConnectivity')
+        nodes = edgeconn[(np.in1d(edgeconn[:,0],nodeInd)) | (np.in1d(edgeconn[:,1],nodeInd))]
+        nodes = np.unique(nodes)
+        nodes = nodes[nodes!=nodeInd]
+        return nodes
 
     def get_subgraph_by_rank(self,edgeInd):
     
