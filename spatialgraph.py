@@ -973,7 +973,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
 
         if deep:
             self.edgeList = None
-            for nodeInd in trange(self.nnode):
+            for nodeInd in range(self.nnode):
                 node = self.get_node(nodeInd)
                 for i,e in enumerate(node.edges):
                     if not node.edge_indices_rev[i]:
@@ -1138,7 +1138,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         lengths = np.zeros(self.nedge)
         
         if node==False:
-            for i in trange(self.nedge):
+            for i in range(self.nedge):
                 x0 = np.sum(nedgepoints[:i])
                 npts = nedgepoints[i]
                 pts = edgeCoords[x0:x0+npts]
@@ -1595,7 +1595,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         scalar_nodes = np.zeros(verts.shape[0],dtype=scalar_points.dtype)
         eei = self.edgepoint_edge_indices()
     
-        for nodeIndex in trange(self.nnode):
+        for nodeIndex in range(self.nnode):
             edgeIds = np.where((conns[:,0]==nodeIndex) | (conns[:,1]==nodeIndex))
             if len(edgeIds[0])>0:
                 vals = []
@@ -1649,6 +1649,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
                             scalar_nodes[j,node] = np.nanmax([np.max(data[x0:x1]),scalar_nodes[j,node]])
                         elif scalar['type']=='int':
                             scalar_nodes[j,node] = np.nanmin([np.min(data[x0:x1]),scalar_nodes[j,node]])
+                        else:
+                            scalar_nodes[j,node] = np.nanmin([np.min(data[x0:x1]),scalar_nodes[j,node]])
         return scalar_nodes.squeeze()
         
     def point_scalars_to_edge_scalars(self,func=np.mean,name=None):
@@ -1680,6 +1682,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         scalar_edges[j,i] = func(data[x0:x1])
                     elif scalar['type']=='int':
                         scalar_edges[j,i] = data[x0]
+                    else:
+                        scalar_edges[j,i] = func(data[x0:x1])
         return scalar_edges.squeeze()
  
     def point_scalars_to_segment_scalars(self,func=np.mean,name=None):
@@ -2464,7 +2468,7 @@ class Editor(object):
 
         # Mark which edgepoints to keep / delete
         keepEdgePoint = np.zeros(nedgepoint,dtype='bool') + True
-        for edgeIndex in tqdm(edges_to_delete):
+        for edgeIndex in edges_to_delete:
             npoints = nedgepoints[edgeIndex]
             strt = np.sum(nedgepoints[0:edgeIndex])
             fin = strt + npoints
@@ -2488,7 +2492,7 @@ class Editor(object):
         #Check for any other scalar fields
         scalars = [f for f in graph.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
         print('Updating scalars...')
-        for sc in tqdm(scalars):
+        for sc in scalars:
             #data_ed = np.delete(sc['data'],edgepoints_to_delete[0],axis=0)
             data = sc['data']
             data_ed = data[keepEdgePoint==True]
@@ -2637,7 +2641,7 @@ class Editor(object):
         
         consol_edge = []
         # Loop through each of the inline nodes (i.e. nodes with exactly 2 connections)
-        for i,_node_inds in enumerate(tqdm(inline_nodes[0])):
+        for i,_node_inds in enumerate(inline_nodes[0]):
             consolodated_edges = []
             start_or_end_node = []
             node_inds = [_node_inds]
@@ -2729,7 +2733,7 @@ class Editor(object):
         
         # Add new edges to graph
         scalar_names = [x['name'] for x in scalars]
-        for edge in tqdm(consol_edge):
+        for edge in consol_edge:
             new_conn = arr([edge['start_node'],edge['end_node']])
             new_pts = edge['points']
             # Create indices defining the first, last and every second index in between
@@ -2917,7 +2921,7 @@ class Editor(object):
             node_radius = np.zeros(nodecoords.shape[0]) - 1
             rname = graph.get_radius_field_name()
             rind = [i for i,s in enumerate(graph.get_scalars()) if s['name']==rname][0]
-            for i in trange(graph.nedge):
+            for i in range(graph.nedge):
                 edge = graph.get_edge(i)
                 rads = np.min(edge.scalars[rind])
                 node_radius[edge.start_node_index] = np.max([rads,node_radius[edge.start_node_index]])
@@ -2925,7 +2929,7 @@ class Editor(object):
             
             is_stub = np.zeros(radius.shape[0],dtype='bool')
             stub_loc = np.zeros(graph.nedge,dtype='int') - 1
-            for i in trange(graph.nedge):
+            for i in range(graph.nedge):
                 edge = graph.get_edge(i)   
                 rads = edge.scalars[rind]
                 #epointinds = np.linspace(edge.i0,edge.i1,edge.npoints,dtype='int')
@@ -2946,7 +2950,7 @@ class Editor(object):
             stub_loc = stub_loc[edge_stubs]
             # Shorten stubs
             edgepoints_valid = np.ones(edgepoints.shape[0],dtype='bool') 
-            for i,edge in enumerate(tqdm(edges)):
+            for i,edge in enumerate(edges):
                  nodes = nodecoords[edge]
                  edgeObj = graph.get_edge(edge_stubs[i])
                  points = edgeObj.coordinates
@@ -3050,7 +3054,7 @@ class Editor(object):
             filter = np.ones(conns.shape[0],dtype='bool')
         
         pts_interp,npoints_interp = [],np.zeros(conns.shape[0],dtype='int')-1
-        for i,conn in enumerate(tqdm(conns)):
+        for i,conn in enumerate(conns):
             i0 = np.sum(npoints[:i])
             i1 = i0 + npoints[i]
             pts = points[i0:i1]
@@ -3243,7 +3247,7 @@ class Editor(object):
             g_node_scalars.append(gvars.node_scalar_values[j][gvars.nodecoords_allocated])  
             g_node_scalar_names.append(gvars.node_scalars[j]['name'])
 
-        for i,conn in enumerate(tqdm(conns)):
+        for i,conn in enumerate(conns):
 
             if filter[i]==True: # Ignore if filter is False           
             
@@ -3387,7 +3391,7 @@ class Editor(object):
         nodes = graph.get_data('VertexCoordinates')
         edgepoints = graph.get_data('EdgePointCoordinates')
         
-        for i,c1 in enumerate(tqdm(nodes)):
+        for i,c1 in enumerate(nodes):
             sind = np.where((nodes[:,0]==c1[0]) & (nodes[:,1]==c1[1]) & (nodes[:,2]==c1[2]))
             if len(sind[0])>1:
                 #print(f'Degenerate nodes: {sind[0]}')
