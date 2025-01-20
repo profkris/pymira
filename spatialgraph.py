@@ -216,8 +216,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
     def print(self):
         self.__repr__()
         
-    def unique_node_label(self):
-        nl = self.get_data('NodeLabel')
+    def unique_node_label(self,nl=None):
+        if nl is None:
+            nl = self.get_data('NodeLabel')
         self.node_label_counter += 1
         nxt = self.node_label_counter
         if nl is not None:
@@ -226,8 +227,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 self.node_label_counter = nxt
         return nxt
         
-    def unique_edge_label(self):
-        el = self.get_data('EdgeLabel')
+    def unique_edge_label(self,el=None):
+        if el is None:
+            el = self.get_data('EdgeLabel')
         self.edge_label_counter += 1
         nxt = self.edge_label_counter
         if el is not None:
@@ -296,18 +298,29 @@ class SpatialGraph(amiramesh.AmiraMesh):
             if type(scalars) is not list:
                 scalars = [scalars]
             for i,sc in enumerate(scalars):
-                self.add_field(name=sc,marker='@{}'.format(offset),
-                                  definition='POINT',type='float',
-                                  nelements=1,nentries=[0])
+
+                if sc=='EdgeLabel':
+                    self.add_field(name='EdgeLabel',marker=f'@{len(self.fields)+1}',
+                                                  definition='POINT',type='int',
+                                                  nelements=1,nentries=[0])  
+                else:
+                    self.add_field(name=sc,marker='@{}'.format(offset),
+                                      definition='POINT',type='float',
+                                      nelements=1,nentries=[0])
                 offset = len(self.fields) + 1
                                   
         if len(node_scalars)>0:
             if type(node_scalars) is not list:
                 node_scalars = [node_scalars]
             for i,sc in enumerate(node_scalars):
-                self.add_field(name=sc,marker='@{}'.format(i+offset),
-                                  definition='VERTEX',type='float',
-                                  nelements=1,nentries=[0])
+                if sc=='NodeLabel':
+                    self.add_field(name='NodeLabel',marker=f'@{len(self.fields)+1}',
+                                                  definition='VERTEX',type='int',
+                                                  nelements=1,nentries=[0])   
+                else:
+                    self.add_field(name=sc,marker='@{}'.format(i+offset),
+                                      definition='VERTEX',type='float',
+                                      nelements=1,nentries=[0])
                 offset = len(self.fields) + 1
                               
         self.fieldNames = [x['name'] for x in self.fields]
@@ -432,7 +445,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         self.fields[ind]['name'] = new_name
         self.fieldNames[ind] = new_name
         
-    def set_graph_sizes(self):
+    def set_graph_sizes(self,labels=False):
         """
         Ensure consistency between data size fields and the data itself
         """
@@ -448,6 +461,16 @@ class SpatialGraph(amiramesh.AmiraMesh):
             self.nedgepoint = self.get_definition('POINT')['size'][0]
         except:
             pass
+            
+        if labels:
+            sc = [x['name'] for x in self.fields]
+            if 'EdgeLabel' in sc:
+                nedgepoint = self.get_data('NumEdgePoints')
+                edgeLabel = np.repeat(np.linspace(0,self.nedge-1,self.nedge,dtype='int'),nedgepoint)
+                self.set_data(edgeLabel,name='EdgeLabel')   
+            if 'NodeLabel' in sc:
+                nodeLabel = np.linspace(0,self.nnode-1,self.nnode,dtype='int')
+                self.set_data(nodeLabel,name='NodeLabel')    
             
     def get_standard_fields(self):
         """
@@ -996,7 +1019,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                             print(err)
                             #print(('Edge end point does not match edge start (REVERSE) ({}) coordinates'.format(e.index)))
                         if not all(x.astype('float32')==y.astype('float32') for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
-                            err = f'Edge start point does not match edge end (REVERSE) ({e.index}) coordinates'
+                            err = f'Edge start point does not match edge end (REVERSE) (edge {e.index}) coordinates'
                             print(err)
                             #print(('Edge start point does not match edge end (REVERSE) ({}) coordinates'.format(e.index)))        
 
@@ -1281,7 +1304,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         _ = delete_vertices(self,keep_node)
 
-    def test_treelike(self, inlet=None, outlet=None, euler=True, ignore_type=False):
+    def test_treelike(self, inlet=None, outlet=None, euler=True, ignore_type=False, quiet=False):
 
         if inlet is None:
             inlet,outlet = self.identify_inlet_outlet()
@@ -1315,13 +1338,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     if len(next_front)>0:
                         dplicates = np.in1d(next_front,visited)
                         if np.any(dplicates):
-                            print(f'Test treelike, revisited: {next_front[dplicates]}, it: {count}')
+                            if not quiet:
+                                print(f'Test treelike, revisited: {next_front[dplicates]}, it: {count}')
                             dnodes = next_front[dplicates]
                             edges = self.get_edges_containing_node(dnodes)
                             return False
                         unq,cnt = np.unique(next_front,return_counts=True)
                         if np.any(cnt)>1:
-                            print(f'Test treelike, duplicate paths to node: {unq[cnt>1]}')
+                            if not quiet:
+                                print(f'Test treelike, duplicate paths to node: {unq[cnt>1]}')
                             #breakpoint()
                             return False
                         visited.extend(next_front.tolist())
@@ -1337,7 +1362,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
         # Double check
         all_in = np.in1d(np.arange(nodecoords.shape[0]),visited)
         if not np.all(all_in):
-            print(f'Not all nodes visited: {np.arange(nodecoords.shape[0])[~all_in]}')
+            if not quiet:
+                print(f'Not all nodes visited: {np.arange(nodecoords.shape[0])[~all_in]}')
             return False
             
         gc = self.get_node_count()
@@ -1350,7 +1376,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
         if euler:
             if vt is None:
                 if self.nnode!=self.nedge+1:
-                    print(f'Euler criterion failed ({self.nnode} nodes, {self.nedge} edges)')              
+                    if not quiet:
+                        print(f'Euler criterion failed ({self.nnode} nodes, {self.nedge} edges)')              
             if ignore_type:
                 n_anode = np.sum((vt==0) | (vt==1))
             else:
@@ -1364,9 +1391,11 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 n_aedges = a_edges.shape[0]
                 if n_anode!=n_aedges+1:
                     if n_anode>n_aedges+1:
-                        print(f'Euler criterion failed (arterial, too many nodes! {n_anode} nodes, {n_aedges} edges)')
+                        if not quiet:
+                            print(f'Euler criterion failed (arterial, too many nodes! {n_anode} nodes, {n_aedges} edges)')
                     if n_anode<n_aedges+1:
-                        print(f'Euler criterion failed (arterial, too many edges! {n_anode} nodes, {n_aedges} edges)')
+                        if not quiet:
+                            print(f'Euler criterion failed (arterial, too many edges! {n_anode} nodes, {n_aedges} edges)')
                     return False
                 
             # Euler: Venous nodes
@@ -1378,25 +1407,30 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     n_vedges = v_edges.shape[0]
                     if n_vnode!=n_vedges+1:
                         if n_vnode>n_vedges+1:
-                            print(f'Euler criterion failed (venous, too many nodes! {n_vnode} nodes, {n_vedges} edges)')
+                            if not quiet:
+                                print(f'Euler criterion failed (venous, too many nodes! {n_vnode} nodes, {n_vedges} edges)')
                         if n_vnode<n_vedges+1:
-                            print(f'Euler criterion failed (venous, too many edges! {n_vnode} nodes, {n_vedges} edges)')
+                            if not quiet:
+                                print(f'Euler criterion failed (venous, too many edges! {n_vnode} nodes, {n_vedges} edges)')
                         return False
          
         duplicate_edges = self.get_duplicated_edges()
         if np.any(duplicate_edges>0):
-            print(f'Duplicated edges!')
+            if not quiet:
+                print(f'Duplicated edges!')
             return False
                 
         selfconnected_edges = (edges[:,0]==edges[:,1])
         if np.any(selfconnected_edges):
-            print(f'Self-connected edges!')
+            if not quiet:
+                print(f'Self-connected edges!')
             return False
             
         # Test for degeneracy
         res,_ = self.test_node_degeneracy(find_all=False)
         if res: 
-            print('Degenerate nodes present!')
+            if not quiet:
+                print('Degenerate nodes present!')
             return False
         
         return True
@@ -1582,6 +1616,24 @@ class SpatialGraph(amiramesh.AmiraMesh):
         return graphIndex, graph_size
         
     def edge_scalar_to_node_scalar(self,name,maxval=False):
+    
+        if False: #type(name) is str:
+            data = self.get_data(name)
+            if data is None:
+                return None
+            conns = self.get_data('EdgeConnectivity')
+
+            if False:
+                mask = (conns[:, 0][:, None] == np.arange(self.nnode)) | (conns[:, 1][:, None] == np.arange(self.nnode))
+                masked_data = np.where(mask, data[:, None], np.nan)
+                node_scalar = np.nanmax(masked_data, axis=0)
+                node_scalar = np.where(np.all(np.isnan(masked_data), axis=0), None, node_scalar).astype(data.dtype)
+            else:
+                node_scalar = arr([None if len(np.where((conns[:,0]==n) | (conns[:,1]==n))[0])==0
+                                   else np.nanmax(data[np.where((conns[:,0]==n) | (conns[:,1]==n))])
+                                   for n in range(self.nnode)]).astype(data.dtype)
+            
+            return node_scalar
 
         scalar_points = self.get_data(name)
         if scalar_points is None:
@@ -1620,6 +1672,29 @@ class SpatialGraph(amiramesh.AmiraMesh):
         return scalar_nodes
         
     def point_scalars_to_node_scalars(self,mode='max',name=None):
+    
+        if True: #type(name) is str and mode=='max':
+            data = self.get_data(name)
+            if data is None:
+                return None
+            npts = self.get_data('NumEdgePoints')
+            epi = np.repeat(np.linspace(0,self.nedge-1,self.nedge,dtype='int'),npts)
+            sums = np.bincount(epi, weights=data, minlength=self.nedge)
+            counts = np.bincount(epi, minlength=self.nedge)
+            means = np.divide(sums, counts, where=counts!=0)
+            conns = self.get_data('EdgeConnectivity')
+
+            #if False:
+            mask = (conns[:, 0][:, None] == np.arange(self.nnode)) | (conns[:, 1][:, None] == np.arange(self.nnode))
+            masked_data = np.where(mask, means[:, None], np.nan)
+            node_scalar = np.nanmax(masked_data, axis=0)
+            node_scalar = np.where(np.all(np.isnan(masked_data), axis=0), None, node_scalar).astype(data.dtype)
+            #else:
+            #node_scalar2 = arr([None if len(np.where((conns[:,0]==n) | (conns[:,1]==n))[0])==0
+            #                       else np.nanmax(means[np.where((conns[:,0]==n) | (conns[:,1]==n))])
+            #                       for n in range(self.nnode)]).astype(data.dtype)
+
+            return node_scalar
 
         scalars = self.get_scalars()
         if name is not None:
@@ -1651,9 +1726,25 @@ class SpatialGraph(amiramesh.AmiraMesh):
                             scalar_nodes[j,node] = np.nanmin([np.min(data[x0:x1]),scalar_nodes[j,node]])
                         else:
                             scalar_nodes[j,node] = np.nanmin([np.min(data[x0:x1]),scalar_nodes[j,node]])
-        return scalar_nodes.squeeze()
+
+        scalar_nodes = scalar_nodes.squeeze()
+        if not np.all((scalar_nodes==node_scalar) | ((~np.isfinite(scalar_nodes) & (~np.isfinite(node_scalar))))):
+            breakpoint()
+        return node_scalar
         
     def point_scalars_to_edge_scalars(self,func=np.mean,name=None):
+    
+        if True: #type(name) is str and func==np.mean:
+            data = self.get_data(name)
+            if data is None:
+                return None
+            npts = self.get_data('NumEdgePoints')
+            epi = np.repeat(np.linspace(0,self.nedge-1,self.nedge,dtype='int'),npts)
+            #edata = arr([np.mean(data[epi==i]) for i in range(self.nedge)])
+            sums = np.bincount(epi, weights=data, minlength=self.nedge)
+            counts = np.bincount(epi, minlength=self.nedge)
+            means = np.divide(sums, counts, where=counts!=0)
+            return means
 
         scalars = self.get_scalars()
         if name is not None:
@@ -2252,6 +2343,41 @@ class SpatialGraph(amiramesh.AmiraMesh):
 
         self.set_data(nodes,name='VertexCoordinates')
         #self.set_data(edgepoints,name='EdgePointCoordinates')
+        
+        return conn_edges
+        
+    def get_segments(self,return_edge=False):
+        nedgepoint = self.get_data(name='NumEdgePoints') 
+        edgepoints = self.get_data('EdgePointCoordinates')
+        nseg = nedgepoint - 1
+        
+        count = 0
+        segments = np.zeros([np.sum(nseg),2,3])
+        segment_edges = np.zeros(np.sum(nseg),dtype='int')
+        segment_points = np.zeros([np.sum(nseg),2],dtype='int')
+        for e in range(self.nedge):
+            edge = self.get_edge(e)
+            for ep in range(1,edge.npoints):
+                segments[count,0] = edge.coordinates[ep-1]
+                segments[count,1] = edge.coordinates[ep]
+                segment_edges[count] = e
+                segment_points[count] = ep-1,ep
+                count += 1
+        if return_edge==False:
+            return segments
+        else:
+            return segments,segment_edges,segment_points
+            
+    def check_for_nan(self):
+        nodes = self.get_data('VertexCoordinates')
+        if np.any(~np.isfinite(nodes)):
+            inds = np.where(~np.isfinite(nodes))
+            return True, 0, inds[0]
+        points = self.get_data('EdgePointCoordinates')
+        if np.any(~np.isfinite(points)):
+            inds = np.where(~np.isfinite(points))
+            return True, 1, inds[0]
+        return False, -1, None
 
 class Editor(object):
 
@@ -3579,7 +3705,10 @@ class Edge(object):
     def get_coordinates_from_graph(self,graph,index):
         nedgepoints = graph.get_field('NumEdgePoints')['data']
         coords = graph.get_field('EdgePointCoordinates')['data']
-        nprev = np.sum(nedgepoints[0:index])
+        if index>0:
+            nprev = np.sum(nedgepoints[0:index])
+        else:
+            nprev = 0
         ncur = nedgepoints[index]
         e_coords = coords[nprev:nprev+ncur,:]
         return e_coords
@@ -4125,6 +4254,11 @@ class GVars(object):
         if fr is not None or npoints==2:
             # Calculate distance along the edge
             dists = np.linalg.norm(edge-edge[0],axis=1)
+            if dists[-1]==0.:
+                if node_location_only:
+                    return None
+                else:
+                    return None, None, None, None
             t = np.cumsum(dists)
             # Calculate insertion point
             new_loc = t[-1]*fr
@@ -4276,6 +4410,6 @@ class GVars(object):
         self.graph.set_definition_size('VERTEX',nodecoords.shape[0])
         self.graph.set_definition_size('EDGE',edgeconn.shape[0])
         self.graph.set_definition_size('POINT',edgepoints.shape[0])  
-        self.graph.set_graph_sizes()
+        self.graph.set_graph_sizes(labels=False)
         self.graph.edgeList = None
         return self.graph

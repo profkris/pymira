@@ -188,7 +188,7 @@ class TubePlot(object):
         #if self.domain is None:
         #    return True, None
         # Cuboid domain
-        if self.domain_type=='cuboid':
+        if self.domain_type=='cuboid' and self.domain is not None:
             if np.all(self.domain[:,0]<=coord) and np.all(self.domain[:,1]>=coord):
                 return True, None
             elif start_coord is not None:
@@ -196,7 +196,7 @@ class TubePlot(object):
                 return False, dom_int
             else:
                 return False, None
-        elif self.domain_type=='rectangle':
+        elif self.domain_type=='rectangle' and self.domain is not None:
             if np.all(self.domain[:2,0]<=coord[:2]) and np.all(self.domain[:2,1]>=coord[:2]):
                 return True, None
             elif start_coord is not None:

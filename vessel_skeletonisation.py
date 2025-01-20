@@ -150,11 +150,8 @@ def skeletonize(image,resolution=arr([1.,1.,1.,]),offset=arr([0.,0.,0.])):
     graph.set_data(edgepoints,name='EdgePointCoordinates')
     graph.set_data(radii,name='Radius')
     graph.set_graph_sizes()
-    
-    breakpoint()
-    
-    ed = spatialgraph.Editor()
-    #breakpoint()
+
+    #ed = spatialgraph.Editor()
     #graph = ed.remove_intermediate_nodes(graph)
     
     return graph
