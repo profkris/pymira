@@ -1777,7 +1777,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         scalar_edges[j,i] = func(data[x0:x1])
         return scalar_edges.squeeze()
  
-    def point_scalars_to_segment_scalars(self,func=np.mean,name=None):
+    def point_scalars_to_segment_scalars(self,func=np.mean,name=None,domain=None):
 
         scalars = self.get_scalars()
         if name is not None:
@@ -1794,6 +1794,12 @@ class SpatialGraph(amiramesh.AmiraMesh):
         nsc = len(scalars)
         nseg = self.nedgepoint - self.nedge
         scalar_segs = np.zeros([nsc,nseg])
+        
+        ins = None
+        if domain is not None:
+            segments = self.get_segments(domain=domain)
+            ins = (np.all(segments[:,0]>=domain[:,0],axis=1)) & (np.all(segments[:,0]<=domain[:,1],axis=1)) & \
+                  (np.all(segments[:,1]>=domain[:,0],axis=1)) & (np.all(segments[:,1]<=domain[:,1],axis=1))
     
         for i,conn in enumerate(conns):
             npts = int(npoints[i])
@@ -1810,7 +1816,10 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         scalar_segs[j,s0:s1] = data[x0:x1-1]
                     else:
                         scalar_segs[j,s0] = data[x0]
-        return scalar_segs.squeeze()
+        if ins is None:
+            return scalar_segs.squeeze()
+        else:
+            return scalar_segs[ins].squeeze()
  
     def plot_radius(self,*args,**kwargs):
         _ = self.plot_histogram(self.get_radius_field_name(),*args,**kwargs)
@@ -2317,7 +2326,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
     def move_node(self,nodeIndex,coords=None,displacement=None):
     
         """
-        Move nodeIndex to coords
+        Move nodeIndex to coords and translate any connected edge
         """
     
         nodes = self.get_data('VertexCoordinates').copy()
@@ -2346,23 +2355,27 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         return conn_edges
         
-    def get_segments(self,return_edge=False):
+    def get_segments(self,return_edge=False,domain=None):
         nedgepoint = self.get_data(name='NumEdgePoints') 
         edgepoints = self.get_data('EdgePointCoordinates')
-        nseg = nedgepoint - 1
+        epi = self.edge_point_index()
+        #nseg = nedgepoint - 1
+            
+        segments = np.hstack([edgepoints[:-1],edgepoints[1:]])
+        segments = segments.reshape([segments.shape[0],2,3])
+        epi_seg = np.vstack([epi[:-1],epi[1:]]).transpose()
+        valid = epi_seg[:,0]==epi_seg[:,1]
         
-        count = 0
-        segments = np.zeros([np.sum(nseg),2,3])
-        segment_edges = np.zeros(np.sum(nseg),dtype='int')
-        segment_points = np.zeros([np.sum(nseg),2],dtype='int')
-        for e in range(self.nedge):
-            edge = self.get_edge(e)
-            for ep in range(1,edge.npoints):
-                segments[count,0] = edge.coordinates[ep-1]
-                segments[count,1] = edge.coordinates[ep]
-                segment_edges[count] = e
-                segment_points[count] = ep-1,ep
-                count += 1
+        if domain is not None:
+            ins = (np.all(segments[:,0]>=domain[:,0],axis=1)) & (np.all(segments[:,0]<=domain[:,1],axis=1)) & \
+                  (np.all(segments[:,1]>=domain[:,0],axis=1)) & (np.all(segments[:,1]<=domain[:,1],axis=1))
+            valid = valid & ins
+        
+        segments = segments[valid]
+        segment_edges = epi_seg[valid,0]
+        segment_points = np.linspace(0,np.sum(nedgepoint)-1,np.sum(nedgepoint),dtype='int')-np.repeat(np.cumsum(nedgepoint)-nedgepoint,nedgepoint)
+        segment_points = segment_points.reshape([int(segment_points.shape[0]/2),2])
+        
         if return_edge==False:
             return segments
         else:
