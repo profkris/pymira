@@ -2373,8 +2373,10 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         segments = segments[valid]
         segment_edges = epi_seg[valid,0]
-        segment_points = np.linspace(0,np.sum(nedgepoint)-1,np.sum(nedgepoint),dtype='int')-np.repeat(np.cumsum(nedgepoint)-nedgepoint,nedgepoint)
-        segment_points = segment_points.reshape([int(segment_points.shape[0]/2),2])
+        #segment_points = np.linspace(0,np.sum(nedgepoint)-1,np.sum(nedgepoint),dtype='int')-np.repeat(np.cumsum(nedgepoint)-nedgepoint,nedgepoint)
+        #segment_points = segment_points.reshape([int(segment_points.shape[0]/2),2])
+        p0 = np.concatenate([np.linspace(0,x-2,x-1,dtype='int') for x in nedgepoint])
+        segment_points = np.vstack([p0,p0+1]).transpose()
         
         if return_edge==False:
             return segments
