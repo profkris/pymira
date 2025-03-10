@@ -30,6 +30,7 @@ class AmiraMesh(object):
         self.dataTypes = ['float','double','byte','int','long','binary','bool']
         self.filename = None
         self.dir = None
+        self.diagnostic = None
         
     def _populate_next_data_field(self,i,curDataMarker,eof=False):
         self.dataFieldCount += 1
@@ -612,6 +613,8 @@ class AmiraMesh(object):
                 f['nentries'] = [len(data)]
             except:
                 f['nentries'] = [1]
+            if self.diagnostic is not None:
+                self.diagnostic(func='set_data',a={'data':data,'field':f})
             
     def get_definition(self,name):
         defin = [x for x in self.definitions if x['name'].lower()==name.lower()]

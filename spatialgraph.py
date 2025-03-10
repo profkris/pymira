@@ -11,6 +11,7 @@ Amira SpatialGraph loader and writer
 from pymira import amiramesh
 import numpy as np
 arr = np.asarray
+#np.seterr(invalid='raise')
 import os
 from tqdm import tqdm, trange # progress bar
 import matplotlib as mpl
@@ -992,7 +993,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     print(err)
                 if not all(x==y for x,y in zip(f['data'].shape,f['shape'])):
                     err = f'{f["name"]} data shape does not match shape field!'
-                    print(err)               
+                    print(err)             
 
         if deep:
             self.edgeList = None
@@ -1022,6 +1023,16 @@ class SpatialGraph(amiramesh.AmiraMesh):
                             err = f'Edge start point does not match edge end (REVERSE) (edge {e.index}) coordinates'
                             print(err)
                             #print(('Edge start point does not match edge end (REVERSE) ({}) coordinates'.format(e.index)))        
+
+        # Check for nans
+        nodes = self.get_data('VertexCoordinates') 
+        if np.any(np.isfinite(nodes)==False):
+            err = 'Non-finite node values present'
+            print(err)
+        points = self.get_data('EdgePointCoordinates')   
+        if np.any(np.isfinite(points)==False):
+            err = 'Non-finite edgepoint values present'
+            print(err)        
 
         if err!='':
             return False
@@ -1457,8 +1468,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
         Return an array with nnode elements, with value equal to the first node with a degenerate coordinate identified (or -1 if not degenerate)
         """
     
-        degen_nodes = np.zeros(self.nnode,dtype='int') - 1
         nodecoords = self.get_data('VertexCoordinates')
+        degen_nodes = np.zeros(nodecoords.shape[0],dtype='int') - 1
         
         for i,c1 in enumerate(nodecoords):
             if degen_nodes[i]<0:
@@ -2273,7 +2284,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 dist1 = np.linalg.norm(e.end_node_coords-new_coords)
                 translated_points = e.coordinates - e.coordinates[-1]
             else:
-                if np.all(coords) is None and displacement is not None:
+                if coords is None and displacement is not None:
                     new_coords = e.end_node_coords + displacement
                 elif coords is not None:
                     new_coords = coords
@@ -2285,6 +2296,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 dist0 = np.linalg.norm(e.start_node_coords-e.end_node_coords)
                 dist1 = np.linalg.norm(e.start_node_coords-new_coords)
                 translated_points = e.coordinates - e.coordinates[0]
+            if np.any(np.isfinite(translated_points)==False):
+                breakpoint()
             
             scale_factor = dist1 / dist0
                 
@@ -2336,6 +2349,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         for ei in conn_edges:
             e = self.get_edge(ei)
+            
             new_coords = self._translate_edge_coords(nodeIndex,e,coords=coords,displacement=displacement)
             
             if False:
