@@ -30,6 +30,7 @@ class TubePlot(object):
                          edge_highlight=[],node_highlight=[],highlight_color=[1,1,1],scalar_color_name=None,log_color=False,
                          show=True,block=True,engine='open3d',domain=None,domain_type='cylinder',ignore_domain=False,additional_meshes=None):
         self.vis = None
+        self.headless = False # If headless mode detected, don't try and display anything
         self.graph = graph
         self.cylinders = cylinders
         self.cylinders_combined = cylinders_combined
@@ -532,7 +533,11 @@ class TubePlot(object):
                 self.vis.add_geometry(self.additional_meshes)
             
             opt = self.vis.get_render_option()
-            opt.background_color = np.asarray(self.bgcolor)
+            self.headless = False
+            if opt is not None:
+                opt.background_color = np.asarray(self.bgcolor)
+            else:
+                self.headless = True
         elif self.engine=='pyvista':
             pass
             #self.vis = pv.Plotter(window_size=[self.win_width,self.win_height])
@@ -545,7 +550,7 @@ class TubePlot(object):
         
     def update(self):
         if self.engine=='open3d':
-            if self.vis is not None:
+            if self.vis is not None and self.headless==False:
                 meshes = []
                 #breakpoint()
                 if self.additional_meshes is not None:
