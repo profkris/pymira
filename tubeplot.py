@@ -577,6 +577,8 @@ class TubePlot(object):
                     self.vis.update_geometry(self.cylinders_combined)
         
     def screen_grab(self,fname):
+        if self.headless:
+            return
         if self.engine=='open3d':
             if self.vis is not None:
                 self.vis.capture_screen_image(fname,do_render=True)     
