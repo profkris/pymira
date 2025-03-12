@@ -541,6 +541,7 @@ class TubePlot(object):
                 opt.background_color = np.asarray(self.bgcolor)
             else:
                 self.headless = True
+                self.vis.destroy_window()
         elif self.engine=='pyvista':
             pass
             #self.vis = pv.Plotter(window_size=[self.win_width,self.win_height])
