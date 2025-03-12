@@ -109,6 +109,7 @@ class TubePlot(object):
         # Create plot window
         self.create_plot_window()
         if self.headless:
+            print('Headless mode! Cannot render image')
             return
             
         # Set colours (only if raw cylinders have been provided)
