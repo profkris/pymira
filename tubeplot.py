@@ -345,6 +345,8 @@ class TubePlot(object):
             self.update()
             
     def add_torus(self,centre=arr([0.,0.,0.]),color=arr([1.,1.,1.]),**kwargs):
+        if self.headless:
+            return
         torus = o3d.geometry.TriangleMesh.create_torus(**kwargs) # torus_radius=1.0, tube_radius=0.5, radial_resolution=30, tubular_resolution=20
         # Simple translation (TODO: Add rotation, etc.)
         torus = torus.translate(centre, relative=False)
@@ -357,6 +359,8 @@ class TubePlot(object):
         self.update()
         
     def add_cylinder(self,centre=arr([0.,0.,0.]),color=arr([1.,1.,1.]),**kwargs):
+        if self.headless:
+            return
         cyl = o3d.geometry.TriangleMesh.create_cylinder(**kwargs)
         # Simple translation (TODO: Add rotation, etc.)
         cyl = cyl.translate(centre, relative=False)
@@ -370,6 +374,8 @@ class TubePlot(object):
         self.update()
         
     def add_mesh(self,mesh,color=arr([1.,1.,1.]),**kwargs):
+        if self.headless:
+            return
         mesh.paint_uniform_color(color)
         # For now, add it in to the combined mesh. TODO: Have a dedicated set of additional meshes
         if self.additional_meshes is None:
@@ -380,6 +386,8 @@ class TubePlot(object):
         self.update()
         
     def add_point_cloud(self,points,color=arr([1.,1.,1.]),**kwargs):
+        if self.headless:
+            return
         pointcloud = o3d.geometry.PointCloud()
         pointcloud.points = o3d.utility.Vector3dVector(points)
         
@@ -402,6 +410,8 @@ class TubePlot(object):
         self.update()
         
     def create_plot_cylinders(self):
+        if self.headless:
+            return
     
         nc = self.graph.get_data('VertexCoordinates')
         points = self.graph.get_data('EdgePointCoordinates')
@@ -490,6 +500,8 @@ class TubePlot(object):
         #o3d.visualization.draw_geometries(self.cylinders[self.cylinders!=None][:50])
         
     def combine_cylinders(self):
+        if self.headless:
+            return
     
         if self.engine=='open3d':
             if self.vis is not None:
@@ -549,7 +561,7 @@ class TubePlot(object):
             #self.vis.set_background(self.bgcolor)
         
     def _show_plot(self):
-        if self.vis is not None:
+        if self.vis is not None and self.headless==False:
             self.vis.run()
             self.vis.destroy_window()
         
