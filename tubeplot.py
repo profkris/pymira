@@ -357,6 +357,21 @@ class TubePlot(object):
             self.additional_meshes += torus
         self.update()
         
+    def add_sphere(self,centre=arr([0.,0.,0.]),color=arr([1.,1.,1.]),**kwargs):
+        # kwargs: radius, resolution
+        if self.headless:
+            return
+        sphere = o3d.geometry.TriangleMesh.create_sphere(**kwargs) # torus_radius=1.0, tube_radius=0.5, radial_resolution=30, tubular_resolution=20
+        # Simple translation (TODO: Add rotation, etc.)
+        sphere = sphere.translate(centre, relative=False)
+        sphere.paint_uniform_color(color)
+        if self.additional_meshes is None:
+            self.additional_meshes = sphere
+            self.vis.add_geometry(self.additional_meshes)
+        else:
+            self.additional_meshes += sphere
+        self.update()
+        
     def add_cylinder(self,centre=arr([0.,0.,0.]),color=arr([1.,1.,1.]),**kwargs):
         if self.headless:
             return

@@ -1204,7 +1204,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
         edgeconn = self.get_data('EdgeConnectivity')
         edgepoints = self.get_data('EdgePointCoordinates')
         nedgepoints = self.get_data('NumEdgePoints')
-        radius = self.get_data(self.get_radius_field_name())
+        #radius = self.get_data(self.get_radius_field_name())
+        edge_radius = self.point_scalars_to_edge_scalars(name=self.get_radius_field_name(),func=np.max)
         category = self.get_data('VesselType')
         
         if category is None:
@@ -1224,14 +1225,14 @@ class SpatialGraph(amiramesh.AmiraMesh):
         terminal_node[term_inds] = True
 
         # Assign a radius to nodes using the largest radius of each connected edge
-        edge_radius = radius[first_edgepoint_inds]
+        #edge_radius = radius[first_edgepoint_inds]
 
         # Assign a category to each node using the minimum category of each connected edge (thereby favouring arteries/veins (=0,1) over capillaries (=2))
         edge_category = category[first_edgepoint_inds]
         
         # Locate arterial input(s)
         mask = np.ones(edgeconn.shape[0])
-        mask[(edge_category!=0) | ((node_count[edgeconn[:,0]]!=1) & (node_count[edgeconn[:,0]]!=1))] = np.nan
+        mask[(edge_category!=0) | ((node_count[edgeconn[:,0]]!=1) & (node_count[edgeconn[:,1]]!=1))] = np.nan
         if ignore is not None:
             mask[(np.in1d(edgeconn[:,0],ignore)) | (np.in1d(edgeconn[:,1],ignore))] = np.nan
         if np.nansum(mask)==0.:
@@ -1243,7 +1244,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         # Locate vein output(s)
         mask = np.ones(edgeconn.shape[0])
-        mask[(edge_category!=1) | ((node_count[edgeconn[:,0]]!=1) & (node_count[edgeconn[:,0]]!=1))] = np.nan
+        mask[(edge_category!=1) | ((node_count[edgeconn[:,0]]!=1) & (node_count[edgeconn[:,1]]!=1))] = np.nan
         if ignore is not None:
             mask[(np.in1d(edgeconn[:,0],ignore)) | (np.in1d(edgeconn[:,1],ignore))] = np.nan
         if np.nansum(mask)==0.:
