@@ -3418,7 +3418,11 @@ class Editor(object):
                 cumulative_lengths = np.insert(np.cumsum(lengths), 0, 0)
                 total_length = np.sum(lengths)
                 meanRadius = np.mean(radii[i0:i1])
-                cur_interp_res = interp_radius_factor*meanRadius
+                
+                if interp_resolution is None:
+                    cur_interp_res = interp_radius_factor*meanRadius
+                else:
+                    cur_interp_res = interp_resolution
 
                 if total_length>cur_interp_res:
                     ninterp = np.clip(total_length/cur_interp_res,1,None).astype('int')
