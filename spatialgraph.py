@@ -1207,13 +1207,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
         #radius = self.get_data(self.get_radius_field_name())
         edge_radius = self.point_scalars_to_edge_scalars(name=self.get_radius_field_name(),func=np.max)
         category = self.get_data('VesselType')
+        edge_category = self.point_scalars_to_edge_scalars(name='VesselType')
         
         if category is None:
-            category = np.zeros(edgepoints.shape[0],dtype='bool')
+            category = np.zeros(edgepoints.shape[0],dtype='int')
+            edge_category = np.zeros(self.nedgepoints,dtype='int')
 
-        inds = np.linspace(0,edgeconn.shape[0]-1,edgeconn.shape[0],dtype='int')
-        edge_inds = np.repeat(inds,nedgepoints)
-        first_edgepoint_inds = np.concatenate([[0],np.cumsum(nedgepoints)[:-1]])
+        #inds = np.linspace(0,edgeconn.shape[0]-1,edgeconn.shape[0],dtype='int')
+        #edge_inds = np.repeat(inds,nedgepoints)
+        #first_edgepoint_inds = np.concatenate([[0],np.cumsum(nedgepoints)[:-1]])
 
         #edge_node_lookup = create_edge_node_lookup(nodecoords,edgeconn,tmpfile=tmpfile,restore=restore)
                 
@@ -1228,7 +1230,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         #edge_radius = radius[first_edgepoint_inds]
 
         # Assign a category to each node using the minimum category of each connected edge (thereby favouring arteries/veins (=0,1) over capillaries (=2))
-        edge_category = category[first_edgepoint_inds]
+        #edge_category = category[first_edgepoint_inds]
         
         # Locate arterial input(s)
         mask = np.ones(edgeconn.shape[0])
@@ -1239,8 +1241,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
             a_inlet_node = None
         else:
             a_inlet_edge_ind = np.nanargmax(edge_radius*mask)
-            a_inlet_edge = edgeconn[a_inlet_edge_ind]
-            a_inlet_node = a_inlet_edge[node_count[a_inlet_edge]==1][0]
+            a_inlet_edge_nodes = edgeconn[a_inlet_edge_ind]
+            a_inlet_node = a_inlet_edge_nodes[node_count[a_inlet_edge_nodes]==1][0]
         
         # Locate vein output(s)
         mask = np.ones(edgeconn.shape[0])
@@ -1251,8 +1253,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
             v_outlet_node = None
         else:
             v_outlet_edge_ind = np.nanargmax(edge_radius*mask)
-            v_outlet_edge = edgeconn[v_outlet_edge_ind]
-            v_outlet_node = v_outlet_edge[node_count[v_outlet_edge]==1][0]
+            v_outlet_edge_nodes = edgeconn[v_outlet_edge_ind]
+            v_outlet_node = v_outlet_edge_nodes[node_count[v_outlet_edge_nodes]==1][0]
         
         return a_inlet_node,v_outlet_node 
 
