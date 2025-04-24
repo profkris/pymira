@@ -551,24 +551,44 @@ class TubePlot(object):
         if win_height is not None:
             self.win_height = win_height
         if bgcolor is not None:
-            self.bgcolor = bgcolor                      
+            self.bgcolor = bgcolor           
     
         if self.engine=='open3d':
-            self.vis = o3d.visualization.Visualizer() #O3DVisualizer()
-            self.vis.create_window(width=self.win_width,height=self.win_height,visible=self.show)
-        
-            if self.cylinders_combined is not None:
-                self.vis.add_geometry(self.cylinders_combined)
-            if self.additional_meshes is not None:
-                self.vis.add_geometry(self.additional_meshes)
-            
-            opt = self.vis.get_render_option()
-            self.headless = False
-            if opt is not None:
-                opt.background_color = np.asarray(self.bgcolor)
+            if True:
+                self.vis = o3d.visualization.Visualizer() #O3DVisualizer()
+                self.vis.create_window(width=self.win_width,height=self.win_height,visible=self.show)
+                                        
+                if self.cylinders_combined is not None:
+                    self.vis.add_geometry(self.cylinders_combined)
+                if self.additional_meshes is not None:
+                    self.vis.add_geometry(self.additional_meshes)
+                
+                opt = self.vis.get_render_option()
+                self.headless = False
+                if opt is not None:
+                    opt.background_color = np.asarray(self.bgcolor)
+                else:
+                    self.headless = True
+                    self.vis.destroy_window()
             else:
-                self.headless = True
-                self.vis.destroy_window()
+                import open3d.visualization.rendering as rendering
+                import open3d.visualization.gui as gui
+                gui.Application.instance.initialize()
+                self.vis = o3d.visualization.O3DVisualizer()
+                
+                # Create a dummy window (off-screen or tiny)
+                dummy_window = gui.Application.instance.create_window("Hidden", width=self.win_width, height=self.win_height)
+
+                # Set up the renderer
+                renderer = rendering.OffscreenRenderer(self.win_width, self.win_height)
+                
+                if self.cylinders_combined is not None:
+                    self.vis.add_geometry(self.cylinders_combined)
+                if self.additional_meshes is not None:
+                    self.vis.add_geometry(self.additional_meshes)
+            
+            breakpoint()
+
         elif self.engine=='pyvista':
             pass
             #self.vis = pv.Plotter(window_size=[self.win_width,self.win_height])

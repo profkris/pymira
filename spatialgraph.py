@@ -1685,7 +1685,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         
         return scalar_nodes
         
-    def point_scalars_to_node_scalars(self,mode='max',name=None):
+    def point_scalars_to_node_scalars(self,mode='max',name=None,func=np.nanmax):
     
         if True: #type(name) is str and mode=='max':
             data = self.get_data(name)
@@ -1701,14 +1701,24 @@ class SpatialGraph(amiramesh.AmiraMesh):
             #if False:
             mask = (conns[:, 0][:, None] == np.arange(self.nnode)) | (conns[:, 1][:, None] == np.arange(self.nnode))
             masked_data = np.where(mask, means[:, None], np.nan)
-            node_scalar = np.nanmax(masked_data, axis=0)
-            node_scalar = np.where(np.all(np.isnan(masked_data), axis=0), None, node_scalar).astype(data.dtype)
+            if callable(func):
+                node_scalar = func(masked_data, axis=0)
+                node_scalar = np.where(np.all(np.isnan(masked_data), axis=0), None, node_scalar).astype(data.dtype)
+                return node_scalar
+            elif isinstance(func, list) and all(callable(f) for f in func):
+                res = []
+                for f in func:
+                    node_scalar = f(masked_data, axis=0)
+                    node_scalar = np.where(np.all(np.isnan(masked_data), axis=0), None, node_scalar).astype(data.dtype)
+                    res.append(node_scalar)
+                return res
+            else:
+                breakpoint()
             #else:
             #node_scalar2 = arr([None if len(np.where((conns[:,0]==n) | (conns[:,1]==n))[0])==0
             #                       else np.nanmax(means[np.where((conns[:,0]==n) | (conns[:,1]==n))])
             #                       for n in range(self.nnode)]).astype(data.dtype)
 
-            return node_scalar
 
         scalars = self.get_scalars()
         if name is not None:
