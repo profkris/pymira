@@ -1756,10 +1756,13 @@ class SpatialGraph(amiramesh.AmiraMesh):
             breakpoint()
         return node_scalar
         
-    def point_scalars_to_edge_scalars(self,func=np.mean,name=None):
+    def point_scalars_to_edge_scalars(self,func=np.mean,name=None,data=None):
     
         if True: #type(name) is str and func==np.mean:
-            data = self.get_data(name)
+            if data is None:
+                data = self.get_data(name)
+            elif data.shape[0]!=self.nedgepoint:
+                return None
             if data is None:
                 return None
             npts = self.get_data('NumEdgePoints')
@@ -3879,7 +3882,7 @@ class Edge(object):
         if len(values)!=len(oldVals):
             print('Incorrect number of scalar values!')
             return
-        self.scalars[scalarInd[0]] = values
+        self.scalars[scalarInd[0]] = values            
             
     def _print(self):
         print(('EDGE ({})'.format(self.index)))
@@ -4245,7 +4248,7 @@ class GVars(object):
         x0 = int(np.sum(nedgepoints[:int(edge_index)]))
         x1 = x0 + int(nedgepoints[int(edge_index)])
         if npoints==npoints_cur:
-            self.edgepoints[self.edgepoints_allocated][x0:x1] = edgepoints
+            self.edgepoints[x0:x1] = edgepoints
         elif npoints>npoints_cur:
             
             nedgepoints[int(edge_index)] = npoints
@@ -4255,15 +4258,41 @@ class GVars(object):
             alloc[x1+dif:] = alloc[x1:-dif]
             alloc[x0:x1+dif] = True
             self.edgepoints_allocated = alloc
-            edgeCoords = self.edgepoints[self.edgepoints_allocated]
+            edgeCoords = self.edgepoints #[self.edgepoints_allocated]
             edgeCoords[x1+dif:] = edgeCoords[x1:-dif]
             edgeCoords[x0:x1+dif] = edgepoints
-            self.edgepoints[self.edgepoints_allocated] = edgeCoords
+            #self.edgepoints[self.edgepoints_allocated] = edgeCoords
+            self.edgepoints = edgeCoords
             for i in range(len(self.scalar_values)):
-                scalars = self.scalar_values[i][self.edgepoints_allocated]
+                scalars = self.scalar_values[i] #[self.edgepoints_allocated]
                 scalars[x1+dif:] = scalars[x1:-dif]
                 scalars[x0:x1+dif] = new_scalar_values[i]
-                self.scalar_values[i][self.edgepoints_allocated] = scalars
+                #self.scalar_values[i][self.edgepoints_allocated] = scalars
+                self.scalar_values[i] = scalars
+            if len(self.edgepoints)==0 or np.all(self.edgepoints_allocated==False):
+                breakpoint()
+        elif npoints<npoints_cur:
+            #breakpoint()
+            nedgepoints[int(edge_index)] = npoints
+            self.nedgepoints[self.edgeconn_allocated] = nedgepoints
+            # Reallocate existing data  
+            alloc = self.edgepoints_allocated
+            alloc[x1+dif:dif] = alloc[x1:]
+            alloc[dif:] = False
+            self.edgepoints_allocated = alloc
+            edgeCoords = self.edgepoints#[self.edgepoints_allocated]
+            edgeCoords[x1+dif:dif] = edgeCoords[x1:]
+            edgeCoords[x0:x1+dif] = edgepoints
+            edgeCoords[dif:] = 0.
+            self.edgepoints = edgeCoords
+            for i in range(len(self.scalar_values)):
+                scalars = self.scalar_values[i] #[self.edgepoints_allocated]
+                scalars[x1+dif:dif] = scalars[x1:]
+                scalars[x0:x1+dif] = new_scalar_values[i]
+                #self.scalar_values[i][self.edgepoints_allocated] = scalars
+                self.scalar_values[i] = scalars
+            if len(self.edgepoints)==0 or np.all(self.edgepoints_allocated==False):
+                breakpoint()
         else:
             breakpoint()
 
