@@ -255,11 +255,8 @@ class TubePlot(object):
         sind = self.cylinder_inds
             
         # Grab scalar data for lookup table, if required
-<<<<<<< HEAD
         if edge_color is None and (self.edge_color is None or scalar_color_name is not None):
-=======
-        if (edge_color is None and self.edge_color is None) or scalar_color_name is not None:
->>>>>>> 15f716692e1a1baeccba7d89b20456e01fe29640
+        #if (edge_color is None and self.edge_color is None) or scalar_color_name is not None:
             scalars = self.graph.get_scalars()
             scalarNames = [x['name'] for x in scalars]
             if self.scalar_color_name in scalarNames:
