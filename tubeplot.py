@@ -554,6 +554,7 @@ class TubePlot(object):
             self.bgcolor = bgcolor           
     
         if self.engine=='open3d':
+            breakpoint()
             if True:
                 self.vis = o3d.visualization.Visualizer() #O3DVisualizer()
                 self.vis.create_window(width=self.win_width,height=self.win_height,visible=self.show)
@@ -565,7 +566,6 @@ class TubePlot(object):
                 
                 opt = self.vis.get_render_option()
                 self.headless = False
-                breakpoint()
                 if opt is not None:
                     opt.background_color = np.asarray(self.bgcolor)
                 else:
