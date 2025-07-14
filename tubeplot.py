@@ -255,7 +255,7 @@ class TubePlot(object):
         sind = self.cylinder_inds
             
         # Grab scalar data for lookup table, if required
-        if edge_color is None and self.edge_color is None:
+        if edge_color is None and (self.edge_color is None or scalar_color_name is not None):
             scalars = self.graph.get_scalars()
             scalarNames = [x['name'] for x in scalars]
             if self.scalar_color_name in scalarNames:
@@ -586,8 +586,6 @@ class TubePlot(object):
                     self.vis.add_geometry(self.cylinders_combined)
                 if self.additional_meshes is not None:
                     self.vis.add_geometry(self.additional_meshes)
-            
-            breakpoint()
 
         elif self.engine=='pyvista':
             pass
