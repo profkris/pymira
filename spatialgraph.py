@@ -1211,7 +1211,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         if category is None:
             category = np.zeros(edgepoints.shape[0],dtype='int')
-            edge_category = np.zeros(self.nedgepoints,dtype='int')
+            edge_category = np.zeros(self.nedgepoint,dtype='int')
 
         #inds = np.linspace(0,edgeconn.shape[0]-1,edgeconn.shape[0],dtype='int')
         #edge_inds = np.repeat(inds,nedgepoints)
@@ -2385,11 +2385,12 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         return conn_edges
         
-    def get_segments(self,return_edge=False,domain=None):
+    def get_segments(self,return_edge=False,return_counts=False,domain=None):
         nedgepoint = self.get_data(name='NumEdgePoints') 
         edgepoints = self.get_data('EdgePointCoordinates')
         epi = self.edge_point_index()
-        #nseg = nedgepoint - 1
+        
+        gc = self.get_node_count()
             
         segments = np.hstack([edgepoints[:-1],edgepoints[1:]])
         segments = segments.reshape([segments.shape[0],2,3])
@@ -2406,10 +2407,19 @@ class SpatialGraph(amiramesh.AmiraMesh):
         #segment_points = np.linspace(0,np.sum(nedgepoint)-1,np.sum(nedgepoint),dtype='int')-np.repeat(np.cumsum(nedgepoint)-nedgepoint,nedgepoint)
         #segment_points = segment_points.reshape([int(segment_points.shape[0]/2),2])
         p0 = np.concatenate([np.linspace(0,x-2,x-1,dtype='int') for x in nedgepoint])
+
+        # Which segment points correspond to a node (-1 if none)
+        edgeconn = self.get_data('EdgeConnectivity')
+        segment_node = np.concatenate([np.concatenate([[arr(edgeconn[i,0])],np.repeat(-1,x-2),[arr(edgeconn[i,1])]]) for i,x in enumerate(nedgepoint)])
+        # How many connections for each segment point
+        sc = gc[segment_node]
+        sc[segment_node<0] = 2
         segment_points = np.vstack([p0,p0+1]).transpose()
         
         if return_edge==False:
             return segments
+        elif return_counts:
+            return segments,segment_edges,segment_points,segment_node,sc
         else:
             return segments,segment_edges,segment_points
             
