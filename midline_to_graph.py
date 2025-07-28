@@ -3,6 +3,8 @@ arr = np.asarray
 #from pymira import spatialgraph
 from skimage.graph import route_through_array
 from matplotlib import pyplot as plt
+import matplotlib
+matplotlib.use('Agg') 
 
 class Midline2Graph(object):
 
@@ -157,5 +159,6 @@ class Midline2Graph(object):
             z = [edgepoints[conn[0],2],edgepoints[conn[1],2]]
             plt.plot(x,y,z)
         
-        plt.show()
-                        
+        #plt.show()
+        plt.savefig('midline_graph.png', dpi=300)  # Save plot as PNG file
+        plt.close()                

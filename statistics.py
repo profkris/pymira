@@ -332,7 +332,9 @@ class Statistics(object):
         #plt.grid(True)
         
         if show:
-            plt.show()
+            #plt.show()
+            plt.savefig("statistics_1.png", dpi=300)
+            plt.close()
         
     def boxplot(self,v):
         

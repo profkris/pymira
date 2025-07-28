@@ -4,6 +4,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 join = os.path.join
 from scipy.stats import mannwhitneyu
+import matplotlib
+matplotlib.use('Agg')
 
 dirs = '/mnt/data2/retinas - GIULIA/vessel_stats'
 
@@ -94,7 +96,9 @@ pf = '{:g}'.format(float('{:.{p}g}'.format(p, p=2)))
 plt.figtext(0.5, 0.7, f'Mann-Whitney: p={pf}')
 
 if False:
-    plt.show()
+    #plt.show()
+    plt.savefig("stats_summary.png", dpi=300)
+    plt.close()
 else:
     ofile = join(dirs,f'{pname}_histogram.png')
     fig = plt.savefig(ofile)

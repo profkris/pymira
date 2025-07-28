@@ -11,7 +11,6 @@ Amira SpatialGraph loader and writer
 from pymira import amiramesh
 import numpy as np
 arr = np.asarray
-#np.seterr(invalid='raise')
 import os
 from tqdm import tqdm, trange # progress bar
 import matplotlib as mpl
@@ -48,7 +47,7 @@ def update_array_index(vals,inds,keep):
     
     return vals[keep],new_inds,new_inds_lookup
     
-def delete_vertices(graph,keep_nodes,return_lookup=False,return_keep_edge=False): # #verts,edges,keep_nodes):
+def delete_vertices(graph,keep_nodes,return_lookup=False): # #verts,edges,keep_nodes):
 
     """
     Efficiently delete vertices as flagged by a boolean array (keep_nodes) and update the indexing of an
@@ -111,68 +110,8 @@ def delete_vertices(graph,keep_nodes,return_lookup=False,return_keep_edge=False)
 
     if return_lookup:
         return graph, edge_lookup
-    elif return_keep_edge:
-        return graph, keep_edges
     else:
         return graph
-        
-def split_artery_vein(graph,gfile=None,capillaries=False):
-
-    # Arterial graph
-    if gfile is None:
-        agraph = graph.copy()
-    else:
-        agraph = spatialgraph.SpatialGraph()
-        agraph.read(gfile)
-    seg_cat = agraph.get_data('VesselType')  
-    epi = agraph.edgepoint_edge_indices()
-    inds = np.where(seg_cat!=0)
-    edges_to_delete = np.unique(epi[inds])
-    from pymira.spatialgraph import GVars
-    gv = GVars(agraph)
-    gv.remove_edges(edges_to_delete)
-    gv.set_in_graph()
-    
-    # Arterial graph
-    if gfile is None:
-        vgraph = graph.copy()
-    else:
-        vgraph = spatialgraph.SpatialGraph()
-        vgraph.read(gfile)
-    seg_cat = vgraph.get_data('VesselType')  
-    epi = vgraph.edgepoint_edge_indices()
-    inds = np.where(seg_cat!=1)
-    edges_to_delete = np.unique(epi[inds])
-    #ed.delete_edges(vgraph,edges_to_delete)
-    gv = GVars(vgraph)
-    gv.remove_edges(edges_to_delete)
-    gv.set_in_graph()
-    
-    ed = Editor()
-    agraph = ed.remove_disconnected_nodes(agraph)
-    vgraph = ed.remove_disconnected_nodes(vgraph)
-    
-    # Capillaries
-    if capillaries:
-        if gfile is None:
-            cgraph = graph.copy()
-        else:
-            cgraph = spatialgraph.SpatialGraph()
-            cgraph.read(gfile)
-        seg_cat = cgraph.get_data('VesselType')  
-        epi = cgraph.edgepoint_edge_indices()
-        inds = np.where(seg_cat!=2)
-        edges_to_delete = np.unique(epi[inds])
-        #ed.delete_edges(vgraph,edges_to_delete)
-        gv = GVars(cgraph)
-        gv.remove_edges(edges_to_delete)
-        gv.set_in_graph()
-        
-        cgraph = ed.remove_disconnected_nodes(cgraph)
-    
-        return agraph,vgraph,cgraph
-    else:
-        return agraph,vgraph
 
 class SpatialGraph(amiramesh.AmiraMesh):
 
@@ -187,10 +126,6 @@ class SpatialGraph(amiramesh.AmiraMesh):
         self.edgeList = None
         self.edgeListPtr = 0
         self.path = path
-        
-        self.edge_label_counter = 0
-        self.node_label_counter = 0
-        self.point_label_counter = 0
         
         if header_from is not None:
             import copy
@@ -216,32 +151,6 @@ class SpatialGraph(amiramesh.AmiraMesh):
             
     def print(self):
         self.__repr__()
-        
-    def unique_node_label(self,nl=None):
-        if nl is None:
-            nl = self.get_data('NodeLabel')
-        self.node_label_counter += 1
-        nxt = self.node_label_counter
-        if nl is not None:
-            if nxt in nl:
-                nxt = np.max(nl) + 1
-                self.node_label_counter = nxt
-        return nxt
-        
-    def unique_edge_label(self,el=None):
-        if el is None:
-            el = self.get_data('EdgeLabel')
-        self.edge_label_counter += 1
-        nxt = self.edge_label_counter
-        if el is not None:
-            if nxt in el:
-                nxt = np.max(el) + 1
-                self.edge_label_counter = nxt
-        return nxt
-        
-    def unique_point_label(self):
-        self.point_label_counter += 1
-        return self.point_label_counter
         
     def copy(self):
         graph_copy = SpatialGraph()
@@ -299,29 +208,18 @@ class SpatialGraph(amiramesh.AmiraMesh):
             if type(scalars) is not list:
                 scalars = [scalars]
             for i,sc in enumerate(scalars):
-
-                if sc=='EdgeLabel':
-                    self.add_field(name='EdgeLabel',marker=f'@{len(self.fields)+1}',
-                                                  definition='POINT',type='int',
-                                                  nelements=1,nentries=[0])  
-                else:
-                    self.add_field(name=sc,marker='@{}'.format(offset),
-                                      definition='POINT',type='float',
-                                      nelements=1,nentries=[0])
+                self.add_field(name=sc,marker='@{}'.format(offset),
+                                  definition='POINT',type='float',
+                                  nelements=1,nentries=[0])
                 offset = len(self.fields) + 1
                                   
         if len(node_scalars)>0:
             if type(node_scalars) is not list:
                 node_scalars = [node_scalars]
             for i,sc in enumerate(node_scalars):
-                if sc=='NodeLabel':
-                    self.add_field(name='NodeLabel',marker=f'@{len(self.fields)+1}',
-                                                  definition='VERTEX',type='int',
-                                                  nelements=1,nentries=[0])   
-                else:
-                    self.add_field(name=sc,marker='@{}'.format(i+offset),
-                                      definition='VERTEX',type='float',
-                                      nelements=1,nentries=[0])
+                self.add_field(name=sc,marker='@{}'.format(i+offset),
+                                  definition='VERTEX',type='float',
+                                  nelements=1,nentries=[0])
                 offset = len(self.fields) + 1
                               
         self.fieldNames = [x['name'] for x in self.fields]
@@ -340,24 +238,6 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 pass
 
         self.set_graph_sizes()
-        
-        node_labels = self.get_data('NodeLabel')
-        if node_labels is None:
-            self.node_label_counter = self.nnode
-        else:
-            self.node_label_counter = np.max(node_labels) + 1
-            
-        edge_labels = self.get_data('EdgeLabel')
-        if edge_labels is None:
-            self.edge_label_counter = self.nedge
-        else:
-            self.edge_label_counter = np.max(edge_labels) + 1
-            
-        point_labels = self.get_data('PointLabel')
-        if point_labels is None:
-            self.point_label_counter = self.nedgepoint
-        else:
-            self.point_label_counter = np.max(point_labels) + 1
                 
         return True
             
@@ -436,17 +316,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         tp.destroy_window()
         print(f'Mesh written to {ofile}')
         
-    def change_field_name(self,original_name,new_name):
-    
-        try:
-            ind = self.fieldNames.index(original_name)
-        except:
-            return
-            
-        self.fields[ind]['name'] = new_name
-        self.fieldNames[ind] = new_name
-        
-    def set_graph_sizes(self,labels=False):
+    def set_graph_sizes(self):
         """
         Ensure consistency between data size fields and the data itself
         """
@@ -462,16 +332,6 @@ class SpatialGraph(amiramesh.AmiraMesh):
             self.nedgepoint = self.get_definition('POINT')['size'][0]
         except:
             pass
-            
-        if labels:
-            sc = [x['name'] for x in self.fields]
-            if 'EdgeLabel' in sc:
-                nedgepoint = self.get_data('NumEdgePoints')
-                edgeLabel = np.repeat(np.linspace(0,self.nedge-1,self.nedge,dtype='int'),nedgepoint)
-                self.set_data(edgeLabel,name='EdgeLabel')   
-            if 'NodeLabel' in sc:
-                nodeLabel = np.linspace(0,self.nnode-1,self.nnode,dtype='int')
-                self.set_data(nodeLabel,name='NodeLabel')    
             
     def get_standard_fields(self):
         """
@@ -542,6 +402,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
             newData = np.asarray(coordinates)
             self.set_definition_size('VERTEX',[1,newData.shape])
         self.set_data(newData,name='VertexCoordinates')
+        
+        nodeCoords = None # free memory (necessary?)
     
     def add_node_connection(self,startNode,endNode,edge):
         """
@@ -910,15 +772,13 @@ class SpatialGraph(amiramesh.AmiraMesh):
         """
         Return scalar edge fields
         """
-        return [f for f in self.fields if f['definition'].lower() in ['point',''] and len(f['shape'])==1 and f['name']!='EdgePointCoordinates']
-        #return [f for f in self.fields if f['shape'][0]==self.nedgepoint and len(f['shape'])==1 and f['name']!='EdgePointCoordinates']
+        return [f for f in self.fields if f['definition'].lower()=='point' and len(f['shape'])==1 and f['name']!='EdgePointCoordinates']
         
     def get_node_scalars(self):
         """
         Return scalar edge fields
         """
         return [f for f in self.fields if f is not None and f['definition'].lower()=='vertex' and len(f['shape'])==1 and f['name']!='VertexCoordinates']
-        #return [f for f in self.fields if f['shape'][0]==self.nnode and len(f['shape'])==1 and f['name']!='VertexCoordinates']
         
     def get_radius_field(self):
         """
@@ -993,11 +853,11 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     print(err)
                 if not all(x==y for x,y in zip(f['data'].shape,f['shape'])):
                     err = f'{f["name"]} data shape does not match shape field!'
-                    print(err)             
+                    print(err)               
 
         if deep:
             self.edgeList = None
-            for nodeInd in range(self.nnode):
+            for nodeInd in trange(self.nnode):
                 node = self.get_node(nodeInd)
                 for i,e in enumerate(node.edges):
                     if not node.edge_indices_rev[i]:
@@ -1020,19 +880,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
                             print(err)
                             #print(('Edge end point does not match edge start (REVERSE) ({}) coordinates'.format(e.index)))
                         if not all(x.astype('float32')==y.astype('float32') for x,y in zip(e.coordinates[-1,:],e.end_node_coords)):
-                            err = f'Edge start point does not match edge end (REVERSE) (edge {e.index}) coordinates'
+                            err = f'Edge start point does not match edge end (REVERSE) ({e.index}) coordinates'
                             print(err)
                             #print(('Edge start point does not match edge end (REVERSE) ({}) coordinates'.format(e.index)))        
-
-        # Check for nans
-        nodes = self.get_data('VertexCoordinates') 
-        if np.any(np.isfinite(nodes)==False):
-            err = 'Non-finite node values present'
-            print(err)
-        points = self.get_data('EdgePointCoordinates')   
-        if np.any(np.isfinite(points)==False):
-            err = 'Non-finite edgepoint values present'
-            print(err)        
 
         if err!='':
             return False
@@ -1102,22 +952,6 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     break
         return arr(nodeStore), arr(edgeStore)
         
-    def replace_nodes(self,nodes):
-    
-        if nodes.shape[0]!=self.nnode:
-            print('Spatialgraph.replace_nodes: Supplied node array is the wrong shape!')
-            return
-        
-        nep = self.get_data('NumEdgePoints')
-        edgeconn = self.get_data('EdgeConnectivity')
-        if np.all(nep)==2:
-            edges = nodes[edgeconn.flatten()]
-            self.set_data(edges,name='EdgePointCoordinates')
-            self.set_data(nodes,name='VertexCoordinates')
-        else:
-            print('Error,Spatialgraph.replace_nodes: Not implemented!')
-            return
-        
     def connected_nodes(self,index, return_edges=True):
         # Return all nodes connected to a supplied node index, 
         # along with the edge indices they are connected by
@@ -1162,25 +996,18 @@ class SpatialGraph(amiramesh.AmiraMesh):
         lengths = np.linalg.norm(vertexCoordinates[edgeConnectivity[:,1]]-vertexCoordinates[edgeConnectivity[:,0]],axis=1)
         return lengths
         
-    def get_edge_lengths(self,node=False):
+    def get_edge_lengths(self):
     
         edgeconn = self.get_data('EdgeConnectivity') 
         nedgepoints = self.get_data('NumEdgePoints')
         edgeCoords = self.get_data('EdgePointCoordinates')
-        nodes = self.get_data('VertexCoordinates')
         
         lengths = np.zeros(self.nedge)
-        
-        if node==False:
-            for i in range(self.nedge):
-                x0 = np.sum(nedgepoints[:i])
-                npts = nedgepoints[i]
-                pts = edgeCoords[x0:x0+npts]
-                lengths[i] = np.sum(np.linalg.norm(pts[:-1]-pts[1:],axis=1))
-        else:
-            edge_nodes = nodes[edgeconn]
-            lengths = np.linalg.norm(edge_nodes[:,1]-edge_nodes[:,0],axis=1)
-            
+        for i in trange(self.nedge):
+            x0 = np.sum(nedgepoints[:i])
+            npts = nedgepoints[i]
+            pts = edgeCoords[x0:x0+npts]
+            lengths[i] = np.sum(np.linalg.norm(pts[:-1]-pts[1:],axis=1))
         return lengths
         
     def get_node_count(self,edge_node_lookup=None,restore=False,tmpfile=None,graph_params=None):
@@ -1204,18 +1031,15 @@ class SpatialGraph(amiramesh.AmiraMesh):
         edgeconn = self.get_data('EdgeConnectivity')
         edgepoints = self.get_data('EdgePointCoordinates')
         nedgepoints = self.get_data('NumEdgePoints')
-        #radius = self.get_data(self.get_radius_field_name())
-        edge_radius = self.point_scalars_to_edge_scalars(name=self.get_radius_field_name(),func=np.max)
+        radius = self.get_data(self.get_radius_field_name())
         category = self.get_data('VesselType')
-        edge_category = self.point_scalars_to_edge_scalars(name='VesselType')
         
         if category is None:
-            category = np.zeros(edgepoints.shape[0],dtype='int')
-            edge_category = np.zeros(self.nedgepoints,dtype='int')
+            category = np.zeros(edgepoints.shape[0],dtype='bool')
 
-        #inds = np.linspace(0,edgeconn.shape[0]-1,edgeconn.shape[0],dtype='int')
-        #edge_inds = np.repeat(inds,nedgepoints)
-        #first_edgepoint_inds = np.concatenate([[0],np.cumsum(nedgepoints)[:-1]])
+        inds = np.linspace(0,edgeconn.shape[0]-1,edgeconn.shape[0],dtype='int')
+        edge_inds = np.repeat(inds,nedgepoints)
+        first_edgepoint_inds = np.concatenate([[0],np.cumsum(nedgepoints)[:-1]])
 
         #edge_node_lookup = create_edge_node_lookup(nodecoords,edgeconn,tmpfile=tmpfile,restore=restore)
                 
@@ -1227,34 +1051,34 @@ class SpatialGraph(amiramesh.AmiraMesh):
         terminal_node[term_inds] = True
 
         # Assign a radius to nodes using the largest radius of each connected edge
-        #edge_radius = radius[first_edgepoint_inds]
+        edge_radius = radius[first_edgepoint_inds]
 
         # Assign a category to each node using the minimum category of each connected edge (thereby favouring arteries/veins (=0,1) over capillaries (=2))
-        #edge_category = category[first_edgepoint_inds]
+        edge_category = category[first_edgepoint_inds]
         
         # Locate arterial input(s)
         mask = np.ones(edgeconn.shape[0])
-        mask[(edge_category!=0) | ((node_count[edgeconn[:,0]]!=1) & (node_count[edgeconn[:,1]]!=1))] = np.nan
+        mask[(edge_category!=0) | ((node_count[edgeconn[:,0]]!=1) & (node_count[edgeconn[:,0]]!=1))] = np.nan
         if ignore is not None:
             mask[(np.in1d(edgeconn[:,0],ignore)) | (np.in1d(edgeconn[:,1],ignore))] = np.nan
         if np.nansum(mask)==0.:
             a_inlet_node = None
         else:
             a_inlet_edge_ind = np.nanargmax(edge_radius*mask)
-            a_inlet_edge_nodes = edgeconn[a_inlet_edge_ind]
-            a_inlet_node = a_inlet_edge_nodes[node_count[a_inlet_edge_nodes]==1][0]
+            a_inlet_edge = edgeconn[a_inlet_edge_ind]
+            a_inlet_node = a_inlet_edge[node_count[a_inlet_edge]==1][0]
         
         # Locate vein output(s)
         mask = np.ones(edgeconn.shape[0])
-        mask[(edge_category!=1) | ((node_count[edgeconn[:,0]]!=1) & (node_count[edgeconn[:,1]]!=1))] = np.nan
+        mask[(edge_category!=1) | ((node_count[edgeconn[:,0]]!=1) & (node_count[edgeconn[:,0]]!=1))] = np.nan
         if ignore is not None:
             mask[(np.in1d(edgeconn[:,0],ignore)) | (np.in1d(edgeconn[:,1],ignore))] = np.nan
         if np.nansum(mask)==0.:
             v_outlet_node = None
         else:
             v_outlet_edge_ind = np.nanargmax(edge_radius*mask)
-            v_outlet_edge_nodes = edgeconn[v_outlet_edge_ind]
-            v_outlet_node = v_outlet_edge_nodes[node_count[v_outlet_edge_nodes]==1][0]
+            v_outlet_edge = edgeconn[v_outlet_edge_ind]
+            v_outlet_node = v_outlet_edge[node_count[v_outlet_edge]==1][0]
         
         return a_inlet_node,v_outlet_node 
 
@@ -1263,7 +1087,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         #duplicate_edges = np.zeros(edges.shape[0],dtype='int')
         duplicate_edge_index = np.zeros(edges.shape[0],dtype='int') - 1
         dind = 0
-        for i,x in enumerate(edges): 
+        for i,x in enumerate(tqdm(edges)): 
             s1 = np.where( (edges[:,0]==x[0]) & (edges[:,1]==x[1]) & (duplicate_edge_index==-1) )[0]
             s2 = np.where( (edges[:,1]==x[0]) & (edges[:,0]==x[1]) & (duplicate_edge_index==-1) )[0]
             if len(s1)+len(s2)>1:
@@ -1272,53 +1096,8 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 dind += 1
         
         return duplicate_edge_index
-        
-    def check_artery_vein_classification(self):
-        # Check artery/vein classification
-        # Assumes two seperate graphs, one for arteries (=0) one for veins (=1)
-        gr = self.identify_graphs()
-        # Check that there are only two graphs
-        ugr = np.unique(gr)
-        if not np.all(np.in1d(ugr,[1,2])):
-            return -3
-        # Check that veins and arteries are in separate graphs
-        vtn = self.point_scalars_to_node_scalars(name='VesselType')
-        chk_a = np.all(gr[vtn==0]==gr[vtn==0][0])
-        chk_v = np.all(gr[vtn==1]==gr[vtn==1][0])
-        if not chk_a:
-            return -1
-        if not chk_v:
-            return -2
-        return 0
-        
-    def remove_subsidiary_graphs(self):
-        # Removes all but the largest arterial graph and the largest venous graph
-        
-        vtn = self.point_scalars_to_node_scalars(name='VesselType')
-        nvt = np.unique(vtn)
-        
-        gr = self.identify_graphs()
-        # Check that there are only two graphs
-        ugr,cnt = np.unique(gr,return_counts=True)
-        if len(ugr)<=2:
-            return
-        
-        gr_type = arr([vtn[gr==u][0] for u in ugr])
-        
-        cnt_a = cnt.copy()
-        cnt_a[gr_type!=0] = 0
-        a_keep = ugr[np.nanargmax(cnt_a)]
-        cnt_v = cnt.copy()
-        cnt_v[gr_type!=1] = 0
-        v_keep = ugr[np.nanargmax(cnt_v)]
 
-        keep_node = np.zeros(self.nnode,dtype='bool')
-        keep_node[gr==a_keep] = True
-        keep_node[gr==v_keep] = True
-        
-        _ = delete_vertices(self,keep_node)
-
-    def test_treelike(self, inlet=None, outlet=None, euler=True, ignore_type=False, quiet=False):
+    def test_treelike(self, inlet=None, outlet=None, euler=True, ignore_type=False):
 
         if inlet is None:
             inlet,outlet = self.identify_inlet_outlet()
@@ -1352,15 +1131,13 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     if len(next_front)>0:
                         dplicates = np.in1d(next_front,visited)
                         if np.any(dplicates):
-                            if not quiet:
-                                print(f'Test treelike, revisited: {next_front[dplicates]}, it: {count}')
+                            print(f'Test treelike, revisited: {next_front[dplicates]}, it: {count}')
                             dnodes = next_front[dplicates]
                             edges = self.get_edges_containing_node(dnodes)
                             return False
                         unq,cnt = np.unique(next_front,return_counts=True)
                         if np.any(cnt)>1:
-                            if not quiet:
-                                print(f'Test treelike, duplicate paths to node: {unq[cnt>1]}')
+                            print(f'Test treelike, duplicate paths to node: {unq[cnt>1]}')
                             #breakpoint()
                             return False
                         visited.extend(next_front.tolist())
@@ -1376,8 +1153,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         # Double check
         all_in = np.in1d(np.arange(nodecoords.shape[0]),visited)
         if not np.all(all_in):
-            if not quiet:
-                print(f'Not all nodes visited: {np.arange(nodecoords.shape[0])[~all_in]}')
+            print(f'Not all nodes visited: {np.arange(nodecoords.shape[0])[~all_in]}')
             return False
             
         gc = self.get_node_count()
@@ -1390,8 +1166,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         if euler:
             if vt is None:
                 if self.nnode!=self.nedge+1:
-                    if not quiet:
-                        print(f'Euler criterion failed ({self.nnode} nodes, {self.nedge} edges)')              
+                    print(f'Euler criterion failed ({self.nnode} nodes, {self.nedge} edges)')              
             if ignore_type:
                 n_anode = np.sum((vt==0) | (vt==1))
             else:
@@ -1405,11 +1180,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
                 n_aedges = a_edges.shape[0]
                 if n_anode!=n_aedges+1:
                     if n_anode>n_aedges+1:
-                        if not quiet:
-                            print(f'Euler criterion failed (arterial, too many nodes! {n_anode} nodes, {n_aedges} edges)')
+                        print(f'Euler criterion failed (arterial, too many nodes! {n_anode} nodes, {n_aedges} edges)')
                     if n_anode<n_aedges+1:
-                        if not quiet:
-                            print(f'Euler criterion failed (arterial, too many edges! {n_anode} nodes, {n_aedges} edges)')
+                        print(f'Euler criterion failed (arterial, too many edges! {n_anode} nodes, {n_aedges} edges)')
                     return False
                 
             # Euler: Venous nodes
@@ -1421,30 +1194,25 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     n_vedges = v_edges.shape[0]
                     if n_vnode!=n_vedges+1:
                         if n_vnode>n_vedges+1:
-                            if not quiet:
-                                print(f'Euler criterion failed (venous, too many nodes! {n_vnode} nodes, {n_vedges} edges)')
+                            print(f'Euler criterion failed (venous, too many nodes! {n_vnode} nodes, {n_vedges} edges)')
                         if n_vnode<n_vedges+1:
-                            if not quiet:
-                                print(f'Euler criterion failed (venous, too many edges! {n_vnode} nodes, {n_vedges} edges)')
+                            print(f'Euler criterion failed (venous, too many edges! {n_vnode} nodes, {n_vedges} edges)')
                         return False
          
         duplicate_edges = self.get_duplicated_edges()
         if np.any(duplicate_edges>0):
-            if not quiet:
-                print(f'Duplicated edges!')
+            print(f'Duplicated edges!')
             return False
                 
         selfconnected_edges = (edges[:,0]==edges[:,1])
         if np.any(selfconnected_edges):
-            if not quiet:
-                print(f'Self-connected edges!')
+            print(f'Self-connected edges!')
             return False
             
         # Test for degeneracy
         res,_ = self.test_node_degeneracy(find_all=False)
         if res: 
-            if not quiet:
-                print('Degenerate nodes present!')
+            print('Degenerate nodes present!')
             return False
         
         return True
@@ -1471,10 +1239,10 @@ class SpatialGraph(amiramesh.AmiraMesh):
         Return an array with nnode elements, with value equal to the first node with a degenerate coordinate identified (or -1 if not degenerate)
         """
     
+        degen_nodes = np.zeros(self.nnode,dtype='int') - 1
         nodecoords = self.get_data('VertexCoordinates')
-        degen_nodes = np.zeros(nodecoords.shape[0],dtype='int') - 1
         
-        for i,c1 in enumerate(nodecoords):
+        for i,c1 in enumerate(tqdm(nodecoords)):
             if degen_nodes[i]<0:
                 sind = np.where((nodecoords[:,0]==c1[0]) & (nodecoords[:,1]==c1[1]) & (nodecoords[:,2]==c1[2]))
                 if len(sind[0])>1:
@@ -1489,7 +1257,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         edgepoints = self.get_data('EdgePointCoordinates')
         ones = np.ones([edgepoints.shape[0],1])
         edgepointsH = np.hstack([edgepoints,ones])
-        rads = self.get_data(self.get_radius_field_name())
+        rads = self.get_data('Radius')
         
         nodes = (tr @ nodesH.T).T[:,:3]
         edgepoints = (tr @ edgepointsH.T).T[:,:3]
@@ -1499,7 +1267,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         rads = np.abs(rads * tr[radius_index,radius_index])
         self.set_data(nodes,name='VertexCoordinates')
         self.set_data(edgepoints,name='EdgePointCoordinates')
-        self.set_data(rads,name=self.get_radius_field_name())
+        self.set_data(rads,name='Radius')
                     
     def identify_graphs(self,progBar=False,ignore_node=None,ignore_edge=None,verbose=False,add_scalar=True):
 
@@ -1630,24 +1398,6 @@ class SpatialGraph(amiramesh.AmiraMesh):
         return graphIndex, graph_size
         
     def edge_scalar_to_node_scalar(self,name,maxval=False):
-    
-        if False: #type(name) is str:
-            data = self.get_data(name)
-            if data is None:
-                return None
-            conns = self.get_data('EdgeConnectivity')
-
-            if False:
-                mask = (conns[:, 0][:, None] == np.arange(self.nnode)) | (conns[:, 1][:, None] == np.arange(self.nnode))
-                masked_data = np.where(mask, data[:, None], np.nan)
-                node_scalar = np.nanmax(masked_data, axis=0)
-                node_scalar = np.where(np.all(np.isnan(masked_data), axis=0), None, node_scalar).astype(data.dtype)
-            else:
-                node_scalar = arr([None if len(np.where((conns[:,0]==n) | (conns[:,1]==n))[0])==0
-                                   else np.nanmax(data[np.where((conns[:,0]==n) | (conns[:,1]==n))])
-                                   for n in range(self.nnode)]).astype(data.dtype)
-            
-            return node_scalar
 
         scalar_points = self.get_data(name)
         if scalar_points is None:
@@ -1661,7 +1411,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         scalar_nodes = np.zeros(verts.shape[0],dtype=scalar_points.dtype)
         eei = self.edgepoint_edge_indices()
     
-        for nodeIndex in range(self.nnode):
+        for nodeIndex in trange(self.nnode):
             edgeIds = np.where((conns[:,0]==nodeIndex) | (conns[:,1]==nodeIndex))
             if len(edgeIds[0])>0:
                 vals = []
@@ -1685,40 +1435,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         
         return scalar_nodes
         
-    def point_scalars_to_node_scalars(self,mode='max',name=None,func=np.nanmax):
-    
-        if True: #type(name) is str and mode=='max':
-            data = self.get_data(name)
-            if data is None:
-                return None
-            npts = self.get_data('NumEdgePoints')
-            epi = np.repeat(np.linspace(0,self.nedge-1,self.nedge,dtype='int'),npts)
-            sums = np.bincount(epi, weights=data, minlength=self.nedge)
-            counts = np.bincount(epi, minlength=self.nedge)
-            means = np.divide(sums, counts, where=counts!=0)
-            conns = self.get_data('EdgeConnectivity')
-
-            #if False:
-            mask = (conns[:, 0][:, None] == np.arange(self.nnode)) | (conns[:, 1][:, None] == np.arange(self.nnode))
-            masked_data = np.where(mask, means[:, None], np.nan)
-            if callable(func):
-                node_scalar = func(masked_data, axis=0)
-                node_scalar = np.where(np.all(np.isnan(masked_data), axis=0), None, node_scalar).astype(data.dtype)
-                return node_scalar
-            elif isinstance(func, list) and all(callable(f) for f in func):
-                res = []
-                for f in func:
-                    node_scalar = f(masked_data, axis=0)
-                    node_scalar = np.where(np.all(np.isnan(masked_data), axis=0), None, node_scalar).astype(data.dtype)
-                    res.append(node_scalar)
-                return res
-            else:
-                breakpoint()
-            #else:
-            #node_scalar2 = arr([None if len(np.where((conns[:,0]==n) | (conns[:,1]==n))[0])==0
-            #                       else np.nanmax(means[np.where((conns[:,0]==n) | (conns[:,1]==n))])
-            #                       for n in range(self.nnode)]).astype(data.dtype)
-
+    def point_scalars_to_node_scalars(self,mode='max',name=None):
 
         scalars = self.get_scalars()
         if name is not None:
@@ -1734,7 +1451,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         nsc = len(scalars)
         scalar_nodes = np.zeros([nsc,nodes.shape[0]]) + np.nan
     
-        for i,conn in enumerate(conns):
+        for i,conn in enumerate(tqdm(conns)):
             npts = int(npoints[i])
             x0 = int(np.sum(npoints[0:i]))
             x1 = x0+npts
@@ -1748,27 +1465,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
                             scalar_nodes[j,node] = np.nanmax([np.max(data[x0:x1]),scalar_nodes[j,node]])
                         elif scalar['type']=='int':
                             scalar_nodes[j,node] = np.nanmin([np.min(data[x0:x1]),scalar_nodes[j,node]])
-                        else:
-                            scalar_nodes[j,node] = np.nanmin([np.min(data[x0:x1]),scalar_nodes[j,node]])
-
-        scalar_nodes = scalar_nodes.squeeze()
-        if not np.all((scalar_nodes==node_scalar) | ((~np.isfinite(scalar_nodes) & (~np.isfinite(node_scalar))))):
-            breakpoint()
-        return node_scalar
+        return scalar_nodes.squeeze()
         
     def point_scalars_to_edge_scalars(self,func=np.mean,name=None):
-    
-        if True: #type(name) is str and func==np.mean:
-            data = self.get_data(name)
-            if data is None:
-                return None
-            npts = self.get_data('NumEdgePoints')
-            epi = np.repeat(np.linspace(0,self.nedge-1,self.nedge,dtype='int'),npts)
-            #edata = arr([np.mean(data[epi==i]) for i in range(self.nedge)])
-            sums = np.bincount(epi, weights=data, minlength=self.nedge)
-            counts = np.bincount(epi, minlength=self.nedge)
-            means = np.divide(sums, counts, where=counts!=0)
-            return means
 
         scalars = self.get_scalars()
         if name is not None:
@@ -1784,7 +1483,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
         nsc = len(scalars)
         scalar_edges = np.zeros([nsc,conns.shape[0]])
     
-        for i,conn in enumerate(conns):
+        for i,conn in enumerate(tqdm(conns)):
             npts = int(npoints[i])
             x0 = int(np.sum(npoints[0:i]))
             x1 = x0+npts
@@ -1797,59 +1496,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
                         scalar_edges[j,i] = func(data[x0:x1])
                     elif scalar['type']=='int':
                         scalar_edges[j,i] = data[x0]
-                    else:
-                        scalar_edges[j,i] = func(data[x0:x1])
         return scalar_edges.squeeze()
  
-    def point_scalars_to_segment_scalars(self,func=np.mean,name=None,domain=None):
-
-        scalars = self.get_scalars()
-        if name is not None:
-            scalars = [x for x in scalars if x['name']==name]
-            if len(scalars)==0:
-                return None
-    
-        verts = self.get_data('VertexCoordinates')
-        conns = self.get_data('EdgeConnectivity')
-        npoints = self.get_data('NumEdgePoints')
-        nsegpoints = npoints - 1
-        points = self.get_data('EdgePointCoordinates')
-        
-        nsc = len(scalars)
-        nseg = self.nedgepoint - self.nedge
-        scalar_segs = np.zeros([nsc,nseg])
-        
-        ins = None
-        if domain is not None:
-            segments = self.get_segments(domain=domain)
-            ins = (np.all(segments[:,0]>=domain[:,0],axis=1)) & (np.all(segments[:,0]<=domain[:,1],axis=1)) & \
-                  (np.all(segments[:,1]>=domain[:,0],axis=1)) & (np.all(segments[:,1]<=domain[:,1],axis=1))
-    
-        for i,conn in enumerate(conns):
-            npts = int(npoints[i])
-            x0 = int(np.sum(npoints[0:i]))
-            x1 = x0+npts
-            s0 = int(np.sum(nsegpoints[0:i]))
-            s1 = s0+int(nsegpoints[i])
-
-            for j,scalar in enumerate(scalars):
-                    
-                data = scalar['data']
-                if data is not None:
-                    if npts>2:
-                        scalar_segs[j,s0:s1] = data[x0:x1-1]
-                    else:
-                        scalar_segs[j,s0] = data[x0]
-        if ins is None:
-            return scalar_segs.squeeze()
-        else:
-            return scalar_segs[ins].squeeze()
- 
-    def plot_radius(self,*args,**kwargs):
-        _ = self.plot_histogram(self.get_radius_field_name(),*args,**kwargs)
- 
     def plot_histogram(self,field_name,*args,**kwargs):
-    
         data = self.get_data(field_name)
         
         import matplotlib.pyplot as plt
@@ -1858,7 +1507,9 @@ class SpatialGraph(amiramesh.AmiraMesh):
         #fig.patch.set_alpha(0) # transparent
         plt.xlabel = field_name
         #plt.gca().set_xscale("log")
-        plt.show()
+        #plt.show()
+        plt.savefig("spatialgraph_1.png", dpi=300)
+        plt.close()
         return fig
         
     def plot_pv(self,cylinders=None, vessel_type=None, color=None, edge_color=None, plot=True, grab=False, min_radius=0., \
@@ -1984,22 +1635,13 @@ class SpatialGraph(amiramesh.AmiraMesh):
         self.set_data(radius,name=rad_field_name)
         
     def identify_graphs(self):
-    
+        inlet,outlet = self.identify_inlet_outlet()
+        curnodes = [inlet]
+        
         graphInd = np.zeros(self.nnode,dtype='int')
         curGraph = 1
-    
-        inlet,outlet = self.identify_inlet_outlet()
-        curnodes = []
-        if inlet is not None:
-            curnodes.append(inlet)
-            graphInd[inlet] = curGraph
-        if outlet is not None:
-            curnodes.append(outlet)
-            curGraph += 1
-            graphInd[outlet] = curGraph
-        if len(curnodes)==0:
-            return None
-
+        graphInd[inlet] = curGraph
+        
         while True:
             visited_nodes,visited_edges = curnodes.copy(),[]
 
@@ -2012,7 +1654,7 @@ class SpatialGraph(amiramesh.AmiraMesh):
                     connected_edges = [x for x in connected_edges if x not in visited_edges]
                     
                     if len(connected_nodes)>0:
-                        graphInd[arr(connected_nodes)] = graphInd[node] #curGraph
+                        graphInd[arr(connected_nodes)] = curGraph
                         nextnodes.extend(connected_nodes)
                         visited_nodes.extend(connected_nodes)
                     if len(connected_edges)>0:
@@ -2130,48 +1772,40 @@ class SpatialGraph(amiramesh.AmiraMesh):
     def calculate_ranks(self):
         #if not self.test_treelike():
         #    return 0
-        
-        ranks = np.zeros(self.nedge,dtype='int')
 
         inlet,outlet = self.identify_inlet_outlet()
+        curnodes = [inlet]
+        visited_nodes,visited_edges = curnodes.copy(),[]
         
-        for i in range(2):
-            if i==0 and inlet is not None:
-                curnodes = [inlet]
-            elif i==1 and outlet is not None:
-                curnodes = [outlet]
-            else:
-                curnodes = []
-            visited_nodes,visited_edges = curnodes.copy(),[]
-            
-            curRank = 1
+        ranks = np.zeros(self.nedge,dtype='int')
+        curRank = 1
 
-            while True:
-                n_edge_added = 0
-                nextnodes = []
-                for node in curnodes:
-                    connected_nodes,connected_edges = self.connected_nodes(node)
-                    connected_nodes = [x for x in connected_nodes if x not in visited_nodes]
-                    connected_edges = [x for x in connected_edges if x not in visited_edges]
+        while True:
+            n_edge_added = 0
+            nextnodes = []
+            for node in curnodes:
+                connected_nodes,connected_edges = self.connected_nodes(node)
+                connected_nodes = [x for x in connected_nodes if x not in visited_nodes]
+                connected_edges = [x for x in connected_edges if x not in visited_edges]
+                
+                if len(connected_edges)>0:
+                    ranks[arr(connected_edges)] = curRank
+                
+                    nextnodes.extend(connected_nodes)
+                    visited_nodes.extend(connected_nodes)
+                    visited_edges.extend(connected_edges)
                     
-                    if len(connected_edges)>0:
-                        ranks[arr(connected_edges)] = curRank
-                    
-                        nextnodes.extend(connected_nodes)
-                        visited_nodes.extend(connected_nodes)
-                        visited_edges.extend(connected_edges)
-                        
-                        n_edge_added += 1
-                if n_edge_added==0:
-                    break
-                else:
-                    curRank += 1
-                    curnodes = nextnodes
+                    n_edge_added += 1
+            if n_edge_added==0:
+                break
+            else:
+                curRank += 1
+                curnodes = nextnodes
 
         if 'Ranks' in self.fieldNames:
             self.set_data(ranks,name='Ranks')
         else:
-            f = self.add_field(name='Ranks',definition='EDGE',data=ranks,type='int',shape=[ranks.shape[0]])  
+            f = self.add_field(name='Ranks',data=ranks,type='int',shape=[ranks.shape[0]])  
             
     def get_edges_connected_to_edge(self, edgeInd):
     
@@ -2184,14 +1818,6 @@ class SpatialGraph(amiramesh.AmiraMesh):
         ee = ee[ee!=edgeInd]
         
         return [es,ee]
-        
-    def get_nodes_connected_to_node(self, nodeInd):
-       
-        edgeconn = self.get_data('EdgeConnectivity')
-        nodes = edgeconn[(np.in1d(edgeconn[:,0],nodeInd)) | (np.in1d(edgeconn[:,1],nodeInd))]
-        nodes = np.unique(nodes)
-        nodes = nodes[nodes!=nodeInd]
-        return nodes
 
     def get_subgraph_by_rank(self,edgeInd):
     
@@ -2241,185 +1867,6 @@ class SpatialGraph(amiramesh.AmiraMesh):
         
         return edgeStore
         
-    def _translate_edge_coords(self,nodeIndex,e,coords=None,displacement=None):
-    
-        """
-        nodeIndex: index of node to be moved to new coordinates (coords/displacement)
-        e: edge object
-        coords: new location of nodeIndex (or displacement)
-        """
-    
-        edgepoints = self.get_data('EdgePointCoordinates').copy()
-    
-        if e.start_node_index==nodeIndex:
-            old_coords = e.start_node_coords
-        elif e.end_node_index==nodeIndex:
-            old_coords = e.end_node_coords
-        else:
-            return None
-            
-        new_points = e.coordinates.copy()
-        new_coords = old_coords
-        
-        if e.npoints==2:
-            if e.start_node_index==nodeIndex:
-                if coords is None and displacement is not None:
-                    new_coords = e.start_node_coords + displacement
-                elif coords is not None:
-                    new_coords = coords
-                else:
-                    return
-                edgepoints[e.i0] = new_coords
-            elif e.end_node_index==nodeIndex:
-                if coords is None and displacement is not None:
-                    new_coords = e.end_node_coords + displacement
-                elif coords is not None:
-                    new_coords = coords
-                else:
-                    return
-                edgepoints[e.i0+1] = new_coords
-            else:
-                breakpoint()
-        else:
-        
-            if e.start_node_index==nodeIndex:
-                                    
-                if coords is None and displacement is not None:
-                    new_coords = e.start_node_coords + displacement
-                elif coords is not None:
-                    new_coords = coords
-                else:
-                    return
-            
-                v0 = e.end_node_coords-old_coords
-                v1 = e.end_node_coords-new_coords
-                dist0 = np.linalg.norm(e.end_node_coords-e.start_node_coords)
-                dist1 = np.linalg.norm(e.end_node_coords-new_coords)
-                translated_points = e.coordinates - e.coordinates[-1]
-            else:
-                if coords is None and displacement is not None:
-                    new_coords = e.end_node_coords + displacement
-                elif coords is not None:
-                    new_coords = coords
-                else:
-                    return
-            
-                v0 = e.start_node_coords-old_coords
-                v1 = e.start_node_coords-new_coords
-                dist0 = np.linalg.norm(e.start_node_coords-e.end_node_coords)
-                dist1 = np.linalg.norm(e.start_node_coords-new_coords)
-                translated_points = e.coordinates - e.coordinates[0]
-            if np.any(np.isfinite(translated_points)==False):
-                breakpoint()
-            
-            scale_factor = dist1 / dist0
-                
-            u0 = v0 / dist0
-            u1 = v1 / dist1
-            rotation_axis = np.cross(u0, u1)
-            axis_magnitude = np.linalg.norm(rotation_axis)
-            
-            if axis_magnitude!=0:
-                rotation_axis /= axis_magnitude  # Normalize the rotation axis
-                angle = np.arccos(np.clip(np.dot(u0, u1), -1.0, 1.0))  # Angle between the two vectors
-                K = np.array([[0, -rotation_axis[2], rotation_axis[1]],[rotation_axis[2], 0, -rotation_axis[0]],[-rotation_axis[1], rotation_axis[0], 0]])
-                R = np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * np.dot(K, K)
-                
-                if e.start_node_index==nodeIndex:
-                    new_points = scale_factor * np.dot(R,translated_points.transpose()).transpose() + e.end_node_coords
-                    new_points[0] = new_coords
-                    new_points[-1] = e.end_node_coords
-                elif e.end_node_index==nodeIndex:
-                    new_points = scale_factor * np.dot(R,translated_points.transpose()).transpose() + e.start_node_coords
-                    new_points[-1] = new_coords
-                    new_points[0] = e.start_node_coords
-                else:
-                    breakpoint()
-            else:
-                # Rotation angle is zero
-                if scale_factor!=1.:
-                    if e.start_node_index==nodeIndex:
-                        new_points = scale_factor * translated_points + e.end_node_coords
-                    elif e.end_node_index==nodeIndex:
-                        new_points = scale_factor * translated_points + e.start_node_coords
-                        
-            edgepoints[e.i0:e.i1] = new_points
-            
-        self.set_data(edgepoints,name='EdgePointCoordinates')
-        
-        return new_coords
-     
-    def move_node(self,nodeIndex,coords=None,displacement=None):
-    
-        """
-        Move nodeIndex to coords and translate any connected edge
-        """
-    
-        nodes = self.get_data('VertexCoordinates').copy()
-        #edgepoints = self.get_data('EdgePointCoordinates').copy()
-        conn_edges = self.get_edges_containing_node(nodeIndex)
-        old_coords = nodes[nodeIndex]
-        
-        for ei in conn_edges:
-            e = self.get_edge(ei)
-            
-            new_coords = self._translate_edge_coords(nodeIndex,e,coords=coords,displacement=displacement)
-            
-            if False:
-                plt.ion()
-                plt.scatter(e.coordinates[:,0],e.coordinates[:,1],c='b')
-                plt.scatter(coords[0],coords[1],c='g')
-                if e.start_node_index==nodeIndex:
-                    plt.scatter(e.coordinates[0,0],e.coordinates[0,1],c='r')
-                elif e.end_node_index==nodeIndex:
-                    plt.scatter(e.coordinates[-1,0],e.coordinates[-1,1],c='r')
-                plt.scatter(new_points[:,0],new_points[:,1],c='orange')
-
-        nodes[nodeIndex] = new_coords
-
-        self.set_data(nodes,name='VertexCoordinates')
-        #self.set_data(edgepoints,name='EdgePointCoordinates')
-        
-        return conn_edges
-        
-    def get_segments(self,return_edge=False,domain=None):
-        nedgepoint = self.get_data(name='NumEdgePoints') 
-        edgepoints = self.get_data('EdgePointCoordinates')
-        epi = self.edge_point_index()
-        #nseg = nedgepoint - 1
-            
-        segments = np.hstack([edgepoints[:-1],edgepoints[1:]])
-        segments = segments.reshape([segments.shape[0],2,3])
-        epi_seg = np.vstack([epi[:-1],epi[1:]]).transpose()
-        valid = epi_seg[:,0]==epi_seg[:,1]
-        
-        if domain is not None:
-            ins = (np.all(segments[:,0]>=domain[:,0],axis=1)) & (np.all(segments[:,0]<=domain[:,1],axis=1)) & \
-                  (np.all(segments[:,1]>=domain[:,0],axis=1)) & (np.all(segments[:,1]<=domain[:,1],axis=1))
-            valid = valid & ins
-        
-        segments = segments[valid]
-        segment_edges = epi_seg[valid,0]
-        #segment_points = np.linspace(0,np.sum(nedgepoint)-1,np.sum(nedgepoint),dtype='int')-np.repeat(np.cumsum(nedgepoint)-nedgepoint,nedgepoint)
-        #segment_points = segment_points.reshape([int(segment_points.shape[0]/2),2])
-        p0 = np.concatenate([np.linspace(0,x-2,x-1,dtype='int') for x in nedgepoint])
-        segment_points = np.vstack([p0,p0+1]).transpose()
-        
-        if return_edge==False:
-            return segments
-        else:
-            return segments,segment_edges,segment_points
-            
-    def check_for_nan(self):
-        nodes = self.get_data('VertexCoordinates')
-        if np.any(~np.isfinite(nodes)):
-            inds = np.where(~np.isfinite(nodes))
-            return True, 0, inds[0]
-        points = self.get_data('EdgePointCoordinates')
-        if np.any(~np.isfinite(points)):
-            inds = np.where(~np.isfinite(points))
-            return True, 1, inds[0]
-        return False, -1, None
 
 class Editor(object):
 
@@ -2437,7 +1884,7 @@ class Editor(object):
             if len(conns_with_node)==2:
                 pass           
 
-    def _insert_node_in_edge(self,edge_index,edgepoint_index,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=None):
+    def _insert_node_in_edge(self, edge_index,edgepoint_index,nodeCoords,edgeConn,nedgepoints,edgeCoords,scalars=None):
     
         # Returns the new node index and the two new edges (if any are made)
     
@@ -2636,7 +2083,7 @@ class Editor(object):
 
         # Mark which edgepoints to keep / delete
         keepEdgePoint = np.zeros(nedgepoint,dtype='bool') + True
-        for edgeIndex in edges_to_delete:
+        for edgeIndex in tqdm(edges_to_delete):
             npoints = nedgepoints[edgeIndex]
             strt = np.sum(nedgepoints[0:edgeIndex])
             fin = strt + npoints
@@ -2660,7 +2107,7 @@ class Editor(object):
         #Check for any other scalar fields
         scalars = [f for f in graph.fields if f['definition'].lower()=='point' and len(f['shape'])==1]
         print('Updating scalars...')
-        for sc in scalars:
+        for sc in tqdm(scalars):
             #data_ed = np.delete(sc['data'],edgepoints_to_delete[0],axis=0)
             data = sc['data']
             data_ed = data[keepEdgePoint==True]
@@ -2809,7 +2256,7 @@ class Editor(object):
         
         consol_edge = []
         # Loop through each of the inline nodes (i.e. nodes with exactly 2 connections)
-        for i,_node_inds in enumerate(inline_nodes[0]):
+        for i,_node_inds in enumerate(tqdm(inline_nodes[0])):
             consolodated_edges = []
             start_or_end_node = []
             node_inds = [_node_inds]
@@ -2900,8 +2347,7 @@ class Editor(object):
         #edgeconn = edgeconn[~edge_del_flag]
         
         # Add new edges to graph
-        scalar_names = [x['name'] for x in scalars]
-        for edge in consol_edge:
+        for edge in tqdm(consol_edge):
             new_conn = arr([edge['start_node'],edge['end_node']])
             new_pts = edge['points']
             # Create indices defining the first, last and every second index in between
@@ -2917,13 +2363,8 @@ class Editor(object):
             edgeconn = np.vstack((edgeconn,new_conn))
             nedge = np.concatenate((nedge,[new_npts]))
             points = np.vstack((points,new_pts))
-
             for j,sc in enumerate(scalars):
-                if scalar_names[j]=='EdgeLabel':
-                    new_data = np.concatenate(edge['scalars'][j])[skip_inds]
-                    new_data[:] = graph.unique_edge_label() #  np.min(new_data)
-                else:
-                    new_data = np.concatenate(edge['scalars'][j])[skip_inds]
+                new_data = np.concatenate(edge['scalars'][j])[skip_inds]
                 sc['data'] = np.concatenate((sc['data'],new_data))
         
         graph.set_data(edgeconn,name='EdgeConnectivity')
@@ -2937,10 +2378,296 @@ class Editor(object):
         graph = delete_vertices(graph,~node_del_flag,return_lookup=False)
         
         return graph        
+
+    def remove_intermediate_nodesOLD(self,graph,file=None,nodeList=None,path=None):
+        
+        import pickle
+        import os
+
+        print('Generating node list...')
+        nodeList = graph.node_list(path=path)
+        print('Node list complete.')
+        
+        nnode = graph.nnode
+        nedge = graph.nedge        
+        nconn = np.array([node.nconn for node in nodeList])
+        new_nodeList = []
+        new_edgeList = []
+        
+        # Initialise list for mapping old to new node indices
+        node_index_lookup = np.zeros(nnode,dtype='int') - 1
+        edge_index_lookup = np.zeros(nedge,dtype='int') - 1
+        # Mark if a node has become an edge point
+        node_now_edge = np.zeros(nnode,dtype='int')
+        node_converted = np.zeros(nnode,dtype='int')
+        node_edges_checked = np.zeros(nnode,dtype='int')
+        edge_converted = np.zeros(nedge,dtype='int')
+        
+        newNodeCount = 0
+        newEdgeCount = 0
+        
+        for cntr,node in enumerate(nodeList):
+            
+            # Is the current node branching (or terminal)?
+            if (node.nconn==1 or node.nconn>2) and node_now_edge[node.index]==0 and node_edges_checked[node.index]==0:
+                # If so, make a new node object
+                if node_converted[node.index]==0:
+                    print(('NODE (START) {} {} {}'.format(newNodeCount,node.index,node.nconn)))
+                    newNode = Node(index=newNodeCount,coordinates=node.coords,connecting_node=[],old_index=node.index)
+                    # Mark node as having been converted to a new node (rather than an edge)
+                    node_converted[node.index] = 1
+                    new_nodeList.append(newNode)
+                    newNodeIndex = newNodeCount
+                    node_index_lookup[node.index] = newNodeIndex
+                    newNodeCount += 1
+                else:
+                    print(('NODE (START, REVISITED) {} {} {}'.format(newNodeCount,node.index,node.nconn)))
+                    ind = node_index_lookup[node.index]
+                    if ind<0:
+                        import pdb
+                        pdb.set_trace()
+                    newNode = new_nodeList[ind]
+                    newNodeIndex = newNode.index
+                    
+                node_edges_checked[node.index] = 1
+                
+                edges_complete = np.zeros(node.nconn,dtype='bool') + False
+                
+                # Loop through each branch
+                for node_counter,connecting_node_index in enumerate(node.connecting_node):
+
+                    # Initialise variables                    
+                    curNodeIndex = connecting_node_index
+                    endNode = None
+                    visited = [node.index]
+                    visited_edges = []
+
+                    # Compile connecting edges -
+                    connecting_edge = [e for x,e in zip(node.connecting_node,node.edges) if x==connecting_node_index]
+                        
+                    for connEdge in connecting_edge:
+
+                        # Check if edge has already been converted (e.g. the return of a loop)
+                        if edge_converted[connEdge.index]==0:
+                            # Check whether to reverse coordinates in edge
+                            if connEdge.end_node_index==node.index:
+                                reverse_edge_indices = True
+                                ecoords = connEdge.coordinates
+                                ecoords = ecoords[::-1,:]
+                                scalars = [s[::-1] for s in connEdge.scalars]
+                            elif connEdge.start_node_index==node.index:
+                                reverse_edge_indices = False
+                                ecoords = connEdge.coordinates
+                                scalars = connEdge.scalars
+                            else:
+                                import pdb
+                                pdb.set_trace()
+                                
+                            # Create edge object to add points to during walk
+                            print(('EDGE {}'.format(newEdgeCount)))
+                            newEdge = Edge(index=newEdgeCount,start_node_index=newNode.index,
+                                               start_node_coords=newNode.coords,
+                                               coordinates=ecoords,
+                                               npoints=ecoords.shape[0],
+                                               scalars=scalars,
+                                               scalarNames=connEdge.scalarNames)
+                                               
+                            new_edgeList.append(newEdge)
+                            assert len(new_edgeList)==newEdgeCount+1
+                            
+                            edge_index_lookup[connEdge.index] = newEdgeCount
+                            visited_edges.append(connEdge.index)
+                            edge_converted[connEdge.index] = 1
+                            
+                            newEdgeCount += 1
+                        
+                            # Start walking - complete when a branching node is encountered
+                            endFlag = False
+                            
+                            while endFlag is False:
+                                curNode = nodeList[curNodeIndex]
+                                visited.append(curNodeIndex)
+                                
+                                # If it's an intermediate (connecting) node
+                                if curNode.nconn==2:
+                                    # Check which connecting nodes have been visited already
+                                    next_node_index = [x for x in curNode.connecting_node if x not in visited]
+                                    # Get connecting edge (connected to unvisited, unconverted node)
+                                    connecting_edge_walk = [e for x,e in zip(curNode.connecting_node,curNode.edges) if x not in visited and edge_converted[e.index]==0 ]
+                                    # If no unvisited nodes have been identified...
+                                    if len(connecting_edge_walk)==0:
+                                        # Look for branching nodes that have been visited (i.e. loops)
+                                        connecting_edge_walk = [e for x,e in zip(curNode.connecting_node,curNode.edges) if edge_converted[e.index]==0 ]
+                                        if len(connecting_edge_walk)==1:
+                                            foundConn = False
+                                            # Check both start and end node indices
+                                            for i,j in enumerate([connecting_edge_walk[0].start_node_index,connecting_edge_walk[0].end_node_index]):
+                                                if nodeList[j].nconn > 2:
+                                                    #Loop!
+                                                    # Look for a connecting branch point
+                                                    next_node_index = [j]
+                                                    foundConn = True
+                                            # If still nothing found...
+                                            if not foundConn:
+                                                import pdb
+                                                pdb.set_trace()
+                                                
+                                    # If a connected edge has been found...
+                                    if len(connecting_edge_walk)>0:
+                                        # Check whether to reverse edge points
+                                        if connecting_edge_walk[0].end_node_index==curNode.index:
+                                            reverse_edge_indices = True
+                                        elif connecting_edge_walk[0].start_node_index==curNode.index:
+                                            reverse_edge_indices = False
+                                        else:
+                                            import pdb
+                                            pdb.set_trace()
+            
+                                        # Add in connecting edge points
+                                        # Reverse edge coordinates if necessary
+                                        if reverse_edge_indices:
+                                            scalars = [s[::-1] for s in connecting_edge_walk[0].scalars]
+                                            #scalars = [s[1:-1] for s in scalars]
+                                            coords = connecting_edge_walk[0].coordinates
+                                            coords = coords[::-1,:]
+                                            newEdge.add_point(coords,scalars=scalars,remove_last=True)
+                                        else:
+                                            scalars = connecting_edge_walk[0].scalars
+                                            newEdge.add_point(connecting_edge_walk[0].coordinates,
+                                                          scalars=scalars,remove_last=True)
+        
+                                        # Mark that node is now an edge point
+                                        node_now_edge[curNodeIndex] = 1
+            
+                                        # If we've run out of nodes, then quit;
+                                        # Otherwise, walk to the next node
+                                        if len(next_node_index)==0:                                
+                                            endFlag = True
+                                        else:
+                                            curNodeIndex = next_node_index[0]
+                                            edge_converted[connecting_edge_walk[0].index] = 1
+                                            edge_index_lookup[connecting_edge_walk[0].index] = newEdge.index
+                                    else: # No connected edges found
+                                        print('No connected edges...')
+                                        endFlag = True
+                                        
+                                else: # Branch or terminal point
+                                    endFlag = True
+                                    end_node_index = curNode.index
+                                    # Add in final edge coordinates, if necessary
+                                    if not all([x==y for x,y in zip(newEdge.coordinates[-1,:],curNode.coords)]):
+                                        # Reverse edge coordinates if necessary
+                                        if connEdge.start_node_index!=curNode.index:
+                                            scalars = [s[::-1] for s in connEdge.scalars]
+                                            coords = connEdge.coordinates
+                                            coords = coords[::-1,:]
+                                            newEdge.add_point(coords,scalars=scalars,remove_last=True)
+                                        else:
+                                            scalars = connEdge.scalars
+                                            newEdge.add_point(connEdge.coordinates,
+                                                          scalars=scalars,remove_last=True)
+                                    
+                                # Sort out end nodes and edges
+                                if endFlag:
+                                    # Find end node
+                                    if newEdge is None:
+                                        import pdb
+                                        pdb.set_trace()
+                                    # If node has already been visited
+                                    if node_converted[curNodeIndex]==1 and node_now_edge[curNodeIndex]==0:
+                                        end_node_index_new = int(node_index_lookup[end_node_index])
+                                        if end_node_index_new<0:
+                                            import pdb
+                                            pdb.set_trace()
+                                        endNode = new_nodeList[end_node_index_new]
+                                        #print('REVISITED NODE {} (END)'.format(endNode.index))
+                                    # If node hasn't been converted, and isn't an edge
+                                    elif node_now_edge[curNodeIndex]==0:
+                                        print(('NODE (END) {} {}'.format(newNodeCount,curNode.index)))
+                                        end_node_index_new = newNodeCount
+                                        endNode = Node(index=end_node_index_new,coordinates=curNode.coords,connecting_node=[],old_index=curNode.index)
+                                        node_converted[curNodeIndex] = 1
+                                        new_nodeList.append(endNode) #[newNodeCount] = endNode
+                                        node_index_lookup[end_node_index] = newNodeCount
+                                        newNodeCount += 1
+                                    else:
+                                        import pdb
+                                        pdb.set_trace()
+                                        
+                                    try:
+                                        stat = newEdge.complete_edge(endNode.coords,end_node_index_new)
+                                        if stat!=0:
+                                            import pdb
+                                            pdb.set_trace()
+                                        print(('EDGE COMPLETE: end node {}'.format(endNode.index)))
+                                    except Exception as e:
+                                        print(e)
+                                        import pdb
+                                        pdb.set_trace()
+                                        
+                                    res = newNode.add_edge(newEdge)
+                                    if not res:
+                                        import pdb
+                                        pdb.set_trace()
+                                    if endNode.index!=newNode.index:
+                                        res = endNode.add_edge(newEdge,reverse=True)
+                                        if not res:
+                                            import pdb
+                                            pdb.set_trace()
+                                    
+                                    edges_complete[node_counter] = True
+                                    
+                                    break
+                        else: # Edge has already been converted
+                            newEdgeIndex = edge_index_lookup[connEdge.index]
+                            if newEdgeIndex<0:
+                                import pdb
+                                pdb.set_trace()
+                            newEdge = new_edgeList[newEdgeIndex]
+                            if newEdge.start_node_index==newNode.index:
+                                res = newNode.add_edge(newEdge)
+                                if not res:
+                                    print(('Error: Edge {} is already attached to node {}'.format(newEdge.index,newNode.index)))
+                            elif newEdge.end_node_index==newNode.index:
+                                res = newNode.add_edge(newEdge,reverse=True)
+                                if not res:
+                                    print(('Error: Edge {} is already attached to node {}'.format(newEdge.index,newNode.index)))
+                            else:
+                                import pdb
+                                pdb.set_trace()
+                            edges_complete[node_counter] = True
+                        
+#                    if edges_complete[node_counter]==False:
+#                        import pdb
+#                        pdb.set_trace()
+                        
+#                if newNode.nconn==2:
+#                    import pdb
+#                    pdb.set_trace()
+#                if newNode.nconn!=node.nconn:
+#                    import pdb
+#                    pdb.set_trace()
+#                    #assert endNode is not None
+#                if not all(edges_complete):
+#                    import pdb
+#                    pdb.set_trace()
+
+        #return new_nodeList
+        #se = np.where(edge_converted==0)
+        #elu = np.where(edge_index_lookup<0)
+        #incomplete_edges = [e for e in new_edgeList if e.complete is False]
+        #incomp = np.where(edge_converted==0)
+        #node2 = [n for n in new_nodeList if n.nconn==2]
+
+        new_nedge = newEdgeCount
+        new_nnode = newNodeCount
+        
+        new_graph = graph.node_list_to_graph(new_nodeList)
+        return new_graph
         
     def largest_graph(self, graph):
 
-        graphNodeIndex, graph_size = graph.identify_graphs()
+        graphNodeIndex, graph_size = graph.identify_graphs(progBar=True)
         unq_graph_indices, graph_size = np.unique(graphNodeIndex, return_counts=True)
         largest_graph_index = np.argmax(graph_size)
         node_indices = np.arange(graph.nnode)
@@ -2976,84 +2703,7 @@ class Editor(object):
         
         return graph
         
-    def filter_graph(self,graph,parameter='Radii',min_value=None,max_value=None,clip_value=None,write=False,ofile='',keep_stubs=False,stub_len=100.,ignore=None,return_edge_inds=False):
-
-        """
-        min_value: All edges with radii < this value are deleted
-        clip_value: All edges with radii < this value and > min_value are set to clip_value    
-        """
-
-        #nodecoords, edgeconn, edgepoints, nedgepoints, radius, category, mlp = get_graph_fields(graph)
-        
-        nodecoords = graph.get_data('VertexCoordinates')
-        edgeconn = graph.get_data('EdgeConnectivity')
-        edgepoints = graph.get_data('EdgePointCoordinates')
-        nedgepoints = graph.get_data('NumEdgePoints')
-        paramVals = graph.get_data(parameter)
-        scalars = graph.get_scalars()
-        nscalars = graph.get_node_scalars()
-        
-        nedges = edgeconn.shape[0]
-        nnode = nodecoords.shape[0]
-
-        # List all edge indices
-        inds = np.linspace(0,edgeconn.shape[0]-1,edgeconn.shape[0],dtype='int')
-        # Define which edge each edgepoint belongs to
-        edge_inds = np.repeat(inds,nedgepoints)
-        if clip_value is not None:
-            clip_edge_inds = np.where((paramVals>=clip_value) & (paramVals<=min_value))
-            paramVals[clip_edge_inds] = min_value
-        else:
-            clip_edge_inds = [[]]
-        
-        if min_value is not None and max_value is not None:      
-            del_edge_inds = np.where((paramVals<min_value) | (paramVals>max_value))        
-        elif min_value is None and max_value is not None:
-            del_edge_inds = np.where((paramVals>max_value))        
-        elif min_value is not None and max_value is None:
-            del_edge_inds = np.where((paramVals<min_value))   
-        elif min_value is None and max_value is None:
-            return graph
-
-        #print(f'{len(clip_edge_inds[0])} edges with {parameter}>{clip_value} and {parameter}<{min_filter_radius} clipped.')
-        #print(f'{len(del_edge_inds[0])} edges with {parameter}<{min_filter_radius} clipped.')
-
-        # Find unique edge index references
-        keep_edge = np.ones(edgeconn.shape[0],dtype='bool')
-        # Convert to segments
-        del_inds = np.unique(edge_inds[del_edge_inds])
-        keep_edge[del_inds] = False
-        
-        if ignore is not None:
-            keep_edge[ignore] = True
-        
-        keep_inds = np.where(keep_edge)[0]
-        # Define nodes to keep positively (i.e. using the keep_inds rather than del_inds) so that nodes are retained that appear in edges that aren't flagged for deletion
-        node_keep_inds = np.unique(edgeconn[keep_inds].flatten())
-        keep_node = np.zeros(nodecoords.shape[0],dtype='bool')
-        keep_node[node_keep_inds] = True
-        
-        graph.set_data(nodecoords,name='VertexCoordinates')
-        graph.set_data(edgeconn,name='EdgeConnectivity')
-        graph.set_data(edgepoints,name='EdgePointCoordinates')
-        graph.set_data(nedgepoints,name='NumEdgePoints')
-        graph.set_data(paramVals,name=parameter)
-        graph.set_definition_size('VERTEX',nodecoords.shape[0])
-        graph.set_definition_size('EDGE',edgeconn.shape[0])
-        graph.set_definition_size('POINT',edgepoints.shape[0])            
-        graph.set_graph_sizes()
-        
-        graph,keep_edge = delete_vertices(graph,keep_node,return_keep_edge=True)
-        
-        if write:
-            graph.write(ofile)  
-            
-        if return_edge_inds:
-            return graph,keep_edge
-        else:
-            return graph  
-            
-    def filter_graph_by_radius(self,graph,min_filter_radius=5.,filter_clip_radius=None,write=False,ofile='',keep_stubs=False,stub_len=100.,ignore=None,return_edge_inds=False):
+    def filter_graph_by_radius(self,graph,min_filter_radius=5.,filter_clip_radius=None,write=False,ofile='',keep_stubs=False,stub_len=100.):
 
         """
         min_filter_radius: All edges with radii < this value are deleted
@@ -3089,7 +2739,7 @@ class Editor(object):
             node_radius = np.zeros(nodecoords.shape[0]) - 1
             rname = graph.get_radius_field_name()
             rind = [i for i,s in enumerate(graph.get_scalars()) if s['name']==rname][0]
-            for i in range(graph.nedge):
+            for i in trange(graph.nedge):
                 edge = graph.get_edge(i)
                 rads = np.min(edge.scalars[rind])
                 node_radius[edge.start_node_index] = np.max([rads,node_radius[edge.start_node_index]])
@@ -3097,7 +2747,7 @@ class Editor(object):
             
             is_stub = np.zeros(radius.shape[0],dtype='bool')
             stub_loc = np.zeros(graph.nedge,dtype='int') - 1
-            for i in range(graph.nedge):
+            for i in trange(graph.nedge):
                 edge = graph.get_edge(i)   
                 rads = edge.scalars[rind]
                 #epointinds = np.linspace(edge.i0,edge.i1,edge.npoints,dtype='int')
@@ -3118,7 +2768,7 @@ class Editor(object):
             stub_loc = stub_loc[edge_stubs]
             # Shorten stubs
             edgepoints_valid = np.ones(edgepoints.shape[0],dtype='bool') 
-            for i,edge in enumerate(edges):
+            for i,edge in enumerate(tqdm(edges)):
                  nodes = nodecoords[edge]
                  edgeObj = graph.get_edge(edge_stubs[i])
                  points = edgeObj.coordinates
@@ -3169,10 +2819,6 @@ class Editor(object):
         # Convert to segments
         del_inds = np.unique(edge_inds[del_edge_inds])
         keep_edge[del_inds] = False
-        
-        if ignore is not None:
-            keep_edge[ignore] = True
-        
         keep_inds = np.where(keep_edge)[0]
         # Define nodes to keep positively (i.e. using the keep_inds rather than del_inds) so that nodes are retained that appear in edges that aren't flagged for deletion
         node_keep_inds = np.unique(edgeconn[keep_inds].flatten())
@@ -3184,20 +2830,17 @@ class Editor(object):
         graph.set_data(edgepoints,name='EdgePointCoordinates')
         graph.set_data(nedgepoints,name='NumEdgePoints')
         graph.set_data(radius,name=graph.get_radius_field_name())
-        graph.set_definition_size('VERTEX',nodecoords.shape[0])
-        graph.set_definition_size('EDGE',edgeconn.shape[0])
-        graph.set_definition_size('POINT',edgepoints.shape[0])            
+        graph.set_definition_size('VERTEX',nodecoords[0].shape[0])
+        graph.set_definition_size('EDGE',edgeconn[1].shape[0])
+        graph.set_definition_size('POINT',edgepoints[4].shape[0])            
         graph.set_graph_sizes()
         
-        graph,keep_edge = delete_vertices(graph,keep_node,return_keep_edge=True)
+        graph = delete_vertices(graph,keep_node)
         
         if write:
             graph.write(ofile)  
             
-        if return_edge_inds:
-            return graph,keep_edge
-        else:
-            return graph  
+        return graph  
 
     def interpolate_edges(self,graph,interp_resolution=None,interp_radius_factor=None,ninterp=2,filter=None,noise_sd=0.):
         
@@ -3216,13 +2859,12 @@ class Editor(object):
         scalar_data = [x['data'] for x in scalars]
         scalar_type = [str(x.dtype) for x in scalar_data]
         scalar_data_interp = [[] for x in scalars]
-        scalar_names = [x['name'] for x in scalars]
         
         if filter is None:
             filter = np.ones(conns.shape[0],dtype='bool')
         
         pts_interp,npoints_interp = [],np.zeros(conns.shape[0],dtype='int')-1
-        for i,conn in enumerate(conns):
+        for i,conn in enumerate(tqdm(conns)):
             i0 = np.sum(npoints[:i])
             i1 = i0 + npoints[i]
             pts = points[i0:i1]
@@ -3236,7 +2878,7 @@ class Editor(object):
             
                 # If the current edge has only 2 points
                 if npoints[i]==2:  
-                    ninterp = 2 # default   
+                    ninterp = 2    
                     # Find how many additional points to interpolate in (if length>interpolation resolution)
                     if interp_radius_factor is not None and radii is not None:
                         length = np.linalg.norm(pts[1]-pts[0])
@@ -3334,21 +2976,18 @@ class Editor(object):
                         
                     for j,sd in enumerate(scalar_data):
                         sdc = sd[i0:i1]
-                        if scalar_names[j]=='EdgeLabel':
-                            scalar_data_interp[j].extend(np.repeat(sdc[0],pcur.shape[0]))
-                        else:
-                            if 'float' in scalar_type[j]:
-                                scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0]))
-                            elif 'int' in scalar_type[j]:
-                                #breakpoint()
-                                if sdc[0]==sdc[-1]:
-                                    scalar_data_interp[j].extend(np.zeros(ninterp)+sdc[0])
-                                else:
-                                    scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0],dtype='int'))
-                            elif 'bool' in scalar_type[j]:
-                                scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],ninterp,dtype='bool')) 
+                        if 'float' in scalar_type[j]:
+                            scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0]))
+                        elif 'int' in scalar_type[j]:
+                            #breakpoint()
+                            if sdc[0]==sdc[-1]:
+                                scalar_data_interp[j].extend(np.zeros(ninterp)+sdc[0])
                             else:
-                                breakpoint()
+                                scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[1],pcur.shape[0],dtype='int'))
+                        elif 'bool' in scalar_type[j]:
+                            scalar_data_interp[j].extend(np.linspace(sdc[0],sdc[-1],ninterp,dtype='bool')) 
+                        else:
+                            breakpoint()
                     
                     npoints_interp[i] = ninterp
                     
@@ -3363,7 +3002,9 @@ class Editor(object):
                         ax3d.plot(pcur[:,0], pcur[:,1], pcur[:,2], 'b')
                         ax3d.plot(pcur[:,0], pcur[:,1], pcur[:,2], 'b*')
                         ax3d.plot(pts[:,0], pts[:,1], pts[:,2], 'r*')
-                        plt.show()
+                        #plt.show()
+                        plt.savefig("spatialgraph_2.png", dpi=300)
+                        plt.close()
                         breakpoint()
                 else:
                     breakpoint()
@@ -3387,11 +3028,10 @@ class Editor(object):
         return graph
         
     def insert_nodes_in_edges(self,graph,interp_resolution=None,interp_radius_factor=None,filter=None):
-
+        
         """
-        Given an interpolation resolution, insert nodes into edges with even spacing
         """
-
+        
         coords = graph.get_data('VertexCoordinates')
         points = graph.get_data('EdgePointCoordinates')
         npoints = graph.get_data('NumEdgePoints')
@@ -3399,142 +3039,51 @@ class Editor(object):
         radii = graph.get_radius_data()
 
         if filter is None:
-            filter = np.ones(conns.shape[0],dtype='bool')
-                                            
-        gvars = GVars(graph)
-        g_nedgepoints = gvars.nedgepoints[gvars.edgeconn_allocated]
-        g_edgeCoords = gvars.edgepoints[gvars.edgepoints_allocated]
-        g_nodeCoords = gvars.nodecoords[gvars.nodecoords_allocated]
-        g_edgeConn = gvars.edgeconn[gvars.edgeconn_allocated]
-        g_scalars,g_scalar_names = [],[]
-        for j,sc in enumerate(gvars.scalar_values):
-            g_scalars.append(gvars.scalar_values[j][gvars.edgepoints_allocated]) 
-            g_scalar_names.append(gvars.scalars[j]['name']) 
-        g_node_scalars,g_node_scalar_names = [],[]
-        for j,sc in enumerate(gvars.node_scalar_values):
-            g_node_scalars.append(gvars.node_scalar_values[j][gvars.nodecoords_allocated])  
-            g_node_scalar_names.append(gvars.node_scalars[j]['name'])
-
-        for i,conn in enumerate(conns):
-
-            if filter[i]==True: # Ignore if filter is False           
+            filter_pts = np.ones(points.shape[0],dtype='bool')
+        else:
+            # Convert from edge to edgepoint
+            filter_pts = np.repeat(filter,npoints)
             
+        # Add filter field
+        graph.add_field(name='Filter',marker=f'@{len(graph.fields)+1}',definition='POINT',type='bool',nelements=1,nentries=[0])  
+        graph.set_data(filter_pts,name='Filter')
+        
+        print('Inserting nodes in edges...')
+
+        while True:
+            coords = graph.get_data('VertexCoordinates')
+            points = graph.get_data('EdgePointCoordinates')
+            npoints = graph.get_data('NumEdgePoints')
+            conns = graph.get_data('EdgeConnectivity')
+            filter_pts = graph.get_data('Filter')
+            radii = graph.get_radius_data()
+        
+            change = False
+            
+            for i,conn in enumerate(tqdm(conns)):
                 i0 = np.sum(npoints[:i])
                 i1 = i0 + npoints[i]
                 pts = points[i0:i1]
-                
-                i0p = np.sum(g_nedgepoints[:i])
-                i1p = i0p + g_nedgepoints[i]
-            
-                lengths = np.linalg.norm(pts[1:]-pts[:-1],axis=1) 
-                cumulative_lengths = np.insert(np.cumsum(lengths), 0, 0)
-                total_length = np.sum(lengths)
-                meanRadius = np.mean(radii[i0:i1])
-                
-                if interp_resolution is None:
+
+                if filter_pts[i0]==True: # Ignore if filter is False           
+                    lengths = arr([np.linalg.norm(pts[j]-pts[j-1]) for j in range(1,npoints[i])])
+                    meanRadius = np.mean(radii[i0:i1])
                     cur_interp_res = interp_radius_factor*meanRadius
-                else:
-                    cur_interp_res = interp_resolution
-
-                if total_length>cur_interp_res:
-                    ninterp = np.clip(total_length/cur_interp_res,1,None).astype('int')
-                    distances = np.linspace(0,total_length,ninterp+2)[1:-1] 
-
-                    segment_index = np.searchsorted(cumulative_lengths, distances, side='right') - 1
-                                                 
-                    # Compute the local fraction along the current segment
-                    segment_start_length = cumulative_lengths[segment_index]
-                    segment_end_length = cumulative_lengths[segment_index + 1]
-                    local_fractions = (distances - segment_start_length) / (segment_end_length - segment_start_length)
-                    
-                    # Interpolate between the two points of the segment
-                    start_point = pts[segment_index]
-                    end_point = pts[segment_index + 1]
-                    interpolated_points = ((1-local_fractions)*start_point.transpose()).transpose() + (local_fractions*end_point.transpose()).transpose() 
-                         
-                    segments = np.linspace(0,pts.shape[0]-1,pts.shape[0],dtype='int')
-                    order = np.concatenate([segments,segment_index+local_fractions])
-                    types = np.zeros(order.shape[0],dtype='int')
-                    types[segments.shape[0]:] = 1
-                    pts_interp = np.vstack([pts,interpolated_points])
-                    srt = np.argsort(order)
-                    order = order[srt]
-                    types = types[srt]
-                    pts_interp = pts_interp[srt]
-                    
-                    int_pts = np.where(types==1)
-                    int_pts = np.concatenate([[0],int_pts[0],[pts_interp.shape[0]]])
-                    new_conns = np.concatenate([[0],np.repeat(int_pts[1:-1],2),[int_pts[-1]]])
-                    new_conns = new_conns.reshape([int(new_conns.shape[0]/2),2])
-                    new_edges = [[] for k in range(new_conns.shape[0])]
-                    for j,cn in enumerate(new_conns): 
-                        new_edges[j] = pts_interp[cn[0]:cn[1]+1]
-                    # Edge node indices
-                    nnodes = g_nodeCoords.shape[0]
-                    new_edgeconns = np.concatenate([[conn[0]],np.repeat(np.linspace(nnodes,nnodes+ninterp-1,ninterp,dtype='int'),2),[conn[1]]])
-                    new_edgeconns = new_edgeconns.reshape([int(new_edgeconns.shape[0]/2),2])
-
-                    # Grab all edge coordinates prior to edge to be split
-                    if i0p>0:
-                        edgeCoords_0 = g_edgeCoords[:i0p]
-                    else:
-                        edgeCoords_0 = []
-                    # Edge coordinates listed after the current edge
-                    if g_edgeCoords.shape[0]>i1p:
-                        edgeCoords_1 = g_edgeCoords[i1p:]
-                    else:
-                        edgeCoords_1 = []
-
-                    # Combine edges together
-                    g_edgeCoords = np.concatenate([x for x in [edgeCoords_0,new_edges[0],edgeCoords_1,np.concatenate(new_edges[1:])] if len(x)>0])
-                    g_nedgepoints = np.concatenate([g_nedgepoints,[ned.shape[0] for ned in new_edges[1:]]])
-                    g_nedgepoints[i] = new_edges[0].shape[0]
-                    g_edgeConn = np.concatenate([g_edgeConn,new_edgeconns[1:]])
-                    g_edgeConn[i] = new_edgeconns[0]
-                    g_nodeCoords = np.concatenate([g_nodeCoords,pts_interp[types==1]])
-
-                    # Sort out scalars
-                    # Make all node scalars equal to the value for the start node
-                    try:
-                        new_node_scalars = [np.repeat(x[conn[0]],ninterp) for x in g_node_scalars]   
-                        if 'NodeLabel' in g_node_scalar_names:
-                            new_node_scalars[g_node_scalar_names.index('NodeLabel')] = [graph.unique_node_label() for _ in range(ninterp)]                        
-                        for j,data in enumerate(g_node_scalars):
-                            g_node_scalars[j] = np.concatenate([data,np.concatenate([new_node_scalars[j]])])
-                    except Exception as e:
-                        print(e)
-                        breakpoint()
-
-                    for j,data in enumerate(g_scalars):
-                        if i0p>0:
-                            sc_0 = data[:i0p]
-                        else:
-                            sc_0 = []
-                        if data.shape[0]>i1p:
-                            sc_1 = data[i1p:]
-                        else:
-                            sc_1 = []
-                        edata = data[i0p:i1p]
-                        interp_data = np.zeros(pts_interp.shape[0],dtype=data.dtype)
-                        interp_data[types==0] = edata
-                        # Assign interpolated points the value at the start of the segment (maybe interpolate in future?)
-                        interp_data[types==1] = edata[segment_index]
-                        new_sc = [[] for k in range(new_conns.shape[0])]
-                        for k,cn in enumerate(new_conns): 
-                            if g_scalar_names[j]=='EdgeLabel':
-                                new_sc[k] = np.repeat(graph.unique_edge_label(),interp_data[cn[0]:cn[1]+1].shape[0])
-                            else:
-                                new_sc[k] = interp_data[cn[0]:cn[1]+1]
-
-                        g_scalars[j] = np.concatenate([x for x in [sc_0,new_sc[0],sc_1,np.concatenate(new_sc[1:])] if len(x)>0])
-
-        if len(g_node_scalars)>0 and g_node_scalars[0].shape[0]!=g_nodeCoords.shape[0]:
-            breakpoint()
-        gvars.set_nodecoords(g_nodeCoords,scalars=g_node_scalars)  
-        gvars.set_edgeconn(g_edgeConn,g_nedgepoints)  
-        gvars.set_edgepoints(g_edgeCoords,scalars=g_scalars)
-        graph = gvars.set_in_graph()
-
+                    print(i,np.sum(lengths),cur_interp_res)
+                    if np.sum(lengths)>cur_interp_res:
+                        stmp = np.where(np.cumsum(lengths)>=cur_interp_res)
+                        if len(stmp[0])>0 and npoints[i]>2 and (stmp[0][0]+1)<(npoints[i]-1):
+                            # and stmp[0][0]>0 and stmp[0][-1]<npoints[i]-1:
+                            gvars = GVars(graph)
+                            _ = gvars.insert_node_in_edge(i,stmp[0][0]+1)
+                            graph = gvars.set_in_graph()
+                            change = True
+                            print('Change!')
+                            break
+            if not change:
+                break
+                
+        graph.remove_field('Filter')
         return graph
         
     def add_noise(self,graph,filter=None,radius_factor=2.):
@@ -3563,7 +3112,7 @@ class Editor(object):
         nodes = graph.get_data('VertexCoordinates')
         edgepoints = graph.get_data('EdgePointCoordinates')
         
-        for i,c1 in enumerate(nodes):
+        for i,c1 in enumerate(tqdm(nodes)):
             sind = np.where((nodes[:,0]==c1[0]) & (nodes[:,1]==c1[1]) & (nodes[:,2]==c1[2]))
             if len(sind[0])>1:
                 #print(f'Degenerate nodes: {sind[0]}')
@@ -3751,10 +3300,7 @@ class Edge(object):
     def get_coordinates_from_graph(self,graph,index):
         nedgepoints = graph.get_field('NumEdgePoints')['data']
         coords = graph.get_field('EdgePointCoordinates')['data']
-        if index>0:
-            nprev = np.sum(nedgepoints[0:index])
-        else:
-            nprev = 0
+        nprev = np.sum(nedgepoints[0:index])
         ncur = nedgepoints[index]
         e_coords = coords[nprev:nprev+ncur,:]
         return e_coords
@@ -3970,13 +3516,6 @@ class GVars(object):
             self.preallocate_nodes(self.n_all,set_pointer_to_start=False)
         self.nodecoords[self.node_ptr] = node
         self.nodecoords_allocated[self.node_ptr] = True
-        
-        if len(new_scalar_vals)==0:
-            node_scalar_names = [x['name'] for x in  self.node_scalars]
-            new_scalar_vals = [x['data'][0] for x in self.node_scalars]   
-            if 'NodeLabel' in node_scalar_names:
-                new_scalar_vals[node_scalar_names.index('NodeLabel')] = self.graph.unique_node_label()                      
-        
         for i,sc in enumerate(self.node_scalar_values):
             self.node_scalar_values[i][self.node_ptr] = new_scalar_vals[i]
         self.node_ptr += 1
@@ -4071,13 +3610,6 @@ class GVars(object):
         self.edgepoints_allocated[self.edgepnt_ptr:self.edgepnt_ptr+npts] = True
         if edgeInd>=0:
             self.nedgepoints[edgeInd] = npts
-            
-        if len(new_scalar_vals)==0:
-            scalar_names = [x['name'] for x in  self.scalars]
-            new_scalar_vals = [x['data'][0] for x in self.scalars]   
-            if 'EdgeLabel' in scalar_names:
-                new_scalar_vals[scalar_names.index('EdgeLabel')] = self.graph.unique_edge_label()                      
-            
         for i,sc in enumerate(self.scalar_values):
             dt = self.scalar_values[i].dtype
             self.scalar_values[i][self.edgepnt_ptr:self.edgepnt_ptr+npts] = np.zeros(npts,dtype=dt)+new_scalar_vals[i]
@@ -4230,44 +3762,7 @@ class GVars(object):
                 
         self.graph.remove_field('Filter')
         
-    def set_edge(self,edge_index,edgepoints,new_scalar_values):
-    
-        nedgepoints = self.nedgepoints[self.edgeconn_allocated]
-        edgeCoords = self.edgepoints[self.edgepoints_allocated]
-
-        npoints = edgepoints.shape[0]
-        npoints_cur = nedgepoints[int(edge_index)]
-        dif = npoints - npoints_cur
-    
-        if self.edgepoints.shape[0]-self.edgepnt_ptr<=dif:
-            self.preallocate_edgepoints(self.n_all,set_pointer_to_start=False)
-        
-        x0 = int(np.sum(nedgepoints[:int(edge_index)]))
-        x1 = x0 + int(nedgepoints[int(edge_index)])
-        if npoints==npoints_cur:
-            self.edgepoints[self.edgepoints_allocated][x0:x1] = edgepoints
-        elif npoints>npoints_cur:
-            
-            nedgepoints[int(edge_index)] = npoints
-            self.nedgepoints[self.edgeconn_allocated] = nedgepoints
-            # Reallocate existing data  
-            alloc = self.edgepoints_allocated
-            alloc[x1+dif:] = alloc[x1:-dif]
-            alloc[x0:x1+dif] = True
-            self.edgepoints_allocated = alloc
-            edgeCoords = self.edgepoints[self.edgepoints_allocated]
-            edgeCoords[x1+dif:] = edgeCoords[x1:-dif]
-            edgeCoords[x0:x1+dif] = edgepoints
-            self.edgepoints[self.edgepoints_allocated] = edgeCoords
-            for i in range(len(self.scalar_values)):
-                scalars = self.scalar_values[i][self.edgepoints_allocated]
-                scalars[x1+dif:] = scalars[x1:-dif]
-                scalars[x0:x1+dif] = new_scalar_values[i]
-                self.scalar_values[i][self.edgepoints_allocated] = scalars
-        else:
-            breakpoint()
-
-    def insert_node_in_edge(self,edge_index,edgepoint_index,new_scalar_values=None,node_location_only=False,fr=0.5):
+    def insert_node_in_edge(self,edge_index,edgepoint_index):
     
         # Returns the new node index and the two new edges (if any are made)
         
@@ -4275,14 +3770,12 @@ class GVars(object):
         edgeConn = self.edgeconn[self.edgeconn_allocated]
         nedgepoints = self.nedgepoints[self.edgeconn_allocated]
         edgeCoords = self.edgepoints[self.edgepoints_allocated]
-        scalars,scalar_names = [],[]
+        scalars = []
         for i,sc in enumerate(self.scalar_values):
             scalars.append(self.scalar_values[i][self.edgepoints_allocated])
-            scalar_names.append(self.scalars[i]['name'])
-        node_scalars,node_scalar_names = [],[]
+        node_scalars = []
         for i,sc in enumerate(self.node_scalar_values):
             node_scalars.append(self.node_scalar_values[i][self.nodecoords_allocated])
-            node_scalar_names.append(self.node_scalars[i]['name'])
     
         nnode = len(nodeCoords)
         nedge = len(edgeConn)
@@ -4293,56 +3786,11 @@ class GVars(object):
         edge = edgeCoords[x0:x1]
         npoints = edge.shape[0]
         
-        start_node = edgeConn[edge_index,0]
-        end_node = edgeConn[edge_index,1]  
-
-        # Calculate location of insertion point, and create a new edge point where new node will subsequently be created
-        if fr is not None or npoints==2:
-            # Calculate distance along the edge
-            dists = np.linalg.norm(edge-edge[0],axis=1)
-            if dists[-1]==0.:
-                if node_location_only:
-                    return None
-                else:
-                    return None, None, None, None
-            t = np.cumsum(dists)
-            # Calculate insertion point
-            new_loc = t[-1]*fr
-            s0 = np.where(t<=new_loc)[0][-1]
-            s1 = np.where(t>=new_loc)[0][0]
-            s0fr = dists[s0]/t[-1]
-            s1fr = dists[s1]/t[-1]
-            sfr = fr - s0fr
-            newpoint = edge[s0] + (edge[s1] - edge[s0])*sfr
-            
-            # Option to return locaiton only and bypass creation of new edge and node
-            if node_location_only:
-                return newpoint
-            
-            # Insert new point into edge
-            new_edge = np.vstack([edge[:s0+1],newpoint,edge[s1:]])
-            # Get current scalar values
-            edge_scalar_values = [x[x0:x1] for x in scalars]
-            # Insert additional vlaue for new node
-            new_scalar_values = [np.hstack([x[:s0+1],[x[s0]],x[s1:]]) for x in edge_scalar_values]
-            #print(new_scalar_values)
-            self.set_edge(edge_index,new_edge,new_scalar_values)
-            edgepoint_index = s0 + 1
-            edge = new_edge
-            npoints += 1
-            #breakpoint()
-        
-        # Reload data
-        nedgepoints = self.nedgepoints[self.edgeconn_allocated]
-        edgeCoords = self.edgepoints[self.edgepoints_allocated]
-        x0 = int(np.sum(nedgepoints[:int(edge_index)]))
-        x1 = x0 + int(nedgepoints[int(edge_index)])
-        scalars = []
-        for i,sc in enumerate(self.scalar_values):
-            scalars.append(self.scalar_values[i][self.edgepoints_allocated])
-               
         xp = int(edgepoint_index)
         new_node_coords = edge[xp]
+        
+        start_node = edgeConn[edge_index,0]
+        end_node = edgeConn[edge_index,1]
         
         if int(edgepoint_index)<npoints-1 and int(edgepoint_index)>0:
             new_edge0 = edge[:xp+1]
@@ -4390,8 +3838,6 @@ class GVars(object):
         
         # Sort out scalars
         for i,data in enumerate(node_scalars):
-            if node_scalar_names[i]=='NodeLabel':
-                new_node_scalars[i] = self.graph.unique_node_label()
             node_scalars[i] = np.concatenate([data,[new_node_scalars[i]]])
             
         for i,data in enumerate(scalars):
@@ -4404,17 +3850,30 @@ class GVars(object):
             else:
                 sc_1 = []
             new_sc0 = data[x0:x0+xp+1]
-                        
-            if scalar_names[i]=='EdgeLabel': 
-                new_lab = self.graph.unique_edge_label()
-                new_sc1 = np.repeat(new_lab,data[x0+xp:x1].shape[0])
-            else:
-                new_sc1 = data[x0+xp:x1]
+            new_sc1 = data[x0+xp:x1]
             scalars[i] = np.concatenate([x for x in [sc_0,new_sc0.copy(),sc_1,new_sc1.copy()] if len(x)>0 and not np.all(x)==-1])
         
+        #breakpoint()
         self.set_nodecoords(nodeCoords,scalars=node_scalars)  
         self.set_edgeconn(edgeConn,nedgepoints)  
         self.set_edgepoints(edgeCoords,scalars=scalars)
+        
+        #self.nodecoords[:nodeCoords.shape[0]] = nodeCoords
+        #self.edgeconn[:edgeConn.shape[0]] = edgeConn
+        #self.nedgepoints[:nedgepoints.shape[0]] = nedgepoints
+        #self.edgepoints[:edgeCoords.shape[0]] = edgeCoords
+        
+        #self.nodecoords_allocated[:nodeCoords.shape[0]] = True #np.linspace(0,nodeCoords.shape[0]-1,nodeCoords.shape[0],dtype='int')
+        #self.edgeconn_allocated[:edgeConn.shape[0]] = True #np.linspace(0,edgeConn.shape[0]-1,edgeConn.shape[0],dtype='int')
+        #self.edgepoints_allocated[:edgeCoords.shape[0]] = True #np.linspace(0,edgeCoords.shape[0]-1,edgeCoords.shape[0],dtype='int')
+        #self.node_ptr = nodeCoords.shape[0]
+        #self.edge_ptr = edgeConn.shape[0]
+        #self.edgepnt_ptr = edgeCoords.shape[0]
+
+        #for i,sc in enumerate(self.scalar_values):
+        #    self.scalar_values[i][:scalars[i].shape[0]] = scalars[i]
+        #for i,sc in enumerate(self.node_scalar_values):
+        #    self.node_scalar_values[i][:node_scalars[i].shape[0]] = node_scalars[i]
            
         return new_edge0.copy(), new_edge1.copy(), new_node_index, new_conn
         
@@ -4456,6 +3915,6 @@ class GVars(object):
         self.graph.set_definition_size('VERTEX',nodecoords.shape[0])
         self.graph.set_definition_size('EDGE',edgeconn.shape[0])
         self.graph.set_definition_size('POINT',edgepoints.shape[0])  
-        self.graph.set_graph_sizes(labels=False)
+        self.graph.set_graph_sizes()
         self.graph.edgeList = None
         return self.graph
