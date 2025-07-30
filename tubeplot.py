@@ -611,6 +611,7 @@ class TubePlot(object):
             if self.cylinders_combined is not None:
                 self.export_colored_ply("cylinders_combined_colored.ply")
             else:
+                print("[WARNING] No cylinders_combined found. Skipping PLY export.")
           
         elif self.engine == 'pyvista':
             pass  # You mentioned PyVista is not working, so leave this blank or disabled
